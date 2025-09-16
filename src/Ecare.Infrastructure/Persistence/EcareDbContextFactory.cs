@@ -37,9 +37,11 @@ public sealed class EcareDbContextFactory : IDesignTimeDbContextFactory<EcareDbC
             throw new InvalidOperationException("Could not find a connection string named 'SqlServer'.");
         }
 
-        var optionsBuilder = new DbContextOptionsBuilder<EcareDbContext>()
-            .UseSqlServer(connectionString);
+        var options = new DbContextOptionsBuilder<EcareDbContext>()
+          .UseSqlServer(connectionString,
+              b => b.MigrationsAssembly(typeof(EcareDbContext).Assembly.FullName))
+          .Options;
 
-        return new EcareDbContext(optionsBuilder.Options);
+        return new EcareDbContext(options);
     }
 }

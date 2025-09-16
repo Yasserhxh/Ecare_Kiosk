@@ -28,7 +28,11 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavi
 
 // Persistence
 builder.Services.AddDbContext<EcareDbContext>(options =>
-    options.UseSqlServer(cfg.GetConnectionString("SqlServer")));
+    options.UseSqlServer
+    (
+        cfg.GetConnectionString("SqlServer"), 
+        b => b.MigrationsAssembly(typeof(EcareDbContext).Assembly.FullName)
+    ));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
 
 builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
