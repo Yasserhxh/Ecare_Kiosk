@@ -3,11 +3,13 @@ using Ecare.Application.Commands;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Infrastructure;
-using Ecare.Infrastructure.Repositories;
 using Ecare.Infrastructure.Printing;
+using Ecare.Infrastructure.Persistence;
+using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
@@ -25,9 +27,10 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBeh
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
 // Persistence
-var connectionString = cfg.GetConnectionString("DataBaseCS")
-    ?? throw new InvalidOperationException("Connection string 'DataBaseCS' not found.");
-builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(connectionString));
+builder.Services.AddDbContext<EcareDbContext>(options =>
+    options.UseSqlServer(cfg.GetConnectionString("SqlServer")));
+builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
+
 builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 
 // Repos + Printing
