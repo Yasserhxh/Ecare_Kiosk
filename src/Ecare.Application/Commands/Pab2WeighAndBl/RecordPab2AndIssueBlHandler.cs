@@ -33,7 +33,7 @@ public sealed class RecordPab2AndIssueBlHandler(IOrderRepository orders, IWeighR
             }, uow);
 
             var blNumber = $"BL-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
-            await uow.Connection.ExecuteAsync(@"INSERT INTO BonLivraison (Id,OrderId,BlNumber,NetKg,IssuedAt)
+            await uow.Connection.ExecuteAsync($@"INSERT INTO {DbTableNames.BonLivraison} (Id,OrderId,BlNumber,NetKg,IssuedAt)
                 VALUES (@Id,@OrderId,@BlNumber,@NetKg,SYSUTCDATETIME())",
                 new { Id = Guid.NewGuid(), OrderId = order.Id, BlNumber = blNumber, NetKg = net }, uow.Transaction);
 
