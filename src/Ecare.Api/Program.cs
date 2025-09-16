@@ -25,7 +25,9 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBeh
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
 // Persistence
-builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
+var connectionString = cfg.GetConnectionString("DataBaseCS")
+    ?? throw new InvalidOperationException("Connection string 'DataBaseCS' not found.");
+builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(connectionString));
 builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 
 // Repos + Printing

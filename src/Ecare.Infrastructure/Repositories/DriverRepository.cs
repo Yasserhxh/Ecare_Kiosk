@@ -11,5 +11,5 @@ public sealed class DriverRepository : IDriverRepository
 {
     public Task<Driver?> GetBySlvAsync(SlvId slv, IUnitOfWork uow)
         => uow.Connection.QuerySingleOrDefaultAsync<Driver>(
-            "SELECT TOP(1) * FROM Drivers WHERE Slv=@slv", new { slv = slv.Value }, uow.Transaction);
+            $"SELECT TOP(1) * FROM {DbTableNames.Drivers} WHERE Slv=@slv", new { slv = slv.Value }, uow.Transaction);
 }
