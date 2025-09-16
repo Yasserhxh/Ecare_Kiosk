@@ -9,7 +9,7 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
 {
     public void Configure(EntityTypeBuilder<Driver> builder)
     {
-        builder.ToTable("Drivers");
+        builder.ToTable("Ecare_Kiosk_Drivers");
 
         builder.HasKey(d => d.Id);
 

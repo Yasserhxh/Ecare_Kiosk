@@ -8,7 +8,7 @@ public sealed class BonLivraisonConfiguration : IEntityTypeConfiguration<BonLivr
 {
     public void Configure(EntityTypeBuilder<BonLivraison> builder)
     {
-        builder.ToTable("BonLivraison");
+        builder.ToTable("Ecare_Kiosk_BonLivraison");
 
         builder.HasKey(b => b.Id);
 

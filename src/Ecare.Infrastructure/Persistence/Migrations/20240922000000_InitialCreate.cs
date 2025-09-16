@@ -12,7 +12,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "Clients",
+                name: "Ecare_Kiosk_Clients",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -25,7 +25,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Lines",
+                name: "Ecare_Kiosk_Lines",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -41,7 +41,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Drivers",
+                name: "Ecare_Kiosk_Drivers",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -55,15 +55,15 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_Drivers", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Drivers_Clients_ClientId",
+                        name: "FK_Ecare_Kiosk_Drivers_Ecare_Kiosk_Clients_ClientId",
                         column: x => x.ClientId,
-                        principalTable: "Clients",
+                        principalTable: "Ecare_Kiosk_Clients",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
-                name: "Orders",
+                name: "Ecare_Kiosk_Orders",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -82,21 +82,21 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_Orders", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Orders_Clients_ClientId",
+                        name: "FK_Ecare_Kiosk_Orders_Ecare_Kiosk_Clients_ClientId",
                         column: x => x.ClientId,
-                        principalTable: "Clients",
+                        principalTable: "Ecare_Kiosk_Clients",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_Orders_Drivers_DriverId",
+                        name: "FK_Ecare_Kiosk_Orders_Ecare_Kiosk_Drivers_DriverId",
                         column: x => x.DriverId,
-                        principalTable: "Drivers",
+                        principalTable: "Ecare_Kiosk_Drivers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
-                name: "Weighings",
+                name: "Ecare_Kiosk_Weighings",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -111,15 +111,15 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_Weighings", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Weighings_Orders_OrderId",
+                        name: "FK_Ecare_Kiosk_Weighings_Ecare_Kiosk_Orders_OrderId",
                         column: x => x.OrderId,
-                        principalTable: "Orders",
+                        principalTable: "Ecare_Kiosk_Orders",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
-                name: "BonLivraison",
+                name: "Ecare_Kiosk_BonLivraison",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -132,54 +132,54 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_BonLivraison", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_BonLivraison_Orders_OrderId",
+                        name: "FK_Ecare_Kiosk_BonLivraison_Ecare_Kiosk_Orders_OrderId",
                         column: x => x.OrderId,
-                        principalTable: "Orders",
+                        principalTable: "Ecare_Kiosk_Orders",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_BonLivraison_BlNumber",
-                table: "BonLivraison",
+                name: "IX_Ecare_Kiosk_BonLivraison_BlNumber",
+                table: "Ecare_Kiosk_BonLivraison",
                 column: "BlNumber",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_BonLivraison_OrderId",
-                table: "BonLivraison",
+                name: "IX_Ecare_Kiosk_BonLivraison_OrderId",
+                table: "Ecare_Kiosk_BonLivraison",
                 column: "OrderId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Drivers_ClientId",
-                table: "Drivers",
+                name: "IX_Ecare_Kiosk_Drivers_ClientId",
+                table: "Ecare_Kiosk_Drivers",
                 column: "ClientId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Drivers_Slv",
-                table: "Drivers",
+                name: "IX_Ecare_Kiosk_Drivers_Slv",
+                table: "Ecare_Kiosk_Drivers",
                 column: "Slv",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Orders_ClientId",
-                table: "Orders",
+                name: "IX_Ecare_Kiosk_Orders_ClientId",
+                table: "Ecare_Kiosk_Orders",
                 column: "ClientId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Orders_DriverId",
-                table: "Orders",
+                name: "IX_Ecare_Kiosk_Orders_DriverId",
+                table: "Ecare_Kiosk_Orders",
                 column: "DriverId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Orders_Number",
-                table: "Orders",
+                name: "IX_Ecare_Kiosk_Orders_Number",
+                table: "Ecare_Kiosk_Orders",
                 column: "Number",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Weighings_OrderId",
-                table: "Weighings",
+                name: "IX_Ecare_Kiosk_Weighings_OrderId",
+                table: "Ecare_Kiosk_Weighings",
                 column: "OrderId");
         }
 
@@ -187,22 +187,22 @@ namespace Ecare.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "BonLivraison");
+                name: "Ecare_Kiosk_BonLivraison");
 
             migrationBuilder.DropTable(
-                name: "Weighings");
+                name: "Ecare_Kiosk_Weighings");
 
             migrationBuilder.DropTable(
-                name: "Orders");
+                name: "Ecare_Kiosk_Orders");
 
             migrationBuilder.DropTable(
-                name: "Drivers");
+                name: "Ecare_Kiosk_Drivers");
 
             migrationBuilder.DropTable(
-                name: "Lines");
+                name: "Ecare_Kiosk_Lines");
 
             migrationBuilder.DropTable(
-                name: "Clients");
+                name: "Ecare_Kiosk_Clients");
         }
     }
 }
