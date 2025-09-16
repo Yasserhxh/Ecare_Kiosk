@@ -1,0 +1,7 @@
+using MediatR;
+using Ecare.Application.Dtos;
+using Ecare.Shared;
+
+namespace Ecare.Application.Queries;
+public sealed record ScanBySlvQuery(string Slv) : IRequest<Result<ScanBySlvVm>>;
+public sealed record ScanBySlvVm(Guid DriverId, string Plate, string? ClientName, bool? SapOk, OrderDto? Order);

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Ecare.Application\Ecare.Application.csproj" />
+    <ProjectReference Include="..\Ecare.Infrastructure\Ecare.Infrastructure.csproj" />
+    <ProjectReference Include="..\Ecare.Shared\Ecare.Shared.csproj" />
+  </ItemGroup>
+</Project>
