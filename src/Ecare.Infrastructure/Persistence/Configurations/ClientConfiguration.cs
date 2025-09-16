@@ -8,7 +8,7 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
 {
     public void Configure(EntityTypeBuilder<Client> builder)
     {
-        builder.ToTable("Clients");
+        builder.ToTable("Ecare_Kiosk_Clients");
 
         builder.HasKey(c => c.Id);
 

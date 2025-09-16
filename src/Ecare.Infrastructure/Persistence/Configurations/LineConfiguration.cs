@@ -9,7 +9,7 @@ public sealed class LineConfiguration : IEntityTypeConfiguration<Line>
 {
     public void Configure(EntityTypeBuilder<Line> builder)
     {
-        builder.ToTable("Lines");
+        builder.ToTable("Ecare_Kiosk_Lines");
 
         builder.HasKey(l => l.Id);
 

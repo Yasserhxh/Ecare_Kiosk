@@ -8,7 +8,7 @@ public sealed class WeighRecordConfiguration : IEntityTypeConfiguration<WeighRec
 {
     public void Configure(EntityTypeBuilder<WeighRecord> builder)
     {
-        builder.ToTable("Weighings");
+        builder.ToTable("Ecare_Kiosk_Weighings");
 
         builder.HasKey(w => w.Id);
 

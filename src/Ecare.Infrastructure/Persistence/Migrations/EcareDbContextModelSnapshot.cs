@@ -48,7 +48,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("BonLivraison");
+                    b.ToTable("Ecare_Kiosk_BonLivraison");
                 });
 
             modelBuilder.Entity("Ecare.Domain.Entities.Client", b =>
@@ -66,7 +66,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Clients");
+                    b.ToTable("Ecare_Kiosk_Clients");
                 });
 
             modelBuilder.Entity("Ecare.Domain.Entities.Driver", b =>
@@ -108,7 +108,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                     b.HasIndex("Slv")
                         .IsUnique();
 
-                    b.ToTable("Drivers");
+                    b.ToTable("Ecare_Kiosk_Drivers");
                 });
 
             modelBuilder.Entity("Ecare.Domain.Entities.Line", b =>
@@ -137,7 +137,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Lines");
+                    b.ToTable("Ecare_Kiosk_Lines");
                 });
 
             modelBuilder.Entity("Ecare.Domain.Entities.Order", b =>
@@ -195,7 +195,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                     b.HasIndex("Number")
                         .IsUnique();
 
-                    b.ToTable("Orders");
+                    b.ToTable("Ecare_Kiosk_Orders");
                 });
 
             modelBuilder.Entity("Ecare.Domain.Entities.WeighRecord", b =>
@@ -225,7 +225,7 @@ namespace Ecare.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("Weighings");
+                    b.ToTable("Ecare_Kiosk_Weighings");
                 });
 
             modelBuilder.Entity("Ecare.Domain.Entities.BonLivraison", b =>
