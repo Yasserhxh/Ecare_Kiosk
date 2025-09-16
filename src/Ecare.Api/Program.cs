@@ -30,6 +30,7 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavi
 builder.Services.AddDbContext<EcareDbContext>(options =>
     options.UseSqlServer(cfg.GetConnectionString("SqlServer")));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
+
 builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 
 // Repos + Printing

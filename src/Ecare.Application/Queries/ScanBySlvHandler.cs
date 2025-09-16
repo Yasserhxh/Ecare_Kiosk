@@ -20,7 +20,7 @@ public sealed class ScanBySlvHandler(IDriverRepository drivers, IOrderRepository
             var client = drv.ClientId is null
                 ? (Id: Guid.Empty, Name: (string?)null, SapOk: (bool?)null)
                 : await uow.Connection.QuerySingleOrDefaultAsync<(Guid Id, string Name, bool SapOk)>(
-                    "SELECT TOP(1) Id,Name,SapOk FROM Clients WHERE Id=@id", new { id = drv.ClientId }, uow.Transaction);
+                    $"SELECT TOP(1) Id,Name,SapOk FROM {DbTableNames.Clients} WHERE Id=@id", new { id = drv.ClientId }, uow.Transaction);
 
             var order = await orders.GetByDriverAsync(drv.Id, uow);
             var dto = order is null ? null : new OrderDto(order.Number, order.ProductName, order.Unit, order.Quantity, order.Status);
