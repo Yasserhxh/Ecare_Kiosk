@@ -3,5 +3,6 @@ public class Client
 {
     public Guid Id { get; init; }
     public string Name { get; set; } = default!;
-    public bool SapOk { get; set; }
+    public string? SapCode { get; set; }
+    public bool SapOk => !string.IsNullOrWhiteSpace(SapCode);
 }

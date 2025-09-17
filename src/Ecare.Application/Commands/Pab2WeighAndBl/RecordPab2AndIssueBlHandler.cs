@@ -19,10 +19,12 @@ public sealed class RecordPab2AndIssueBlHandler(IOrderRepository orders, IWeighR
             if (order is null) return Result<string>.Fail("Commande introuvable");
 
             int net = Math.Abs(request.GrossKg - request.TareKg);
-            var targetKg = order.Unit == "Tonnes" ? (int)(order.Quantity * 1000) : 0;
-            if (targetKg > 0)
+            var targetKg = order.TargetQuantityTons.HasValue
+                ? (int)(order.TargetQuantityTons.Value * 1000)
+                : (int?)null;
+            if (targetKg is > 0)
             {
-                var deltaPct = Math.Abs(net - targetKg) * 100m / targetKg;
+                var deltaPct = Math.Abs(net - targetKg.Value) * 100m / targetKg.Value;
                 if (deltaPct > request.TolerancePct)
                     return Result<string>.Fail($"Écart poids {deltaPct:F2}% > tolérance");
             }
@@ -39,7 +41,8 @@ public sealed class RecordPab2AndIssueBlHandler(IOrderRepository orders, IWeighR
 
             await orders.UpdateStatusAsync(order.Id, OrderStatus.Livre, uow);
 
-            var html = $"<h1>Bon de Livraison</h1><p>Commande {order.Number}</p><p>Produit: {order.ProductName}</p><p>Net: {net} kg</p>";
+            var productLabel = order.Destination ?? order.DeliveryMode ?? "-";
+            var html = $"<h1>Bon de Livraison</h1><p>Commande {order.Number}</p><p>Produit: {productLabel}</p><p>Net: {net} kg</p>";
             await printer.PrintTwoCopiesAsync(blNumber, html, ct);
 
             await uow.CommitAsync(ct);

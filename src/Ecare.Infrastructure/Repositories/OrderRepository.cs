@@ -8,8 +8,7 @@ namespace Ecare.Infrastructure.Repositories;
 public interface IOrderRepository
 {
     Task<Order?> GetByNumberAsync(string number, IUnitOfWork uow);
-    Task<Order?> GetByDriverAsync(Guid driverId, IUnitOfWork uow);
-    Task<Guid> InsertAsync(Order o, IUnitOfWork uow);
+    Task<Order?> GetBySlvAsync(string slvCard, IUnitOfWork uow);
     Task UpdateStatusAsync(Guid id, OrderStatus status, IUnitOfWork uow);
 }
 
@@ -17,23 +16,60 @@ public sealed class OrderRepository : IOrderRepository
 {
     public Task<Order?> GetByNumberAsync(string number, IUnitOfWork uow)
         => uow.Connection.QuerySingleOrDefaultAsync<Order>(
-            $"SELECT * FROM {DbTableNames.Orders} WHERE Number=@number", new { number }, uow.Transaction);
+            $@"SELECT TOP(1)
+                    Id,
+                    ShippingId,
+                    NumeroCommande     AS Number,
+                    DateCommande       AS OrderedAt,
+                    Destination,
+                    ModeDelivraison    AS DeliveryMode,
+                    EmplacementChargement AS LoadingLocation,
+                    MethodeChargement  AS LoadingMethod,
+                    HeureEnlevement    AS PickupTime,
+                    HeureDelivraison   AS DeliveryTime,
+                    CarteSLV           AS SlvCard,
+                    ChauffeurNom       AS DriverLastName,
+                    ChauffeurPrenom    AS DriverFirstName,
+                    PermisDeConduire   AS DriverLicense,
+                    PlaqueCamion       AS TruckPlate,
+                    Statut             AS Status,
+                    UserId,
+                    CAST(NULL AS decimal(18,3)) AS TargetQuantityTons
+                FROM {DbTableNames.Orders}
+                WHERE NumeroCommande=@number",
+            new { number },
+            uow.Transaction);
 
-    public Task<Order?> GetByDriverAsync(Guid driverId, IUnitOfWork uow)
+    public Task<Order?> GetBySlvAsync(string slvCard, IUnitOfWork uow)
         => uow.Connection.QuerySingleOrDefaultAsync<Order>(
-            $"SELECT TOP(1) * FROM {DbTableNames.Orders} WHERE DriverId=@driverId AND Status<>@s ORDER BY CreatedAt DESC",
-            new { driverId, s = OrderStatus.Annulee }, uow.Transaction);
-
-    public async Task<Guid> InsertAsync(Order o, IUnitOfWork uow)
-    {
-        o.Id = Guid.NewGuid();
-        await uow.Connection.ExecuteAsync($@"INSERT INTO {DbTableNames.Orders}
-            (Id,Number,DriverId,ClientId,ProductId,ProductType,ProductName,Unit,Quantity,Status,CreatedAt)
-            VALUES (@Id,@Number,@DriverId,@ClientId,@ProductId,@ProductType,@ProductName,@Unit,@Quantity,@Status,SYSUTCDATETIME())",
-            o, uow.Transaction);
-        return o.Id;
-    }
+            $@"SELECT TOP(1)
+                    Id,
+                    ShippingId,
+                    NumeroCommande     AS Number,
+                    DateCommande       AS OrderedAt,
+                    Destination,
+                    ModeDelivraison    AS DeliveryMode,
+                    EmplacementChargement AS LoadingLocation,
+                    MethodeChargement  AS LoadingMethod,
+                    HeureEnlevement    AS PickupTime,
+                    HeureDelivraison   AS DeliveryTime,
+                    CarteSLV           AS SlvCard,
+                    ChauffeurNom       AS DriverLastName,
+                    ChauffeurPrenom    AS DriverFirstName,
+                    PermisDeConduire   AS DriverLicense,
+                    PlaqueCamion       AS TruckPlate,
+                    Statut             AS Status,
+                    UserId,
+                    CAST(NULL AS decimal(18,3)) AS TargetQuantityTons
+                FROM {DbTableNames.Orders}
+                WHERE CarteSLV=@slvCard AND Statut<>@cancelled
+                ORDER BY DateCommande DESC",
+            new { slvCard, cancelled = OrderStatus.Annulee },
+            uow.Transaction);
 
     public Task UpdateStatusAsync(Guid id, OrderStatus status, IUnitOfWork uow)
-        => uow.Connection.ExecuteAsync($"UPDATE {DbTableNames.Orders} SET Status=@status WHERE Id=@id", new { id, status }, uow.Transaction);
+        => uow.Connection.ExecuteAsync(
+            $"UPDATE {DbTableNames.Orders} SET Statut=@status WHERE Id=@id",
+            new { id, status },
+            uow.Transaction);
 }

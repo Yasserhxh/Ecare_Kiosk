@@ -8,15 +8,23 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
 {
     public void Configure(EntityTypeBuilder<Client> builder)
     {
-        builder.ToTable("Ecare_Kiosk_Clients");
+        builder.ToTable("Client", schema: "dbo");
 
         builder.HasKey(c => c.Id);
 
+        builder.Property(c => c.Id)
+            .HasColumnName("Client_Id");
+
         builder.Property(c => c.Name)
-            .HasMaxLength(120)
+            .HasColumnName("Nom_Complet")
+            .HasMaxLength(200)
             .IsRequired();
 
-        builder.Property(c => c.SapOk)
-            .IsRequired();
+        builder.Property(c => c.SapCode)
+            .HasColumnName("CodeClientSap")
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Ignore(c => c.SapOk);
     }
 }
