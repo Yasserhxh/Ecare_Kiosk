@@ -4,4 +4,4 @@ using Ecare.Shared;
 
 namespace Ecare.Application.Queries;
 public sealed record ScanBySlvQuery(string Slv) : IRequest<Result<ScanBySlvVm>>;
-public sealed record ScanBySlvVm(Guid DriverId, string Plate, string? ClientName, bool? SapOk, OrderDto? Order);
+public sealed record ScanBySlvVm(int DriverId, string Plate, string? ClientName, bool? SapOk, OrderDto? Order);

@@ -14,6 +14,20 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
 
+// --- CORS
+const string ViteDev = "ViteDev";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(ViteDev, policy =>
+        policy
+            .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .SetPreflightMaxAge(TimeSpan.FromHours(1))
+    // .AllowCredentials() // enable only if we truly use cookies
+    );
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -21,7 +35,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssemblyContaining<IAssemblyMarker>();
-}); 
+});
 builder.Services.AddValidatorsFromAssemblyContaining<IAssemblyMarker>();
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
@@ -30,7 +44,7 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavi
 builder.Services.AddDbContext<EcareDbContext>(options =>
     options.UseSqlServer
     (
-        cfg.GetConnectionString("SqlServer"), 
+        cfg.GetConnectionString("SqlServer"),
         b => b.MigrationsAssembly(typeof(EcareDbContext).Assembly.FullName)
     ));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
@@ -41,11 +55,23 @@ builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IWeighRepository, WeighRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
+builder.Services.AddScoped<IOrderItemRepository, OrderItemRepository>();
+builder.Services.AddScoped<IEcareCimentRepository, EcareCimentRepository>();
 builder.Services.AddSingleton<IBlPrinter, MockBlPrinter>();
 
 var app = builder.Build();
-app.UseSwagger();
-app.UseSwaggerUI();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    // <<< BEFORE auth and endpoints
+}
+
+app.UseCors(ViteDev);
+
+// Ensure preflight never blocked (safe in dev)
+
 
 // Endpoints
 app.MapPost("/kiosk/scan", async (ScanBySlvQuery q, IMediator m) => await m.Send(q));

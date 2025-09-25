@@ -10,9 +10,9 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
     {
         builder.ToTable("Client", schema: "dbo");
 
-        builder.HasKey(c => c.Id);
+        builder.HasKey(c => c.Client_Id);
 
-        builder.Property(c => c.Id)
+        builder.Property(c => c.Client_Id)
             .HasColumnName("Client_Id");
 
         builder.Property(c => c.Name)
