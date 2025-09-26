@@ -42,17 +42,16 @@ public sealed class ScanBySlvHandler(
                 var orderItemsList = await orderItems.GetByOrderIdAsync(order.Id, uow);
 
                 // 5. Get product info from EcareCiments for each OrderItem
-                var orderItemsWithProducts = new List<object>();
+                var orderItemsWithProducts = new List<OrderItemDto>();
                 foreach (var item in orderItemsList)
                 {
                     var product = await ciments.GetByIdAsync(item.ProductId, uow);
-                    orderItemsWithProducts.Add(new
-                    {
-                        ProductId = item.ProductId,
-                        ProductName = product?.Name,
-                        Quantity = item.Quantity,
-                        Unite = item.Unite
-                    });
+                    orderItemsWithProducts.Add(new OrderItemDto(
+                        item.ProductId,
+                        product?.Name,
+                        item.Quantity,
+                        item.Unite
+                    ));
                 }
 
                 dto = new OrderDto(
@@ -60,7 +59,8 @@ public sealed class ScanBySlvHandler(
                     order.Destination,
                     order.DeliveryMode,
                     order.TruckPlate,
-                    order.Status);
+                    order.Status,
+                    orderItemsWithProducts);
             }
 
             await uow.CommitAsync(ct);
