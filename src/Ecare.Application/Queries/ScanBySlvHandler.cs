@@ -67,6 +67,7 @@ public sealed class ScanBySlvHandler(
             return Result<ScanBySlvVm>.Ok(new(
                 equipement.Id,
                 equipement.Matricule,
+                equipement.CarteSLV,
                 client?.Name,
                 client?.SapOk,
                 dto));
