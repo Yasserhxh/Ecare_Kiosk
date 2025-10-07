@@ -80,5 +80,6 @@ app.MapPost("/orders/cancel", async (CancelOrderCommand c, IMediator m) => await
 app.MapPost("/pab1/weigh", async (RecordPab1WeighCommand c, IMediator m) => await m.Send(c));
 app.MapPost("/line/start", async (StartLoadingCommand c, IMediator m) => await m.Send(c));
 app.MapPost("/pab2/weigh-bl", async (RecordPab2AndIssueBlCommand c, IMediator m) => await m.Send(c));
+app.MapGet("/catalog/items", async (IMediator m, CancellationToken ct) => await m.Send(new GetCimentsQuery(), ct));
 
 app.Run();
