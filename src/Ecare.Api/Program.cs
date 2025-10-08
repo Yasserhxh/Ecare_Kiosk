@@ -57,6 +57,10 @@ builder.Services.AddScoped<IWeighRepository, WeighRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
 builder.Services.AddScoped<IOrderItemRepository, OrderItemRepository>();
 builder.Services.AddScoped<IEcareCimentRepository, EcareCimentRepository>();
+builder.Services.AddScoped<IClientEquipementRepository, ClientEquipementRepository>();
+builder.Services.AddScoped<IKioskDriverRepository, KioskDriverRepository>();
+builder.Services.AddScoped<IKioskOrderRepository, KioskOrderRepository>();
+builder.Services.AddScoped<ILegacyOrderWriter, LegacyOrderWriter>();
 builder.Services.AddSingleton<IBlPrinter, MockBlPrinter>();
 
 var app = builder.Build();
@@ -81,5 +85,7 @@ app.MapPost("/pab1/weigh", async (RecordPab1WeighCommand c, IMediator m) => awai
 app.MapPost("/line/start", async (StartLoadingCommand c, IMediator m) => await m.Send(c));
 app.MapPost("/pab2/weigh-bl", async (RecordPab2AndIssueBlCommand c, IMediator m) => await m.Send(c));
 app.MapGet("/catalog/items", async (IMediator m, CancellationToken ct) => await m.Send(new GetCimentsQuery(), ct));
+app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
+app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 
 app.Run();

@@ -10,6 +10,8 @@ namespace Ecare.Application.Queries;
 public sealed class ScanBySlvHandler(
     IDriverRepository drivers,
     IOrderRepository orders,
+    IKioskDriverRepository kioskDrivers,
+    IKioskOrderRepository kioskOrders,
     IOrderItemRepository orderItems,
     IEcareCimentRepository ciments,
     IUnitOfWork uow)
@@ -21,6 +23,7 @@ public sealed class ScanBySlvHandler(
         try
         {
             // 1. Get driver info from Ecare_ClientEquipements by CarteSLV
+            // Use legacy driver table since kiosk tables don't exist
             var equipement = await drivers.GetBySlvAsync(SlvId.From(request.Slv), uow);
             if (equipement is null) return Result<ScanBySlvVm>.Fail("Carte SLV inconnue/inactive");
 
@@ -29,10 +32,11 @@ public sealed class ScanBySlvHandler(
                 $@"SELECT TOP(1) *
                     FROM {DbTableNames.Clients}
                     WHERE RaisonSociale = @clientName",
-                new { clientName = equipement.ClientName },
+                new { clientName = equipement?.ClientName },
                 uow.Transaction);
 
             // 3. Get order from Orders table where CarteSLV == request.SLV
+            // Get order from legacy Orders table by SLV
             var order = await orders.GetBySlvAsync(equipement.CarteSLV, uow);
 
             OrderDto? dto = null;
