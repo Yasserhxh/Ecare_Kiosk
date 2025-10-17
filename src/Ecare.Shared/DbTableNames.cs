@@ -14,4 +14,5 @@ public static class DbTableNames
     public const string KioskClients = "[dbo].[Ecare_Kiosk_Clients]";
     public const string KioskDrivers = "[dbo].[Ecare_Kiosk_Drivers]";
     public const string KioskOrders = "[dbo].[Ecare_Kiosk_Orders]";
+    public const string ArticleGranulats = "[dbo].[ArticleGranulats]";
 }
