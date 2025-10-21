@@ -65,6 +65,8 @@ builder.Services.AddScoped<IKioskOrderRepository, KioskOrderRepository>();
 builder.Services.AddScoped<ILegacyOrderWriter, LegacyOrderWriter>();
 builder.Services.AddSingleton<IBlPrinter, MockBlPrinter>();
 
+builder.Services.AddHostedService<Ecare.Application.Services.SignalRInboundListener>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
