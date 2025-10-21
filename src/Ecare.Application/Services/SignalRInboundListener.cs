@@ -47,7 +47,7 @@ public sealed class SignalRInboundListener : BackgroundService
         {
             try
             {
-                var first = await _negotiator.NegotiateAsync(stoppingToken);
+                var first = await _negotiator.NegotiateAsync("data_hub",stoppingToken);
                 _endpoint = first.Url;
 
                 _conn = new HubConnectionBuilder()
@@ -55,7 +55,7 @@ public sealed class SignalRInboundListener : BackgroundService
                     {
                         options.AccessTokenProvider = async () =>
                         {
-                            var p = await _negotiator.NegotiateAsync(stoppingToken);
+                            var p = await _negotiator.NegotiateAsync("data_hub",stoppingToken);
                             return p.AccessToken;
                         };
                     })

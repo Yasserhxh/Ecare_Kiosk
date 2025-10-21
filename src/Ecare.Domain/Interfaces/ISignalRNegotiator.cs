@@ -2,7 +2,7 @@
 
 public interface ISignalRNegotiator
 {
-    Task<NegotiatePayload> NegotiateAsync(CancellationToken ct = default);
+    Task<NegotiatePayload> NegotiateAsync(string hubname,CancellationToken ct = default);
 }
 
 public sealed record NegotiatePayload(string Url, string AccessToken);

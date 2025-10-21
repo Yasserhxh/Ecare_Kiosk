@@ -91,9 +91,9 @@ app.MapGet("/catalog/items", async (IMediator m, CancellationToken ct) => await 
 app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 app.MapGet("/flux/qualite", async (IMediator m, CancellationToken ct) => await m.Send(new GetFluxQualiteQuery(), ct));
-app.MapGet("/negotiate", async (ISignalRNegotiator negotiator, CancellationToken ct) =>
+app.MapGet("/negotiate", async (string hubname,ISignalRNegotiator negotiator, CancellationToken ct) =>
 {
-    var response = await negotiator.NegotiateAsync(ct);
+    var response = await negotiator.NegotiateAsync(hubname,ct);
     return Results.Json(response);
 });
 

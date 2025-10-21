@@ -27,12 +27,12 @@ public sealed class AzureSignalRNegotiator : ISignalRNegotiator
             .BuildServiceManager();
     }
 
-    public Task<NegotiatePayload> NegotiateAsync(CancellationToken ct = default)
+    public Task<NegotiatePayload> NegotiateAsync(string hubname,CancellationToken ct = default)
     {
         // Optional: add userId or claims if you need to target users/groups later
-        string url = _serviceManager.GetClientEndpoint(_options.HubName);
+        string url = _serviceManager.GetClientEndpoint(hubname);
         string token = _serviceManager.GenerateClientAccessToken(
-            _options.HubName,
+            hubname,
             userId: null,                  // or a real user id
             claims: Array.Empty<Claim>(),  // add claims if needed
             lifeTime: TimeSpan.FromHours(1)
