@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace Ecare.Infrastructure.Services.AzureSignalR
 {
-  
+
 
     public sealed class ScanResultBroadcaster : IScanResultBroadcaster, IAsyncDisposable
     {
@@ -32,7 +32,7 @@ namespace Ecare.Infrastructure.Services.AzureSignalR
 
             if (string.IsNullOrWhiteSpace(_opt.ConnectionString))
                 throw new InvalidOperationException("SignalR2:ConnectionString missing");
-            if (string.IsNullOrWhiteSpace(_opt.HubName))
+            if (string.IsNullOrWhiteSpace("data_hub"))
                 throw new InvalidOperationException("SignalR:HubName missing");
 
             _mgr = (IServiceManager?)new ServiceManagerBuilder()
@@ -45,13 +45,12 @@ namespace Ecare.Infrastructure.Services.AzureSignalR
             if (_hub != null) return _hub;
 
             _hub = (ServiceHubContext?)await _mgr.CreateHubContextAsync(
-                _opt.HubName,
+                "data_hub",
                 Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance // avoid the ILoggerFactory/CancellationToken mismatch
             );
 
             return _hub!;
         }
-
 
 
         public async Task BroadcastAsync(ScanResultMessage message, CancellationToken ct = default)

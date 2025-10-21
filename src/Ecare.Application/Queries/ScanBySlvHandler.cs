@@ -95,7 +95,11 @@ public sealed class ScanBySlvHandler(
                         TruckPlate: order.TruckPlate,
                         Items: itemsSummary ?? new List<OrderItemSummary>()));
 
-            _ = Task.Run(() => broadcaster.BroadcastAsync(message, ct)); // non-blocking
+            
+            
+                _ = Task.Run(() => broadcaster.BroadcastAsync(message, ct));
+            
+             // non-blocking
 
             return Result<ScanBySlvVm>.Ok(vm);
         }
