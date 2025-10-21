@@ -21,13 +21,12 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(ViteDev, policy =>
         policy
-            .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
-            .AllowAnyHeader()
+            .AllowAnyOrigin()
             .AllowAnyMethod()
-            .SetPreflightMaxAge(TimeSpan.FromHours(1))
-    // .AllowCredentials() // enable only if we truly use cookies
+            .AllowAnyHeader()
     );
 });
+
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

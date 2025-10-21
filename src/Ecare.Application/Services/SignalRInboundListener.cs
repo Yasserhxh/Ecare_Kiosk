@@ -1,15 +1,16 @@
 ﻿using global::Ecare.Application.Queries;
 using MediatR;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;   // <-- for IServiceScopeFactory / CreateScope()
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Ecare.Infrastructure.Services.AzureSignalR; // for SignalRInfraOptions
-using Ecare.Domain.Interfaces;                   // for ISignalRNegotiator
-      // for RfidEnvelope (DTO)
+using Ecare.Infrastructure.Services.AzureSignalR;
+using Ecare.Domain.Interfaces;
+using Ecare.Application.Services;
 
 namespace Ecare.Application.Services;
 
@@ -17,22 +18,22 @@ public sealed class SignalRInboundListener : BackgroundService
 {
     private readonly ILogger<SignalRInboundListener> _log;
     private readonly SignalRInfraOptions _opt;
-    private readonly IMediator _mediator;
     private readonly ISignalRNegotiator _negotiator;
+    private readonly IServiceScopeFactory _scopeFactory;   // <-- add
 
     private HubConnection? _conn;
-    private string? _endpoint; // stable endpoint to use for .WithUrl(...)
+    private string? _endpoint;
 
     public SignalRInboundListener(
         ILogger<SignalRInboundListener> log,
         IOptions<SignalRInfraOptions> opt,
-        IMediator mediator,
-        ISignalRNegotiator negotiator)
+        ISignalRNegotiator negotiator,
+        IServiceScopeFactory scopeFactory)                  // <-- add
     {
         _log = log;
         _opt = opt.Value;
-        _mediator = mediator;
         _negotiator = negotiator;
+        _scopeFactory = scopeFactory;                      // <-- save
 
         if (string.IsNullOrWhiteSpace(_opt.HubName))
             throw new InvalidOperationException("SignalR:HubName missing");
@@ -46,14 +47,12 @@ public sealed class SignalRInboundListener : BackgroundService
         {
             try
             {
-                // Get initial URL + token from Infra negotiator
                 var first = await _negotiator.NegotiateAsync(stoppingToken);
-                _endpoint = first.Url; // keep URL stable
+                _endpoint = first.Url;
 
                 _conn = new HubConnectionBuilder()
                     .WithUrl(_endpoint, options =>
                     {
-                        // On every (re)connect, ask Infra to mint a fresh token
                         options.AccessTokenProvider = async () =>
                         {
                             var p = await _negotiator.NegotiateAsync(stoppingToken);
@@ -63,7 +62,6 @@ public sealed class SignalRInboundListener : BackgroundService
                     .WithAutomaticReconnect()
                     .Build();
 
-                // Handle inbound messages: { carteSlv, tsUtc }
                 _conn.On<RfidEnvelope>(_opt.MethodName, async msg =>
                 {
                     var slv = msg.CarteSlv;
@@ -74,9 +72,13 @@ public sealed class SignalRInboundListener : BackgroundService
                     }
 
                     _log.LogInformation("Inbound RFID event: CarteSLV={slv}", slv);
+
+                    // 🔑 Create a scope per message, resolve scoped services (IMediator -> handlers -> repositories/DbContext)
+                    using var scope = _scopeFactory.CreateScope();
+                    var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
                     try
                     {
-                        var result = await _mediator.Send(new ScanBySlvQuery(slv), stoppingToken);
+                        var result = await mediator.Send(new ScanBySlvQuery(slv), stoppingToken);
                         if (!result.Success)
                             _log.LogWarning("ScanBySlvQuery failed: {err}", result.Error);
                         else
@@ -94,7 +96,7 @@ public sealed class SignalRInboundListener : BackgroundService
 
                 await Task.Delay(Timeout.Infinite, stoppingToken);
             }
-            catch (OperationCanceledException) { /* shutdown */ }
+            catch (OperationCanceledException) { /* shutting down */ }
             catch (Exception ex)
             {
                 _log.LogError(ex, "Inbound listener error; retrying in 3s");

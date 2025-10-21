@@ -13,7 +13,8 @@ public static class DependencyInjection
         services.Configure<SignalRInfraOptions>(cfg.GetSection("SignalR"));
         services.AddSingleton<ISignalRNegotiator, AzureSignalRNegotiator>();
 
-       
+        
+        services.AddSingleton<IScanResultBroadcaster, ScanResultBroadcaster>();
 
         return services;
     }
