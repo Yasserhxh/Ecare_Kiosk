@@ -38,25 +38,27 @@ namespace Ecare.Api.Services
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
+            // Defer until app is fully started so Swagger/UI are ready first
             _lifetime.ApplicationStarted.Register(() =>
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await Task.Delay(10000, cancellationToken); // tiny delay
+                        await Task.Delay(300, cancellationToken); // tiny delay
                         _runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                         await EnsureConnectedAsync(_runCts.Token);
                     }
+                    catch (OperationCanceledException) { }
                     catch (Exception ex)
                     {
-                        _log.LogError(ex, "RFID SignalR listener failed to start.");
+                        _log.LogError(ex, "RFID SignalR listener failed during initial connect.");
                     }
                 }, cancellationToken);
             });
+
             return Task.CompletedTask;
         }
-
 
         public async Task StopAsync(CancellationToken cancellationToken)
         {
