@@ -1,81 +1,116 @@
 using MediatR;
 using Dapper;
 using Ecare.Application.Dtos;
+using Ecare.Domain.Dtos;
 using Ecare.Domain.Entities;
+using Ecare.Domain.Interfaces;
 using Ecare.Domain.ValueObjects;
 using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 
 namespace Ecare.Application.Queries;
-public sealed class ScanBySlvHandler(
-    IDriverRepository drivers,
-    IOrderRepository orders,
-    IKioskDriverRepository kioskDrivers,
-    IKioskOrderRepository kioskOrders,
-    IOrderItemRepository orderItems,
-    IEcareCimentRepository ciments,
-    IUnitOfWork uow)
-    : IRequestHandler<ScanBySlvQuery, Result<ScanBySlvVm>>
+
+
+public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<SlvDtos.ScanBySlvVm>>
 {
-    public async Task<Result<ScanBySlvVm>> Handle(ScanBySlvQuery request, CancellationToken ct)
+    private readonly IDriverRepository _drivers;
+    private readonly IOrderRepository _orders;
+    private readonly IKioskDriverRepository _kioskDrivers;
+    private readonly IKioskOrderRepository _kioskOrders;
+    private readonly IOrderItemRepository _orderItems;
+    private readonly IEcareCimentRepository _ciments;
+    private readonly IUnitOfWork _uow;
+    private readonly ISlvScanPublisher _publisher;
+
+    public ScanBySlvHandler(
+        IDriverRepository drivers,
+        IOrderRepository orders,
+        IKioskDriverRepository kioskDrivers,
+        IKioskOrderRepository kioskOrders,
+        IOrderItemRepository orderItems,
+        IEcareCimentRepository ciments, 
+        ISlvScanPublisher publisher,
+    IUnitOfWork uow)
     {
-        await uow.BeginAsync(ct);
+        _drivers = drivers;
+        _orders = orders;
+        _kioskDrivers = kioskDrivers;
+        _kioskOrders = kioskOrders;
+        _orderItems = orderItems;
+        _ciments = ciments;
+        _uow = uow;
+        _publisher = publisher;
+    }
+
+    public async Task<Result<SlvDtos.ScanBySlvVm>> Handle(ScanBySlvQuery request, CancellationToken ct)
+    {
+        await _uow.BeginAsync(ct);
         try
         {
-            // 1. Get driver info from Ecare_ClientEquipements by CarteSLV
-            // Use legacy driver table since kiosk tables don't exist
-            var equipement = await drivers.GetBySlvAsync(SlvId.From(request.Slv), uow);
-            if (equipement is null) return Result<ScanBySlvVm>.Fail("Carte SLV inconnue/inactive");
+            // 1) Driver/equipment by CarteSLV
+            var equipement = await _drivers.GetBySlvAsync(SlvId.From(request.Slv), _uow);
+            if (equipement is null)
+                return Result<SlvDtos.ScanBySlvVm>.Fail("Carte SLV inconnue/inactive");
 
-            // 2. Get client info from Client table where ClientName == RaisonSociale
-            var client = await uow.Connection.QuerySingleOrDefaultAsync<Client>(
+            // 2) Client by RaisonSociale (client name taken from equipment)
+            var client = await _uow.Connection.QuerySingleOrDefaultAsync<Client>(
                 $@"SELECT TOP(1) *
-                    FROM {DbTableNames.Clients}
-                    WHERE RaisonSociale = @clientName",
-                new { clientName = equipement?.ClientName },
-                uow.Transaction);
+                       FROM {DbTableNames.Clients}
+                       WHERE RaisonSociale = @clientName",
+                new { clientName = equipement.ClientName },
+                _uow.Transaction);
 
-            // 3. Get order from Orders table where CarteSLV == request.SLV
-            // Get order from legacy Orders table by SLV
-            var order = await orders.GetBySlvAsync(equipement.CarteSLV, uow);
+            // 3) Legacy order by SLV
+            var order = await _orders.GetBySlvAsync(equipement.CarteSLV, _uow);
 
-            OrderDto? dto = null;
+            SlvDtos.OrderDto? orderDto = null;
             if (order is not null)
             {
-                // 4. Get OrderItems by OrderId
-                var orderItemsList = await orderItems.GetByOrderIdAsync(order.Id, uow);
+                // 4) Items by OrderId
+                var items = await _orderItems.GetByOrderIdAsync(order.Id, _uow);
 
-                // 5. Get product info from EcareCiments for each OrderItem
-                var orderItemsWithProducts = new List<OrderItemDto>();
-                foreach (var item in orderItemsList)
+                // 5) Enrich items with product info
+                var itemDtos = new List<SlvDtos.OrderItemDto>(items.Count());
+                foreach (var it in items)
                 {
-                    var product = await ciments.GetByIdAsync(item.ProductId, uow);
-                    orderItemsWithProducts.Add(new OrderItemDto(
-                        item.ProductId,
+                    var product = await _ciments.GetByIdAsync(it.ProductId, _uow);
+                    itemDtos.Add(new SlvDtos.OrderItemDto(
+                        it.ProductId,
                         product?.Name,
-                        item.Quantity,
-                        item.Unite
+                        it.Quantity,
+                        it.Unite
                     ));
                 }
 
-                dto = new OrderDto(
+                orderDto = new SlvDtos.OrderDto(
                     order.Number,
                     order.Destination,
                     order.DeliveryMode,
                     order.TruckPlate,
                     order.Status,
-                    orderItemsWithProducts);
+                    itemDtos
+                );
             }
 
-            await uow.CommitAsync(ct);
-            return Result<ScanBySlvVm>.Ok(new(
-                equipement.Id,
-                equipement.Matricule,
-                equipement.CarteSLV,
-                client?.Name,
-                client?.SapOk,
-                dto));
+            await _uow.CommitAsync(ct);
+
+            // Build the VM you return
+            var vm = new SlvDtos.ScanBySlvVm(
+                equipement.Id,          // DriverId or EquipmentId, per your model
+                equipement.Matricule,   // Plate
+                equipement.CarteSLV,    // SLV value
+                client?.Name,           // ClientName
+                client?.SapOk,          // SapOk (drop if you decided to remove it)
+                orderDto
+            );
+
+            _ = Task.Run(() => _publisher.PublishAsync(vm, ct), ct);
+            return Result<SlvDtos.ScanBySlvVm>.Ok(vm);
         }
-        catch { await uow.RollbackAsync(ct); throw; }
+        catch
+        {
+            await _uow.RollbackAsync(ct);
+            throw;
+        }
     }
 }
