@@ -2,9 +2,10 @@ using Ecare.Application;
 using Ecare.Application.Commands;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
+using Ecare.Domain.Interfaces;
 using Ecare.Infrastructure;
-using Ecare.Infrastructure.Printing;
 using Ecare.Infrastructure.Persistence;
+using Ecare.Infrastructure.Printing;
 using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using FluentValidation;
@@ -39,6 +40,7 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddValidatorsFromAssemblyContaining<IAssemblyMarker>();
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+builder.Services.AddInfrastructure(cfg);
 
 // Persistence
 builder.Services.AddDbContext<EcareDbContext>(options =>
@@ -88,6 +90,12 @@ app.MapGet("/catalog/items", async (IMediator m, CancellationToken ct) => await 
 app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 app.MapGet("/flux/qualite", async (IMediator m, CancellationToken ct) => await m.Send(new GetFluxQualiteQuery(), ct));
+app.MapGet("/negotiate", async (ISignalRNegotiator negotiator, CancellationToken ct) =>
+{
+    var response = await negotiator.NegotiateAsync(ct);
+    return Results.Json(response);
+});
+
 
 
 app.Run();
