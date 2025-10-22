@@ -1,5 +1,6 @@
 using Ecare.Application;
 using Ecare.Application.Commands;
+using Ecare.Application.Commands.Queue.CreateQueue;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Domain.Interfaces;
@@ -10,6 +11,7 @@ using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -102,5 +104,23 @@ app.MapGet("/negotiatedatahub", async (ISignalRNegotiator negotiator, Cancellati
     var response = await negotiator.NegotiatedatahubAsync(ct);
     return Results.Json(response);
 });
+
+app.MapPost("queue", async (
+        [FromBody] CreateQueueEntryCommand cmd,
+        IMediator mediator,
+        CancellationToken ct) =>
+    {
+        var result = await mediator.Send(cmd, ct);
+
+        // Adapt these two property names to your Result<T> type if they differ
+        if (!result.Success)
+            return Results.BadRequest(new { error = result.Error });
+
+        // 201 Created + Location header + body { id }
+        return Results.Created($"/queue/{result.Value}", new { id = result.Value });
+    })
+    .WithName("CreateQueueEntry")
+    .Produces(StatusCodes.Status201Created)
+    .Produces(StatusCodes.Status400BadRequest);
 
 app.Run();

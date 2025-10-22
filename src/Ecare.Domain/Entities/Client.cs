@@ -7,6 +7,7 @@ public class Client
     public string? Prenom { get; set; }
     public string? RaisonSociale { get; set; }
     public int? FormeJuridique_Id { get; set; }
+    public string? ChauffeurName { get; set; }
     public string? Ice { get; set; }
     public string? Nom_Complet { get; set; }
     public string? Email { get; set; }
