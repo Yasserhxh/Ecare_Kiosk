@@ -97,6 +97,10 @@ app.MapGet("/negotiate", async (ISignalRNegotiator negotiator, CancellationToken
     return Results.Json(response);
 });
 
-
+app.MapGet("/negotiatedatahub", async (ISignalRNegotiator negotiator, CancellationToken ct) =>
+{
+    var response = await negotiator.NegotiatedatahubAsync(ct);
+    return Results.Json(response);
+});
 
 app.Run();

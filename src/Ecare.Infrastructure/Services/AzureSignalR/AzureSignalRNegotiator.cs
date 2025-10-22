@@ -40,4 +40,17 @@ public sealed class AzureSignalRNegotiator : ISignalRNegotiator
 
         return Task.FromResult(new NegotiatePayload(url, token));
     }
+    public Task<NegotiatePayload> NegotiatedatahubAsync(CancellationToken ct = default)
+    {
+        // Optional: add userId or claims if you need to target users/groups later
+        string url = _serviceManager.GetClientEndpoint("data_hub");
+        string token = _serviceManager.GenerateClientAccessToken(
+            "data_hub",
+            userId: null,                  // or a real user id
+            claims: Array.Empty<Claim>(),  // add claims if needed
+            lifeTime: TimeSpan.FromHours(1)
+        );
+
+        return Task.FromResult(new NegotiatePayload(url, token));
+    }
 }
