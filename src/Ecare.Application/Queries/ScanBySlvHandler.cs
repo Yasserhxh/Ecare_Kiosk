@@ -106,7 +106,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
             {
                 @event = "OrderDataEvent",
                 site = "Asment-Temara-01",
-                kiosk = "parking",
+                kiosk = "parking-pc-01",
                 slv = result.CarteSLV,
                 ts = DateTime.UtcNow,
                 driver = new
