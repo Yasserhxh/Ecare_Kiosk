@@ -1,15 +1,21 @@
-using Ecare.Application;
+﻿using Ecare.Application;
 using Ecare.Application.Commands;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
+using Ecare.Application.Services;
 using Ecare.Infrastructure;
-using Ecare.Infrastructure.Printing;
 using Ecare.Infrastructure.Persistence;
+using Ecare.Infrastructure.Printing;
 using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Azure.SignalR.Management;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Net.Http.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
@@ -20,38 +26,31 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(ViteDev, policy =>
         policy
-            .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+            .AllowAnyOrigin()   // allow file:// and remote LAN frontend
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .SetPreflightMaxAge(TimeSpan.FromHours(1))
-    // .AllowCredentials() // enable only if we truly use cookies
-    );
+            .SetPreflightMaxAge(TimeSpan.FromHours(1)));
 });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// MediatR + FluentValidation
-builder.Services.AddMediatR(cfg =>
-{
-    cfg.RegisterServicesFromAssemblyContaining<IAssemblyMarker>();
-});
+// --- MediatR + FluentValidation
+builder.Services.AddMediatR(cfgM => cfgM.RegisterServicesFromAssemblyContaining<IAssemblyMarker>());
 builder.Services.AddValidatorsFromAssemblyContaining<IAssemblyMarker>();
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
-// Persistence
+// --- Persistence
 builder.Services.AddDbContext<EcareDbContext>(options =>
-    options.UseSqlServer
-    (
+    options.UseSqlServer(
         cfg.GetConnectionString("SqlServer"),
         b => b.MigrationsAssembly(typeof(EcareDbContext).Assembly.FullName)
     ));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
-
 builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 
-// Repos + Printing
+// --- Repos + Printing
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IWeighRepository, WeighRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
@@ -63,21 +62,56 @@ builder.Services.AddScoped<IKioskOrderRepository, KioskOrderRepository>();
 builder.Services.AddScoped<ILegacyOrderWriter, LegacyOrderWriter>();
 builder.Services.AddSingleton<IBlPrinter, MockBlPrinter>();
 
+// ------------------------------
+// Azure SignalR: NEGOTIATE + BACKGROUND LISTENER + ORDER BROADCASTER
+// ------------------------------
+
+// 1️⃣ Register Azure SignalR ServiceManager (used for negotiate + hub contexts)
+builder.Services.AddSingleton<ServiceManager>(sp =>
+{
+    var cs = cfg.GetConnectionString("AzureSignalR")
+             ?? throw new InvalidOperationException("ConnectionStrings:AzureSignalR missing");
+    return new ServiceManagerBuilder()
+        .WithOptions(o => o.ConnectionString = cs)
+        .BuildServiceManager();
+});
+
+// 2️⃣ Configure client listener options
+builder.Services.Configure<SignalRClientOptions>(cfg.GetSection("SignalRClient"));
+
+// 3️⃣ Register publisher (order_data_hub broadcaster)
+builder.Services.AddSingleton<OrderDataPublisher>();
+
+// 4️⃣ Register RFID → backend listener (listens on slv_hub)
+builder.Services.AddSingleton<DeviceSignalRClient>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DeviceSignalRClient>());
+
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-    // <<< BEFORE auth and endpoints
-}
-
+app.UseSwagger();
+app.UseSwaggerUI();
 app.UseCors(ViteDev);
 
-// Ensure preflight never blocked (safe in dev)
+// ------------------------------
+// ✅ /signalr/negotiate endpoint for both hubs
+// ------------------------------
+app.MapGet("/signalr/negotiate", async (string hub, ServiceManager manager, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(hub))
+        return Results.BadRequest("hub is required");
+
+    await using var hubContext = await manager.CreateHubContextAsync(hub, ct);
+    var negotiation = await hubContext.NegotiateAsync(new NegotiationOptions(), ct);
+
+    return Results.Ok(new { url = negotiation.Url, accessToken = negotiation.AccessToken });
+});
 
 
-// Endpoints
+
+
+// ------------------------------
+// 🧩 API Endpoints
+// ------------------------------
 app.MapPost("/kiosk/scan", async (ScanBySlvQuery q, IMediator m) => await m.Send(q));
 app.MapPost("/orders/confirm", async (ConfirmOrderCommand c, IMediator m) => await m.Send(c));
 app.MapPost("/orders/cancel", async (CancelOrderCommand c, IMediator m) => await m.Send(c));
@@ -89,5 +123,32 @@ app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, Cancella
 app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 app.MapGet("/flux/qualite", async (IMediator m, CancellationToken ct) => await m.Send(new GetFluxQualiteQuery(), ct));
 
+app.MapGet("/test-orderdata", async (ServiceManager manager, CancellationToken ct) =>
+{
+    await using var hub = await manager.CreateHubContextAsync("order_data_hub", ct);
+
+    var payload = new
+    {
+        @event = "OrderDataEvent",
+        site = "Test-Site",
+        kiosk = "test",
+        slv = "TEST-001",
+        ts = DateTime.UtcNow,
+        message = "✅ Test broadcast from backend"
+    };
+
+    await hub.Clients.All.SendAsync("OrderDataEvent", payload, ct);
+    return Results.Ok("✅ Test OrderDataEvent sent to order_data_hub");
+});
+
+
+// ------------------------------
+// ✅ Initialize the publisher (connect to Azure SignalR once)
+// ------------------------------
+using (var scope = app.Services.CreateScope())
+{
+    var publisher = scope.ServiceProvider.GetRequiredService<OrderDataPublisher>();
+    await publisher.InitializeAsync();
+}
 
 app.Run();
