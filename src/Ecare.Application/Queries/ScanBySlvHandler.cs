@@ -137,7 +137,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 }
             };
 
-            await SignalRHelper.BroadcastAsync(
+                await SignalRHelper.BroadcastAsync(
                 _signalR,
                 hubName: "order_data_hub",
                 methodName: "OrderDataEvent",
