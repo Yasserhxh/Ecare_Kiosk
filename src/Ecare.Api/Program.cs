@@ -1,5 +1,6 @@
 ﻿using Ecare.Application;
 using Ecare.Application.Commands;
+using Ecare.Application.Commands.Queue.CreateQueue;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Application.Services;
@@ -10,6 +11,7 @@ using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Azure.SignalR.Management;
@@ -123,23 +125,23 @@ app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, Cancella
 app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 app.MapGet("/flux/qualite", async (IMediator m, CancellationToken ct) => await m.Send(new GetFluxQualiteQuery(), ct));
 
-app.MapGet("/test-orderdata", async (ServiceManager manager, CancellationToken ct) =>
+app.MapPost("queue", async (
+        [FromBody] CreateQueueEntryCommand cmd,
+        IMediator mediator,
+        CancellationToken ct) =>
 {
-    await using var hub = await manager.CreateHubContextAsync("order_data_hub", ct);
+    var result = await mediator.Send(cmd, ct);
 
-    var payload = new
-    {
-        @event = "OrderDataEvent",
-        site = "Test-Site",
-        kiosk = "test",
-        slv = "TEST-001",
-        ts = DateTime.UtcNow,
-        message = "✅ Test broadcast from backend"
-    };
+    // Adapt these two property names to your Result<T> type if they differ
+    if (!result.Success)
+        return Results.BadRequest(new { error = result.Error });
 
-    await hub.Clients.All.SendAsync("OrderDataEvent", payload, ct);
-    return Results.Ok("✅ Test OrderDataEvent sent to order_data_hub");
-});
+    // 201 Created + Location header + body { id }
+    return Results.Created($"/queue/{result.Value}", new { id = result.Value });
+})
+    .WithName("CreateQueueEntry")
+    .Produces(StatusCodes.Status201Created)
+    .Produces(StatusCodes.Status400BadRequest);
 
 
 // ------------------------------

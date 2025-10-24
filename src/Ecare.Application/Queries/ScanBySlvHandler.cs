@@ -50,24 +50,24 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
         await _uow.BeginAsync(ct);
         try
         {
-            // 1️⃣ Lookup driver from Ecare_ClientEquipements (CarteSLV)
+            //Lookup driver from Ecare_ClientEquipements (CarteSLV)
             var equipement = await _drivers.GetBySlvAsync(SlvId.From(request.Slv), _uow);
             if (equipement is null)
                 return Result<ScanBySlvVm>.Fail("Carte SLV inconnue/inactive");
 
-            // 2️⃣ Lookup client info
+            //Lookup client info
             var client = await _uow.Connection.QuerySingleOrDefaultAsync<Client>(
                 $@"SELECT TOP(1) * FROM {DbTableNames.Clients} WHERE RaisonSociale = @clientName",
                 new { clientName = equipement?.ClientName },
                 _uow.Transaction);
 
-            // 3️⃣ Lookup current order
+            //Lookup current order
             var order = await _orders.GetBySlvAsync(equipement.CarteSLV, _uow);
 
             OrderDto? dto = null;
             if (order is not null)
             {
-                // 4️⃣ Get order items + product names
+                //Get order items + product names
                 var orderItemsList = await _orderItems.GetByOrderIdAsync(order.Id, _uow);
                 var orderItemsWithProducts = new List<OrderItemDto>();
 
@@ -101,7 +101,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 client?.SapOk,
                 dto);
 
-            // ✅ 5️⃣ Broadcast result to Azure SignalR (order_data_hub)
+            //Broadcast result to Azure SignalR (order_data_hub)
             var payload = new
             {
                 @event = "OrderDataEvent",
@@ -144,15 +144,15 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 payload: payload,
                 logger: _log,
                 ct: ct
-            );
+                );
 
-            _log.LogInformation("✅ Broadcasted OrderDataEvent for SLV={slv}", result.CarteSLV);
+            _log.LogInformation("Broadcasted OrderDataEvent for SLV={slv}", result.CarteSLV);
 
             return Result<ScanBySlvVm>.Ok(result);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "❌ Error in ScanBySlvHandler for SLV={slv}", request.Slv);
+            _log.LogError(ex, "Error in ScanBySlvHandler for SLV={slv}", request.Slv);
             try { await _uow.RollbackAsync(ct); } catch { }
             throw;
         }

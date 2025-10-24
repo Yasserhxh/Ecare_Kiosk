@@ -19,4 +19,7 @@
     <ProjectReference Include="..\Ecare.Infrastructure\Ecare.Infrastructure.csproj" />
     <ProjectReference Include="..\Ecare.Shared\Ecare.Shared.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Commands\CreateQueue\" />
+  </ItemGroup>
 </Project>
