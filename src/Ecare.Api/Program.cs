@@ -156,6 +156,20 @@ app.MapPost("/queue/toggle-pin/{matricule}", async (string matricule, IMediator 
 })
 .WithName("Queue_TogglePin");
 
+app.MapPost("/queue/rebroadcast", async (
+    ServiceManager signalR,
+    IUnitOfWork uow,
+    ILoggerFactory loggerFactory,
+    CancellationToken ct) =>
+{
+    var log = loggerFactory.CreateLogger("QueueRebroadcast");
+    await QueueSnapshot.BuildAndBroadcastAsync(signalR, uow, log, ct);
+    return Results.Ok(new { ok = true, sent = "QueueDataEvent", hub = "queue_data_hub" });
+})
+.WithName("Queue_Rebroadcast");
+
+
+
 
 // ------------------------------
 //Initialize the publisher (connect to Azure SignalR once)
