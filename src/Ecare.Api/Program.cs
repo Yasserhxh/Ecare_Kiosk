@@ -1,5 +1,6 @@
 ﻿using Ecare.Application;
 using Ecare.Application.Commands;
+using Ecare.Application.Commands.Flux.Create;
 using Ecare.Application.Commands.Queue.CreateQueue;
 using Ecare.Application.Commands.Queue.PinTruck;
 using Ecare.Application.Pipelines;
@@ -168,7 +169,9 @@ app.MapPost("/queue/rebroadcast", async (
 })
 .WithName("Queue_Rebroadcast");
 
-
+app.MapPost("/flux", async (CreateFluxEntryCommand c, IMediator m, CancellationToken ct)
+    => await m.Send(c, ct))
+   .WithName("Flux_Create");
 
 
 // ------------------------------
