@@ -50,35 +50,44 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
         await _uow.BeginAsync(ct);
         try
         {
-            //Lookup driver from Ecare_ClientEquipements (CarteSLV)
+            // 1️⃣ Lookup driver from Ecare_ClientEquipements
             var equipement = await _drivers.GetBySlvAsync(SlvId.From(request.Slv), _uow);
             if (equipement is null)
                 return Result<ScanBySlvVm>.Fail("Carte SLV inconnue/inactive");
 
-            //Lookup client info
+            // 2️⃣ Lookup client info
             var client = await _uow.Connection.QuerySingleOrDefaultAsync<Client>(
                 $@"SELECT TOP(1) * FROM {DbTableNames.Clients} WHERE RaisonSociale = @clientName",
                 new { clientName = equipement?.ClientName },
                 _uow.Transaction);
 
-            //Lookup current order
+            // 3️⃣ Lookup current order
             var order = await _orders.GetBySlvAsync(equipement.CarteSLV, _uow);
 
             OrderDto? dto = null;
+
             if (order is not null)
             {
-                //Get order items + product names
+                // 4️⃣ Get order items
                 var orderItemsList = await _orderItems.GetByOrderIdAsync(order.Id, _uow);
-                var orderItemsWithProducts = new List<OrderItemDto>();
 
+                // 5️⃣ Optimize: Fetch all product images in a single query
+                var productIds = orderItemsList.Select(i => i.ProductId).Distinct().ToArray();
+                var images = await GetImageUrlsAsync(productIds, _uow, ct);
+
+                // 6️⃣ Map order items
+                var orderItemsWithProducts = new List<OrderItemDto>();
                 foreach (var item in orderItemsList)
                 {
                     var product = await _ciments.GetByIdAsync(item.ProductId, _uow);
+                    var imageUrl = images.TryGetValue(item.ProductId, out var url) ? url : null;
+
                     orderItemsWithProducts.Add(new OrderItemDto(
                         item.ProductId,
                         product?.Name,
                         item.Quantity,
-                        item.Unite
+                        item.Unite,
+                        imageUrl 
                     ));
                 }
 
@@ -101,7 +110,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 client?.SapOk,
                 dto);
 
-            //Broadcast result to Azure SignalR (order_data_hub)
+            // 7️⃣ Build SignalR payload
             var payload = new
             {
                 @event = "OrderDataEvent",
@@ -117,7 +126,6 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 },
                 client = new
                 {
-                    //name = client?.Name,
                     name = equipement.ClientName,
                     sapOk = client?.SapOk
                 },
@@ -133,19 +141,21 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                         productId = i.ProductId,
                         productName = i.ProductName,
                         quantity = i.Quantity,
-                        unite = i.Unite
+                        unite = i.Unite,
+                        imageUrl = i.imageUrl 
                     })
                 }
             };
 
-                await SignalRHelper.BroadcastAsync(
+            // 8️⃣ Broadcast via Azure SignalR
+            await SignalRHelper.BroadcastAsync(
                 _signalR,
                 hubName: "order_data_hub",
                 methodName: "OrderDataEvent",
                 payload: payload,
                 logger: _log,
                 ct: ct
-                );
+            );
 
             _log.LogInformation("Broadcasted OrderDataEvent for SLV={slv}", result.CarteSLV);
 
@@ -157,5 +167,18 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
             try { await _uow.RollbackAsync(ct); } catch { }
             throw;
         }
+    }
+
+    // 🔹 Helper: Batch get all image URLs for product IDs
+    private async Task<Dictionary<int, string?>> GetImageUrlsAsync(IEnumerable<int> productIds, IUnitOfWork uow, CancellationToken ct)
+    {
+        if (!productIds.Any())
+            return new();
+
+        const string sql = @"SELECT Id, ImageUrl FROM [dbo].[EcareCiments] WHERE Id IN @ids";
+        var cmd = new CommandDefinition(sql, new { ids = productIds }, transaction: uow.Transaction, cancellationToken: ct);
+
+        var results = await uow.Connection.QueryAsync<(int Id, string? ImageUrl)>(cmd);
+        return results.ToDictionary(x => x.Id, x => x.ImageUrl);
     }
 }
