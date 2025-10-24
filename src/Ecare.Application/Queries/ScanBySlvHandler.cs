@@ -112,12 +112,13 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 driver = new
                 {
                     id = result.DriverId,
-                    name = equipement.Matricule,
+                    name = equipement.ChauffeurName,
                     plate = equipement.Matricule
                 },
                 client = new
                 {
-                    name = client?.Name,
+                    //name = client?.Name,
+                    name = equipement.ClientName,
                     sapOk = client?.SapOk
                 },
                 order = result.Order is null ? null : new
