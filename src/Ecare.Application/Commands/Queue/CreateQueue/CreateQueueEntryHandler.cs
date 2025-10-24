@@ -1,12 +1,12 @@
-﻿using Dapper;
+﻿// Ecare.Application/Commands/Queue/CreateQueue/CreateQueueEntryHandler.cs
+using Dapper;
 using Ecare.Application.Services;
-using Ecare.Domain.ValueObjects;
+using Ecare.Domain.ValueObjects; // QueueStatus enum (EnValidation = 0, EncourTraitement = 1)
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 using System.Data;
-using System.Linq;
 
 namespace Ecare.Application.Commands.Queue.CreateQueue
 {
@@ -26,18 +26,25 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
             _log = log;
         }
 
+        // Include IsPined/PinedAt for proper ordering (even if En Validation ignores them)
         private const string SelectSql = @"
-            SELECT Matricule, Qualite1, Status, CreatedAt
-            FROM Ecare_Queue
+            SELECT 
+                Matricule,
+                Qualite1,
+                Status,
+                CreatedAt,
+                IsPined,
+                PinedAt
+            FROM dbo.Ecare_Queue
             WHERE Status BETWEEN 0 AND 1
-            ORDER BY CreatedAt ASC;"; // oldest → newest
+            ORDER BY CreatedAt ASC;";
 
         public async Task<Result<int>> Handle(CreateQueueEntryCommand request, CancellationToken ct)
         {
             await _uow.BeginAsync(ct);
             try
             {
-                //Insert new queue entry
+                // Insert new queue row (initially not pinned)
                 var newId = await EcareQueueWriter.InsertAsync(
                     _uow,
                     request.Matricule,
@@ -51,14 +58,16 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
                     request.Source,
                     request.Status,
                     request.CreatedAt,
+                    isPined: false,
+                    pinedAt: null,
                     ct: ct);
 
                 await _uow.CommitAsync(ct);
 
-                //Build grouped snapshot
+                // Build grouped snapshot (pin ignored in En Validation)
                 var grouped = await BuildGroupedSnapshotAsync(ct);
 
-                //Broadcast grouped snapshot to SignalR clients
+                // Broadcast snapshot to all clients
                 await SignalRHelper.BroadcastAsync(
                     _signalR,
                     hubName: "queue_data_hub",
@@ -68,55 +77,62 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
                     logger: _log
                 );
 
-                _log.LogInformation("Queue entry {id} inserted and broadcast sent.", newId);
+                _log.LogInformation("Queue entry {Id} inserted and broadcast sent.", newId);
                 return Result<int>.Ok(newId);
             }
             catch (Exception ex)
             {
-                await _uow.RollbackAsync(ct);
+                try { await _uow.RollbackAsync(ct); } catch { }
                 _log.LogError(ex, "Failed to insert queue entry");
                 throw;
             }
         }
 
-        // -------- Helpers --------
+        // -------- Snapshot models --------
 
         private sealed record QueueItem(
             string? Matricule,
             string? Qualite1,
             QueueStatus Status,
-            DateTime CreatedAt);
+            DateTime CreatedAt,
+            bool IsPined,
+            DateTime? PinedAt);
 
         private sealed record QueueGroup(
             string Name,
             IReadOnlyList<QueueItem> Items);
 
+        // -------- Build grouped snapshot --------
         private async Task<IReadOnlyList<QueueGroup>> BuildGroupedSnapshotAsync(CancellationToken ct)
         {
             await _uow.BeginAsync(ct);
             try
             {
                 var items = (await _uow.Connection.QueryAsync<QueueItem>(
-                    SelectSql, transaction: _uow.Transaction)).ToList();
+                    new CommandDefinition(SelectSql, transaction: _uow.Transaction, cancellationToken: ct)
+                )).ToList();
 
                 await _uow.CommitAsync(ct);
 
-                // Status = 0 → "En Validation"
+                // Lane 1: En Validation (Status = 0) — IGNORE pinning, FIFO by CreatedAt
                 var enValidation = items
                     .Where(i => i.Status == QueueStatus.EnValidation)
                     .OrderBy(i => i.CreatedAt)
                     .ToList();
 
-                // Status = 1 → group by Qualite1
+                // Lane 2: En cours de traitement (Status = 1)
+                // Group by Qualite1, each group pinned-first then newest pin, then FIFO
                 var inProgressGroups = items
                     .Where(i => i.Status == QueueStatus.EncourTraitement)
-                    .GroupBy(i => string.IsNullOrWhiteSpace(i.Qualite1)
-                        ? "(Sans Qualité)"
-                        : i.Qualite1!)
+                    .GroupBy(i => string.IsNullOrWhiteSpace(i.Qualite1) ? "(Sans Qualité)" : i.Qualite1!)
                     .OrderBy(g => g.Key)
                     .Select(g => new QueueGroup(
                         Name: g.Key,
-                        Items: g.OrderBy(i => i.CreatedAt).ToList()))
+                        Items: g
+                            .OrderByDescending(i => i.IsPined)                       // pinned first
+                            .ThenByDescending(i => i.PinedAt ?? DateTime.MinValue)   // recent pins near top
+                            .ThenBy(i => i.CreatedAt)                                // FIFO among same pin state
+                            .ToList()))
                     .ToList();
 
                 var result = new List<QueueGroup>(1 + inProgressGroups.Count);
@@ -126,20 +142,19 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
                 result.AddRange(inProgressGroups);
                 return result;
             }
-            catch (Exception ex)
+            catch
             {
-                await _uow.RollbackAsync(ct);
-                _log.LogError(ex, "❌ Failed to build queue snapshot");
+                try { await _uow.RollbackAsync(ct); } catch { }
                 throw;
             }
         }
     }
 
-    // -------- Writer --------
+    // -------- Writer (INSERT) --------
     public static class EcareQueueWriter
     {
         private const string InsertSql = @"
-            INSERT INTO Ecare_Queue
+            INSERT INTO dbo.Ecare_Queue
             (
                 Matricule,
                 Nom_Chaufeur,
@@ -151,7 +166,9 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
                 Bon_Livraison,
                 Source,
                 Status,
-                CreatedAt
+                CreatedAt,
+                IsPined,
+                PinedAt
             )
             OUTPUT INSERTED.Id
             VALUES
@@ -166,9 +183,14 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
                 @Bon_Livraison,
                 @Source,
                 @Status,
-                @CreatedAt
+                @CreatedAt,
+                @IsPined,
+                @PinedAt
             );";
 
+        /// <summary>
+        /// Inserts a row into Ecare_Queue and returns the new Id.
+        /// </summary>
         public static async Task<int> InsertAsync(
             IUnitOfWork uow,
             string? matricule,
@@ -182,6 +204,8 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
             string? source,
             QueueStatus status,
             DateTime createdAt,
+            bool isPined,
+            DateTime? pinedAt,
             CancellationToken ct = default)
         {
             var p = new DynamicParameters();
@@ -195,10 +219,12 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
             p.Add("Bon_Livraison", bonLivraison, DbType.String);
             p.Add("Source", source, DbType.String);
             p.Add("Status", status, DbType.Int32);
-            p.Add("CreatedAt", createdAt, DbType.DateTime);
+            p.Add("CreatedAt", createdAt, DbType.DateTime2);
+            p.Add("IsPined", isPined, DbType.Boolean);   // BIT
+            p.Add("PinedAt", pinedAt, DbType.DateTime2); // nullable
 
             return await uow.Connection.ExecuteScalarAsync<int>(
-                InsertSql, p, uow.Transaction);
+                new CommandDefinition(InsertSql, p, uow.Transaction, cancellationToken: ct));
         }
     }
 }

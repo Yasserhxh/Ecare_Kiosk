@@ -1,6 +1,7 @@
 ﻿using Ecare.Application;
 using Ecare.Application.Commands;
 using Ecare.Application.Commands.Queue.CreateQueue;
+using Ecare.Application.Commands.Queue.PinTruck;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Application.Services;
@@ -143,9 +144,21 @@ app.MapPost("queue", async (
     .Produces(StatusCodes.Status201Created)
     .Produces(StatusCodes.Status400BadRequest);
 
+app.MapPost("/queue/toggle-pin/{matricule}", async (string matricule, IMediator mediator, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(matricule))
+        return Results.BadRequest("matricule is required");
+
+    var res = await mediator.Send(new TogglePinByMatriculeCommand(matricule), ct);
+    return res.Success
+        ? Results.Ok(new { affected = res.Value })
+        : Results.BadRequest(res.Error);
+})
+.WithName("Queue_TogglePin");
+
 
 // ------------------------------
-// ✅ Initialize the publisher (connect to Azure SignalR once)
+//Initialize the publisher (connect to Azure SignalR once)
 // ------------------------------
 using (var scope = app.Services.CreateScope())
 {
