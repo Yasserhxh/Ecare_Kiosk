@@ -85,12 +85,20 @@ builder.Services.AddSingleton<ServiceManager>(sp =>
 // 2️⃣ Configure client listener options
 builder.Services.Configure<SignalRClientOptions>(cfg.GetSection("SignalRClient"));
 
+builder.Services.Configure<RfidListenerOptions>(
+    builder.Configuration.GetSection("RfidListener"));
+
 // 3️⃣ Register publisher (order_data_hub broadcaster)
 builder.Services.AddSingleton<OrderDataPublisher>();
 
 // 4️⃣ Register RFID → backend listener (listens on slv_hub)
 builder.Services.AddSingleton<DeviceSignalRClient>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DeviceSignalRClient>());
+
+builder.Services.AddHttpClient(nameof(RfidPabEntryListner));
+
+// Background listener
+builder.Services.AddHostedService<RfidPabEntryListner>();
 
 var app = builder.Build();
 
