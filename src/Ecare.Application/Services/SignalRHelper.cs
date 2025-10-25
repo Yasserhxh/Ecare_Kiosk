@@ -38,18 +38,18 @@ public static class SignalRHelper
             {
                 hubCtx = await manager.CreateHubContextAsync(hubName, ct);
                 _hubCache[hubName] = hubCtx;
-                logger?.LogInformation("🔗 Created new hub context for {hub}", hubName);
+                logger?.LogInformation("Created new hub context for {hub}", hubName);
             }
 
             // Broadcast payload
             await hubCtx.Clients.All.SendAsync(methodName, payload, ct);
 
-            logger?.LogInformation("✅ Broadcasted to hub '{hub}' via method '{method}' → {payload}",
+            logger?.LogInformation("Broadcasted to hub '{hub}' via method '{method}' → {payload}",
                 hubName, methodName, JsonSerializer.Serialize(payload));
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "❌ Failed to broadcast to hub '{hub}'", hubName);
+            logger?.LogError(ex, "Failed to broadcast to hub '{hub}'", hubName);
             throw;
         }
     }

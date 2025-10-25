@@ -3,6 +3,7 @@ using Ecare.Application.Commands;
 using Ecare.Application.Commands.Flux.Create;
 using Ecare.Application.Commands.Orders;
 using Ecare.Application.Commands.Queue.CreateQueue;
+using Ecare.Application.Commands.Queue.PabEntry;
 using Ecare.Application.Commands.Queue.PinTruck;
 using Ecare.Application.Commands.Queue.UpdateQueue;
 using Ecare.Application.Pipelines;
@@ -192,6 +193,15 @@ app.MapPost("/orders/from-form", async (CreateOrderFromFormCommand c, IMediator 
 app.MapPost("/queue/update-details", async (UpdateQueueDetailsCommand c, IMediator m)
     => await m.Send(c))
    .WithName("Queue_UpdateDetails");
+
+app.MapPut("/queue/pab-entry", async (SetFirstWeightAndStartPabCommand c, IMediator m, CancellationToken ct) =>
+{
+    var res = await m.Send(c, ct);
+    return res.Success ? Results.Ok(res.Value) : Results.BadRequest(res.Error);
+})
+.WithName("Queue_PabEntry_SetFirstWeight")
+.Produces<int>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest);
 
 // ------------------------------
 //Initialize the publisher (connect to Azure SignalR once)
