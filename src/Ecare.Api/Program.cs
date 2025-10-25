@@ -4,6 +4,7 @@ using Ecare.Application.Commands.Flux.Create;
 using Ecare.Application.Commands.Orders;
 using Ecare.Application.Commands.Queue.CreateQueue;
 using Ecare.Application.Commands.Queue.PinTruck;
+using Ecare.Application.Commands.Queue.UpdateQueue;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Application.Services;
@@ -180,6 +181,9 @@ app.MapPost("/orders/from-form", async (CreateOrderFromFormCommand c, IMediator 
    .WithName("CreateOrderFromForm")
    .WithSummary("Create order using only form fields (matricule, chauffeur, client, bon, product, quantity).");
 
+app.MapPost("/queue/update-details", async (UpdateQueueDetailsCommand c, IMediator m)
+    => await m.Send(c))
+   .WithName("Queue_UpdateDetails");
 
 // ------------------------------
 //Initialize the publisher (connect to Azure SignalR once)
