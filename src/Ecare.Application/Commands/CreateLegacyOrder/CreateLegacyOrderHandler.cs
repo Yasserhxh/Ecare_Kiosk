@@ -19,11 +19,11 @@ public sealed class CreateLegacyOrderHandler(
             var eq = await equipements.GetByCarteSlvAsync(request.Slv, uow);
             if (eq is null) return Result<string>.Fail("Carte SLV inconnue/inactive");
 
-            var created = await writer.CreateOrderWithItemAsync(request.Slv, eq.Matricule, request.ProductId, request.Quantity, request.Unite, uow, ct);
-            if (created is null) return Result<string>.Fail("Création commande échouée");
+            var created = await writer.CreateOrderWithItemAsync(request.NumeroCommande,request.Slv, eq.Matricule, request.ProductId, request.Quantity, request.Unite, uow, ct);
+            if (created is 0) return Result<string>.Fail("Création commande échouée");
 
             await uow.CommitAsync(ct);
-            return Result<string>.Ok(created.Value.NumeroCommande);
+            return Result<string>.Ok(created.ToString());
         }
         catch
         {
