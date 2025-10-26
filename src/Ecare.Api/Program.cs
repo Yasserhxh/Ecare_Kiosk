@@ -8,6 +8,7 @@ using Ecare.Application.Commands.Queue.UpdateQueue;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Application.Services;
+using Ecare.Application.Services.Ecare.Application.Services;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
 using Ecare.Infrastructure.Printing;
@@ -91,6 +92,30 @@ builder.Services.AddSingleton<OrderDataPublisher>();
 // 4️⃣ Register RFID → backend listener (listens on slv_hub)
 builder.Services.AddSingleton<DeviceSignalRClient>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DeviceSignalRClient>());
+
+// options for the single listener
+// Program.cs (or Composition Root)
+builder.Services.AddOptions<SignalRListenerOptions>()
+    .Bind(builder.Configuration.GetSection("SignalRInbound"))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.NegotiateEndpoint)
+                && !string.IsNullOrWhiteSpace(o.Hub)
+                && !string.IsNullOrWhiteSpace(o.Method),
+              "SignalRInbound: NegotiateEndpoint, Hub, Method are required")
+    .ValidateOnStart();
+
+builder.Services.AddHttpClient(nameof(SignalRHubListener));
+
+// Use YOUR handler (not the logging no-op)
+builder.Services.AddSingleton<ISignalRInboundHandler, PabEntryInboundHandler>();
+
+// The background listener
+builder.Services.AddHostedService<SignalRHubListener>();
+
+
+
+
+
+
 
 var app = builder.Build();
 

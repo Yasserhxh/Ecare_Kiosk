@@ -3,7 +3,7 @@
 public sealed record QueueItemDto(
     string? Matricule,
     string? Qualite1,
-    Ecare.Domain.ValueObjects.QueueStatus Status,
+    Domain.ValueObjects.QueueStatus Status,
     DateTime CreatedAt,
     bool IsPined,
     DateTime? PinedAt);

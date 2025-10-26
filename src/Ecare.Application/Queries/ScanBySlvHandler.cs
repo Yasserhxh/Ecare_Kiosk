@@ -142,7 +142,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                         productName = i.ProductName,
                         quantity = i.Quantity,
                         unite = i.Unite,
-                        imageUrl = i.imageUrl 
+                        imageUrl = i.ImageUrl 
                     })
                 }
             };
