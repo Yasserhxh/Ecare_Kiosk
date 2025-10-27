@@ -29,7 +29,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
         ILogger<LoadingInboundHandler> log,
         IServiceProvider sp,
         ServiceManager signalR,
-        IOptions<PabEntryOutboundOptions> outOpt)
+        IOptions<LoadingOutboundOptions> outOpt)
     {
         _log = log;
         _sp = sp;
