@@ -183,6 +183,14 @@ app.MapPost("/flux/first-weight/by-bon", async (UpdateFirstWeightByBonCommand cm
         : Results.BadRequest(new { error = res.Error });
 });
 
+app.MapPost("/flux/second-weight/by-bon", async (UpdateSecondWeightByBonCommand cmd, IMediator mediator, CancellationToken ct) =>
+{
+    var res = await mediator.Send(cmd, ct);
+    return res.Success
+        ? Results.Ok(new { updated = res.Value })
+        : Results.BadRequest(new { error = res.Error });
+});
+
 app.MapGet("/pab/exit", async Task<IResult> (string slv, ISender mediator, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(slv))
