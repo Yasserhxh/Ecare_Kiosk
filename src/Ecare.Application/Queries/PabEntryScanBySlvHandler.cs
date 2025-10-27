@@ -83,6 +83,7 @@ public sealed class PabEntryScanBySlvHandler
                     order.Number,
                     order.Destination,
                     order.DeliveryMode,
+                    
                     order.TruckPlate,
                     order.Status,
                     mapped);
@@ -95,7 +96,8 @@ public sealed class PabEntryScanBySlvHandler
                 equipement.Id,
                 equipement.Matricule,     // Plate
                 equipement.CarteSLV,
-                client?.Name,             // ClientName
+                equipement.ChauffeurName,
+                // ClientName
                 client?.SapOk,            // SapOk
                 dto);
 
@@ -111,11 +113,12 @@ public sealed class PabEntryScanBySlvHandler
                 driver = new
                 {
                     id = vm.DriverId,
-                    plate = vm.Plate
+                    plate = vm.Plate,
+                    name = equipement.ChauffeurName
                 },
                 client = new
                 {
-                    name = vm.ClientName,
+                    name = equipement.ClientName,
                     sapOk = vm.SapOk
                 },
                 order = vm.Order is null ? null : new
