@@ -14,7 +14,7 @@ namespace Ecare.Api.Extensions
     {
         public static IServiceCollection AddSignalRListeners(this IServiceCollection services, IConfiguration cfg)
         {
-            // 🔹 Validate configuration
+            // Validate configuration
             var entrySection = cfg.GetSection("SignalRInbound");
             var exitSection = cfg.GetSection("SignalRInboundExit");
 
@@ -23,22 +23,22 @@ namespace Ecare.Api.Extensions
             if (!exitSection.Exists())
                 throw new InvalidOperationException("Missing 'SignalRInboundExit' section");
 
-            // 🔹 HTTP client
+            // HTTP client
             services.AddHttpClient(nameof(SignalRHubListener));
 
-            // 🔹 Outbound configs
+            // Outbound configs
             services.Configure<PabEntryOutboundOptions>(cfg.GetSection("PabEntryOutbound"));
             services.Configure<PabExitOutboundOptions>(cfg.GetSection("PabExitOutbound"));
 
-            // 🔹 Named options
+            // Named options
             services.Configure<SignalRListenerOptions>("PabEntry", entrySection);
             services.Configure<SignalRListenerOptions>("PabExit", exitSection);
 
-            // 🔹 Handlers
+            // Handlers
             services.AddSingleton<PabEntryInboundHandler>();
             services.AddSingleton<PabExitInboundHandler>();
 
-            // 🔹 Register BOTH listeners as hosted services
+            // Register BOTH listeners as hosted services
             services.AddHostedService<PabEntryListener>();
             services.AddHostedService<PabExitListener>();
 

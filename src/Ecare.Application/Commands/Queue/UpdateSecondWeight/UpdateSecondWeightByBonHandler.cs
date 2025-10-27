@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace Ecare.Application.Commands.Flux;
 
 public sealed class UpdateSecondWeightByBonHandler
-    : IRequestHandler<UpdateFirstWeightByBonCommand, Result<int>>
+    : IRequestHandler<UpdateSecondWeightByBonCommand, Result<int>>
 {
     private readonly IUnitOfWork _uow;
     private readonly ILogger<UpdateFirstWeightByBonHandler> _log;
@@ -23,7 +23,7 @@ public sealed class UpdateSecondWeightByBonHandler
 
     }
 
-    public async Task<Result<int>> Handle(UpdateFirstWeightByBonCommand request, CancellationToken ct)
+    public async Task<Result<int>> Handle(UpdateSecondWeightByBonCommand request, CancellationToken ct)
     {
         await _uow.BeginAsync(ct);
         try

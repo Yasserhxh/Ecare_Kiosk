@@ -18,7 +18,7 @@ namespace Ecare.Application.Services
             PabExitInboundHandler handler)
         {
             var opts = options.Get("PabExit");
-            log.LogInformation("🟠 PabExitListener constructor: Hub={Hub}, Method={Method}",
+            log.LogInformation("PabExitListener constructor: Hub={Hub}, Method={Method}",
                 opts.Hub, opts.Method);
             _inner = new SignalRHubListener(log, http, Options.Create(opts), handler);
         }

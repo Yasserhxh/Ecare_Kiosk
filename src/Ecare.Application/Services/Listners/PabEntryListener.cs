@@ -18,7 +18,7 @@ namespace Ecare.Application.Services
             PabEntryInboundHandler handler)
         {
             var opts = options.Get("PabEntry");
-            log.LogInformation("🟢 PabEntryListener constructor: Hub={Hub}, Method={Method}",
+            log.LogInformation("PabEntryListener constructor: Hub={Hub}, Method={Method}",
                 opts.Hub, opts.Method);
             _inner = new SignalRHubListener(log, http, Options.Create(opts), handler);
         }

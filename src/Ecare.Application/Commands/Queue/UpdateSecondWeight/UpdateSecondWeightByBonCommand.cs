@@ -6,5 +6,5 @@ namespace Ecare.Application.Commands.Flux;
 public sealed record UpdateSecondWeightByBonCommand(
     string Matricule,
     string BonDeCommande,
-    decimal FirstWeight
+    decimal SecondWeight
 ) : IRequest<Result<int>>;
