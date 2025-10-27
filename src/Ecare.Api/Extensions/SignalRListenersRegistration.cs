@@ -17,11 +17,14 @@ namespace Ecare.Api.Extensions
             // Validate configuration
             var entrySection = cfg.GetSection("SignalRInbound");
             var exitSection = cfg.GetSection("SignalRInboundExit");
+            var loadingSection = cfg.GetSection("SignalRInboundLoading");
 
             if (!entrySection.Exists())
                 throw new InvalidOperationException("Missing 'SignalRInbound' section");
             if (!exitSection.Exists())
                 throw new InvalidOperationException("Missing 'SignalRInboundExit' section");
+            if (!loadingSection.Exists())
+                throw new InvalidOperationException("Missing 'SignalRInboundLoading' section");
 
             // HTTP client
             services.AddHttpClient(nameof(SignalRHubListener));
@@ -29,18 +32,22 @@ namespace Ecare.Api.Extensions
             // Outbound configs
             services.Configure<PabEntryOutboundOptions>(cfg.GetSection("PabEntryOutbound"));
             services.Configure<PabExitOutboundOptions>(cfg.GetSection("PabExitOutbound"));
+            services.Configure<LoadingOutboundOptions>(cfg.GetSection("LoadingOutbound"));
 
             // Named options
             services.Configure<SignalRListenerOptions>("PabEntry", entrySection);
             services.Configure<SignalRListenerOptions>("PabExit", exitSection);
+            services.Configure<SignalRListenerOptions>("Loading", loadingSection);
 
             // Handlers
             services.AddSingleton<PabEntryInboundHandler>();
             services.AddSingleton<PabExitInboundHandler>();
+            services.AddSingleton<LoadingInboundHandler>();
 
             // Register BOTH listeners as hosted services
             services.AddHostedService<PabEntryListener>();
             services.AddHostedService<PabExitListener>();
+            services.AddHostedService<LoadingListner>();
 
             return services;
         }
