@@ -23,7 +23,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
     private readonly ILogger<LoadingInboundHandler> _log;
     private readonly IServiceProvider _sp;
     private readonly ServiceManager _signalR;
-    private readonly PabEntryOutboundOptions _outOpt;
+    private readonly LoadingOutboundOptions _outOpt;
 
     public LoadingInboundHandler(
         ILogger<LoadingInboundHandler> log,
