@@ -1,7 +1,9 @@
 ﻿// Ecare.Application/Commands/Flux/UpdateFirstWeightByBonHandler.cs
 using Dapper;
+using Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
+using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 
 namespace Ecare.Application.Commands.Flux;
@@ -11,11 +13,14 @@ public sealed class UpdateFirstWeightByBonHandler
 {
     private readonly IUnitOfWork _uow;
     private readonly ILogger<UpdateFirstWeightByBonHandler> _log;
+    private readonly ServiceManager _serviceManager;
 
-    public UpdateFirstWeightByBonHandler(IUnitOfWork uow, ILogger<UpdateFirstWeightByBonHandler> log)
+    public UpdateFirstWeightByBonHandler(IUnitOfWork uow, ILogger<UpdateFirstWeightByBonHandler> log,ServiceManager serviceManager)
     {
         _uow = uow;
         _log = log;
+        _serviceManager = serviceManager;
+
     }
 
     public async Task<Result<int>> Handle(UpdateFirstWeightByBonCommand request, CancellationToken ct)
@@ -69,6 +74,8 @@ WHERE Matricule = @Matricule
             _log.LogInformation(
                 "FirstWeight updated for {Matricule}/{Bon}. Flux={FluxRows}, Queue updated={QueueRows}",
                 request.Matricule, request.BonDeCommande, fluxRows, queueRows);
+
+            await QueueSnapshot.BuildAndBroadcastAsync(_serviceManager, _uow, _log, ct);
 
             return Result<int>.Ok(fluxRows + queueRows);
         }
