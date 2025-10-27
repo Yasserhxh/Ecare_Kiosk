@@ -123,7 +123,7 @@ public sealed class GetOrderDetailsHandler : IRequestHandler<GetOrderDetailsQuer
             {
                 @event = "LoadingDataEvent",
                 site = "Asment-Temara-01",
-                kiosk = "pab-exit-pc-01",
+                kiosk = "loading-pc-01",
                 slv = result.CarteSLV,
                 ts = DateTime.UtcNow,
                 firstWeight = firstWeight,
