@@ -210,6 +210,33 @@ app.MapGet("/pab/exit", async Task<IResult> (string slv, ISender mediator, Cance
     return Results.Ok(new { message = "Exit data retrieved and broadcast.", data = result.Value });
 });
 
+app.MapPost("/flux/start-charging", async (
+    UpdateStartChargingCommand cmd,
+    IMediator mediator,
+    CancellationToken ct) =>
+{
+    var res = await mediator.Send(cmd, ct);
+    return res.Success
+        ? Results.Ok(new { updated = res.Value })
+        : Results.BadRequest(new { error = res.Error });
+})
+.WithName("Flux_UpdateStartCharging")
+.WithSummary("Met à jour EcareFlux.StartChargingAt=DateTime.Now pour un Matricule + BonDeCommande.");
+
+app.MapPost("/flux/finish-charging", async (
+    UpdateFinishChargingCommand cmd,
+    IMediator mediator,
+    CancellationToken ct) =>
+{
+    var res = await mediator.Send(cmd, ct);
+    return res.Success
+        ? Results.Ok(new { updated = res.Value })
+        : Results.BadRequest(new { error = res.Error });
+})
+.WithName("Flux_UpdateFinishCharging")
+.WithSummary("Met à jour EcareFlux.FinishChargingAt=DateTime.Now pour un Matricule + BonDeCommande.");
+
+
 // ---------------------------------------------------------
 // Initialize shared SignalR publisher once
 // ---------------------------------------------------------

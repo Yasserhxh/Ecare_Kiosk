@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Ecare.Application.Queries
+namespace Ecare.Application.Queries.Loading.GetOrderDetails
 {
 
     public sealed record GetOrderDetailsQuery(string Slv) : IRequest<Result<ScanBySlvLoading>>;

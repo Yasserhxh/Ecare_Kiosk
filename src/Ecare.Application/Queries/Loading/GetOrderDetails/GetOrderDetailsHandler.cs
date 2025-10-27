@@ -9,7 +9,7 @@ using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 using Ecare.Application.Services;
 
-namespace Ecare.Application.Queries;
+namespace Ecare.Application.Queries.Loading.GetOrderDetails;
 
 public sealed class GetOrderDetailsHandler : IRequestHandler<GetOrderDetailsQuery, Result<ScanBySlvLoading>>
 {
@@ -126,7 +126,7 @@ public sealed class GetOrderDetailsHandler : IRequestHandler<GetOrderDetailsQuer
                 kiosk = "loading-pc-01",
                 slv = result.CarteSLV,
                 ts = DateTime.UtcNow,
-                firstWeight = firstWeight,
+                firstWeight,
                 driver = new
                 {
                     id = result.DriverId,

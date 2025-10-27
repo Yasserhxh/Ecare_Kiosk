@@ -1,5 +1,6 @@
 ﻿// Ecare.Application/Services/PabEntryInboundHandler.cs
 using Ecare.Application.Queries;
+using Ecare.Application.Queries.Loading.GetOrderDetails;
 using Ecare.Application.Services.Ecare.Application.Services;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
