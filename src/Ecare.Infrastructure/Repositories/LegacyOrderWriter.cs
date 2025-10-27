@@ -5,7 +5,8 @@ namespace Ecare.Infrastructure.Repositories;
 
 public interface ILegacyOrderWriter
 {
-    Task<(int OrderId, string NumeroCommande)?> CreateOrderWithItemAsync(
+    Task<(int OrderId, int NumeroCommande)?> CreateOrderWithItemAsync(
+        int NumeroCommande,
         string slv,
         string truckPlate,
         int productId,
@@ -17,7 +18,9 @@ public interface ILegacyOrderWriter
 
 public sealed class LegacyOrderWriter : ILegacyOrderWriter
 {
-    public async Task<(int OrderId, string NumeroCommande)?> CreateOrderWithItemAsync(
+    public async Task<(int OrderId, int NumeroCommande)?> CreateOrderWithItemAsync(
+        
+        int numeroCommande,
         string slv,
         string truckPlate,
         int productId,
@@ -26,7 +29,7 @@ public sealed class LegacyOrderWriter : ILegacyOrderWriter
         IUnitOfWork uow,
         CancellationToken ct)
     {
-        var numero = $"CMD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
+        //var numero = $"CMD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
 
         // Get or create a default shipping ID
         var getShippingId = new CommandDefinition(
@@ -53,7 +56,7 @@ public sealed class LegacyOrderWriter : ILegacyOrderWriter
             new
             {
                 ShippingId = shippingId ?? 1, // Use found shipping ID or default to 1
-                NumeroCommande = numero,
+                NumeroCommande = numeroCommande,
                 CarteSLV = slv,
                 PlaqueCamion = truckPlate,
                 Statut = "Crée",
@@ -71,7 +74,7 @@ public sealed class LegacyOrderWriter : ILegacyOrderWriter
             transaction: uow.Transaction,
             cancellationToken: ct);
         var rows = await uow.Connection.ExecuteAsync(insertItem);
-        return rows == 1 ? (orderId.Value, numero) : null;
+        return rows == 1 ? (orderId.Value,numeroCommande) : null;
     }
 }
 

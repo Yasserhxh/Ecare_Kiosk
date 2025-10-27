@@ -7,23 +7,23 @@ public sealed class CreateLegacyOrderHandler(
     IClientEquipementRepository equipements,
     ILegacyOrderWriter writer,
     IUnitOfWork uow)
-    : IRequestHandler<CreateLegacyOrderCommand, Result<string>>
+    : IRequestHandler<CreateLegacyOrderCommand, Result<int>>
 {
-    public async Task<Result<string>> Handle(CreateLegacyOrderCommand request, CancellationToken ct)
+    public async Task<Result<int>> Handle(CreateLegacyOrderCommand request, CancellationToken ct)
     {
-        if (request.Quantity <= 0) return Result<string>.Fail("Quantité invalide");
+        //if (request.Quantity <= 0) return Result<string>.Fail("Quantité invalide");
 
         await uow.BeginAsync(ct);
         try
         {
             var eq = await equipements.GetByCarteSlvAsync(request.Slv, uow);
-            if (eq is null) return Result<string>.Fail("Carte SLV inconnue/inactive");
+            //if (eq is null) return Result<string>.Fail("Carte SLV inconnue/inactive");
 
-            var created = await writer.CreateOrderWithItemAsync(request.Slv, eq.Matricule, request.ProductId, request.Quantity, request.Unite, uow, ct);
-            if (created is null) return Result<string>.Fail("Création commande échouée");
+            var created = await writer.CreateOrderWithItemAsync(request.NumeroCommande, request.Slv, eq.Matricule, request.ProductId, request.Quantity, request.Unite, uow, ct);
+            //if (created is null) return Result<string>.Fail("Création commande échouée");
 
             await uow.CommitAsync(ct);
-            return Result<string>.Ok(created.Value.NumeroCommande);
+            return Result<int>.Ok(created.Value.NumeroCommande);
         }
         catch
         {
