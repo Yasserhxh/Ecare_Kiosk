@@ -1,4 +1,5 @@
-﻿using Ecare.Application;
+﻿using Ecare.Api.Extensions; // <-- for AddSignalRListeners
+using Ecare.Application;
 using Ecare.Application.Commands;
 using Ecare.Application.Commands.Flux;
 using Ecare.Application.Commands.Flux.Create;
@@ -9,7 +10,6 @@ using Ecare.Application.Commands.Queue.UpdateQueue;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Application.Services;
-using Ecare.Application.Services.Ecare.Application.Services;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
 using Ecare.Infrastructure.Printing;
@@ -18,47 +18,61 @@ using Ecare.Shared;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using System.Net.Http.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
 
-// --- CORS
+// ---------------------------------------------------------
+// General host config: show all DI problems during startup
+// ---------------------------------------------------------
+builder.Host.UseDefaultServiceProvider(opt =>
+{
+    opt.ValidateScopes = true;
+    opt.ValidateOnBuild = true;
+});
+
+// ---------------------------------------------------------
+// CORS + Swagger
+// ---------------------------------------------------------
 const string ViteDev = "ViteDev";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(ViteDev, policy =>
-        policy
-            .AllowAnyOrigin()   // allow file:// and remote LAN frontend
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .SetPreflightMaxAge(TimeSpan.FromHours(1)));
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .SetPreflightMaxAge(TimeSpan.FromHours(1)));
 });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// --- MediatR + FluentValidation
-builder.Services.AddMediatR(cfgM => cfgM.RegisterServicesFromAssemblyContaining<IAssemblyMarker>());
+// ---------------------------------------------------------
+// MediatR + Validation Pipelines
+// ---------------------------------------------------------
+builder.Services.AddMediatR(m => m.RegisterServicesFromAssemblyContaining<IAssemblyMarker>());
 builder.Services.AddValidatorsFromAssemblyContaining<IAssemblyMarker>();
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
-// --- Persistence
+// ---------------------------------------------------------
+// Persistence (EF Core + Dapper UnitOfWork)
+// ---------------------------------------------------------
 builder.Services.AddDbContext<EcareDbContext>(options =>
     options.UseSqlServer(
         cfg.GetConnectionString("SqlServer"),
-        b => b.MigrationsAssembly(typeof(EcareDbContext).Assembly.FullName)
-    ));
-builder.Services.AddSingleton<IDbConnectionFactory>(_ => new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
+        b => b.MigrationsAssembly(typeof(EcareDbContext).Assembly.FullName)));
+
+builder.Services.AddSingleton<IDbConnectionFactory>(_ =>
+    new SqlConnectionFactory(cfg.GetConnectionString("SqlServer")!));
+
 builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 
-// --- Repos + Printing
+// ---------------------------------------------------------
+// Repositories + Infrastructure services
+// ---------------------------------------------------------
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IWeighRepository, WeighRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
@@ -70,63 +84,38 @@ builder.Services.AddScoped<IKioskOrderRepository, KioskOrderRepository>();
 builder.Services.AddScoped<ILegacyOrderWriter, LegacyOrderWriter>();
 builder.Services.AddSingleton<IBlPrinter, MockBlPrinter>();
 
-// ------------------------------
-// Azure SignalR: NEGOTIATE + BACKGROUND LISTENER + ORDER BROADCASTER
-// ------------------------------
-
-// 1️⃣ Register Azure SignalR ServiceManager (used for negotiate + hub contexts)
+// ---------------------------------------------------------
+// Azure SignalR setup
+// ---------------------------------------------------------
 builder.Services.AddSingleton<ServiceManager>(sp =>
 {
     var cs = cfg.GetConnectionString("AzureSignalR")
-             ?? throw new InvalidOperationException("ConnectionStrings:AzureSignalR missing");
+        ?? throw new InvalidOperationException("ConnectionStrings:AzureSignalR missing");
     return new ServiceManagerBuilder()
         .WithOptions(o => o.ConnectionString = cs)
         .BuildServiceManager();
 });
 
-// 2️⃣ Configure client listener options
-builder.Services.Configure<SignalRClientOptions>(cfg.GetSection("SignalRClient"));
-
-// 3️⃣ Register publisher (order_data_hub broadcaster)
+// Optional: shared publisher used elsewhere
 builder.Services.AddSingleton<OrderDataPublisher>();
 
-// 4️⃣ Register RFID → backend listener (listens on slv_hub)
-builder.Services.AddSingleton<DeviceSignalRClient>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<DeviceSignalRClient>());
+// ---------------------------------------------------------
+// Custom Extension: Registers both ENTRY and EXIT listeners
+// ---------------------------------------------------------
+builder.Services.AddSignalRListeners(cfg);
 
-// options for the single listener
-// Program.cs (or Composition Root)
-builder.Services.AddOptions<SignalRListenerOptions>()
-    .Bind(builder.Configuration.GetSection("SignalRInbound"))
-    .Validate(o => !string.IsNullOrWhiteSpace(o.NegotiateEndpoint)
-                && !string.IsNullOrWhiteSpace(o.Hub)
-                && !string.IsNullOrWhiteSpace(o.Method),
-              "SignalRInbound: NegotiateEndpoint, Hub, Method are required")
-    .ValidateOnStart();
-
-builder.Services.AddHttpClient(nameof(SignalRHubListener));
-
-// Use YOUR handler (not the logging no-op)
-builder.Services.AddSingleton<ISignalRInboundHandler, PabEntryInboundHandler>();
-
-// The background listener
-builder.Services.AddHostedService<SignalRHubListener>();
-
-
-
-
-
-
-
+// ---------------------------------------------------------
+// Build + middleware
+// ---------------------------------------------------------
 var app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors(ViteDev);
 
-// ------------------------------
-// ✅ /signalr/negotiate endpoint for both hubs
-// ------------------------------
+// ---------------------------------------------------------
+// Negotiate endpoint (for all hubs)
+// ---------------------------------------------------------
 app.MapGet("/signalr/negotiate", async (string hub, ServiceManager manager, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(hub))
@@ -134,16 +123,12 @@ app.MapGet("/signalr/negotiate", async (string hub, ServiceManager manager, Canc
 
     await using var hubContext = await manager.CreateHubContextAsync(hub, ct);
     var negotiation = await hubContext.NegotiateAsync(new NegotiationOptions(), ct);
-
     return Results.Ok(new { url = negotiation.Url, accessToken = negotiation.AccessToken });
 });
 
-
-
-
-// ------------------------------
-// 🧩 API Endpoints
-// ------------------------------
+// ---------------------------------------------------------
+// Minimal API endpoints
+// ---------------------------------------------------------
 app.MapPost("/kiosk/scan", async (ScanBySlvQuery q, IMediator m) => await m.Send(q));
 app.MapPost("/orders/confirm", async (ConfirmOrderCommand c, IMediator m) => await m.Send(c));
 app.MapPost("/orders/cancel", async (CancelOrderCommand c, IMediator m) => await m.Send(c));
@@ -155,23 +140,15 @@ app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, Cancella
 app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) => await m.Send(c, ct));
 app.MapGet("/flux/qualite", async (IMediator m, CancellationToken ct) => await m.Send(new GetFluxQualiteQuery(), ct));
 
-app.MapPost("queue", async (
-        [FromBody] CreateQueueEntryCommand cmd,
-        IMediator mediator,
-        CancellationToken ct) =>
+app.MapPost("queue", async ([FromBody] CreateQueueEntryCommand cmd, IMediator mediator, CancellationToken ct) =>
 {
     var result = await mediator.Send(cmd, ct);
-
-    // Adapt these two property names to your Result<T> type if they differ
     if (!result.Success)
         return Results.BadRequest(new { error = result.Error });
 
-    // 201 Created + Location header + body { id }
     return Results.Created($"/queue/{result.Value}", new { id = result.Value });
 })
-    .WithName("CreateQueueEntry")
-    .Produces(StatusCodes.Status201Created)
-    .Produces(StatusCodes.Status400BadRequest);
+.WithName("CreateQueueEntry");
 
 app.MapPost("/queue/toggle-pin/{matricule}", async (string matricule, IMediator mediator, CancellationToken ct) =>
 {
@@ -179,54 +156,55 @@ app.MapPost("/queue/toggle-pin/{matricule}", async (string matricule, IMediator 
         return Results.BadRequest("matricule is required");
 
     var res = await mediator.Send(new TogglePinByMatriculeCommand(matricule), ct);
-    return res.Success
-        ? Results.Ok(new { affected = res.Value })
-        : Results.BadRequest(res.Error);
-})
-.WithName("Queue_TogglePin");
+    return res.Success ? Results.Ok(new { affected = res.Value }) : Results.BadRequest(res.Error);
+});
 
-app.MapPost("/queue/rebroadcast", async (
-    ServiceManager signalR,
-    IUnitOfWork uow,
-    ILoggerFactory loggerFactory,
-    CancellationToken ct) =>
+app.MapPost("/queue/rebroadcast", async (ServiceManager signalR, IUnitOfWork uow, ILoggerFactory loggerFactory, CancellationToken ct) =>
 {
     var log = loggerFactory.CreateLogger("QueueRebroadcast");
     await QueueSnapshot.BuildAndBroadcastAsync(signalR, uow, log, ct);
     return Results.Ok(new { ok = true, sent = "QueueDataEvent", hub = "queue_data_hub" });
-})
-.WithName("Queue_Rebroadcast");
+});
 
 app.MapPost("/flux", async (CreateFluxEntryCommand c, IMediator m, CancellationToken ct)
-    => await m.Send(c, ct))
-   .WithName("Flux_Create");
+    => await m.Send(c, ct));
 
-// Program.cs (or your endpoints file)
 app.MapPost("/orders/from-form", async (CreateOrderFromFormCommand c, IMediator m, CancellationToken ct)
-    => await m.Send(c, ct))
-   .WithName("CreateOrderFromForm")
-   .WithSummary("Create order using only form fields (matricule, chauffeur, client, bon, product, quantity).");
+    => await m.Send(c, ct));
 
 app.MapPost("/queue/update-details", async (UpdateQueueDetailsCommand c, IMediator m)
-    => await m.Send(c))
-   .WithName("Queue_UpdateDetails");
+    => await m.Send(c));
 
-app.MapPost("/flux/first-weight/by-bon", async (
-    UpdateFirstWeightByBonCommand cmd,
-    IMediator mediator,
-    CancellationToken ct) =>
+app.MapPost("/flux/first-weight/by-bon", async (UpdateFirstWeightByBonCommand cmd, IMediator mediator, CancellationToken ct) =>
 {
     var res = await mediator.Send(cmd, ct);
     return res.Success
         ? Results.Ok(new { updated = res.Value })
         : Results.BadRequest(new { error = res.Error });
-})
-.WithName("Flux_UpdateFirstWeight_ByBon")
-.WithSummary("Update EcareFlux.FirstWeight + PabEntryAt (now) by Matricule & BonDeCommande; set Ecare_Queue.Status=2 by Matricule & Bon_Commande.");
+});
 
-// ------------------------------
-//Initialize the publisher (connect to Azure SignalR once)
-// ------------------------------
+app.MapGet("/pab/exit", async Task<IResult> (string slv, ISender mediator, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(slv))
+        return Results.BadRequest("Missing query parameter 'slv'.");
+
+    var result = await mediator.Send(new GetPabExitDataQuery(slv), ct);
+    if (!result.Success)
+    {
+        var msg = result.Error ?? "Unknown error";
+        if (msg.Contains("inconnue", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("inactive", StringComparison.OrdinalIgnoreCase))
+            return Results.NotFound(msg);
+
+        return Results.BadRequest(msg);
+    }
+
+    return Results.Ok(new { message = "Exit data retrieved and broadcast.", data = result.Value });
+});
+
+// ---------------------------------------------------------
+// Initialize shared SignalR publisher once
+// ---------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
     var publisher = scope.ServiceProvider.GetRequiredService<OrderDataPublisher>();
