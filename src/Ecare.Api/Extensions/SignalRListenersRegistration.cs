@@ -18,6 +18,7 @@ namespace Ecare.Api.Extensions
             var entrySection = cfg.GetSection("SignalRInbound");
             var exitSection = cfg.GetSection("SignalRInboundExit");
             var loadingSection = cfg.GetSection("SignalRInboundLoading");
+            var parkingSection = cfg.GetSection("SignalRInboundParking");
 
             if (!entrySection.Exists())
                 throw new InvalidOperationException("Missing 'SignalRInbound' section");
@@ -25,6 +26,8 @@ namespace Ecare.Api.Extensions
                 throw new InvalidOperationException("Missing 'SignalRInboundExit' section");
             if (!loadingSection.Exists())
                 throw new InvalidOperationException("Missing 'SignalRInboundLoading' section");
+            if (!loadingSection.Exists())
+                throw new InvalidOperationException("Missing 'SignalRInboundParking' section");
 
             // HTTP client
             services.AddHttpClient(nameof(SignalRHubListener));
@@ -33,21 +36,25 @@ namespace Ecare.Api.Extensions
             services.Configure<PabEntryOutboundOptions>(cfg.GetSection("PabEntryOutbound"));
             services.Configure<PabExitOutboundOptions>(cfg.GetSection("PabExitOutbound"));
             services.Configure<LoadingOutboundOptions>(cfg.GetSection("LoadingOutbound"));
+            services.Configure<ParkingOutboundOptions>(cfg.GetSection("ParkingOutbound"));
 
             // Named options
             services.Configure<SignalRListenerOptions>("PabEntry", entrySection);
             services.Configure<SignalRListenerOptions>("PabExit", exitSection);
             services.Configure<SignalRListenerOptions>("Loading", loadingSection);
+            services.Configure<SignalRListenerOptions>("Parking", parkingSection);
 
             // Handlers
             services.AddSingleton<PabEntryInboundHandler>();
             services.AddSingleton<PabExitInboundHandler>();
             services.AddSingleton<LoadingInboundHandler>();
+            services.AddSingleton<ParkingSlvInboundHandler>();
 
             // Register BOTH listeners as hosted services
             services.AddHostedService<PabEntryListener>();
             services.AddHostedService<PabExitListener>();
             services.AddHostedService<LoadingListner>();
+            services.AddHostedService<ParkingSlvListner>();
 
             return services;
         }
