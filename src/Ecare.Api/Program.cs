@@ -78,8 +78,7 @@ builder.Services.AddSingleton<ServiceManager>(sp =>
         .BuildServiceManager();
 });
 
-// Optional: shared publisher used elsewhere
-builder.Services.AddSingleton<OrderDataPublisher>();
+
 
 // ---------------------------------------------------------
 // Custom Extension: Registers both ENTRY and EXIT listeners
@@ -105,13 +104,6 @@ app.MapQueueEndpoints();
 app.MapFluxEndpoints();
 app.MapOtherEndpoints();
 
-// ---------------------------------------------------------
-// Initialize shared SignalR publisher once
-// ---------------------------------------------------------
-using (var scope = app.Services.CreateScope())
-{
-    var publisher = scope.ServiceProvider.GetRequiredService<OrderDataPublisher>();
-    await publisher.InitializeAsync();
-}
+
 
 app.Run();
