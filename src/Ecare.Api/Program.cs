@@ -5,6 +5,7 @@ using Ecare.Application.Pipelines;
 using Ecare.Application.Services;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
+using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using FluentValidation;
 using MediatR;
@@ -15,7 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
 
 // ---------------------------------------------------------
-// General host config: show all DI problems during startup
+// General host config
 // ---------------------------------------------------------
 builder.Host.UseDefaultServiceProvider(opt =>
 {
@@ -40,7 +41,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // ---------------------------------------------------------
-// MediatR + Validation Pipelines
+// MediatR + Validation
 // ---------------------------------------------------------
 builder.Services.AddMediatR(m => m.RegisterServicesFromAssemblyContaining<IAssemblyMarker>());
 builder.Services.AddValidatorsFromAssemblyContaining<IAssemblyMarker>();
@@ -48,7 +49,7 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBeh
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
 // ---------------------------------------------------------
-// Persistence (EF Core + Dapper UnitOfWork)
+// Persistence
 // ---------------------------------------------------------
 builder.Services.AddDbContext<EcareDbContext>(options =>
     options.UseSqlServer(
@@ -67,7 +68,7 @@ builder.Services.AddRepositories();
 builder.Services.AddInfrastructureServices();
 
 // ---------------------------------------------------------
-// Azure SignalR setup
+// Azure SignalR setup (concrete ServiceManager)
 // ---------------------------------------------------------
 builder.Services.AddSingleton<ServiceManager>(sp =>
 {
@@ -78,10 +79,20 @@ builder.Services.AddSingleton<ServiceManager>(sp =>
         .BuildServiceManager();
 });
 
-
+// If your listeners or negotiate paths use HttpClient, make sure this is present:
+builder.Services.AddHttpClient();
 
 // ---------------------------------------------------------
-// Custom Extension: Registers both ENTRY and EXIT listeners
+// Device registry + Nonce store (your own impls)
+// ---------------------------------------------------------
+builder.Services.AddSingleton<IDeviceRegistry, DeviceRegistry>();
+builder.Services.AddSingleton<INonceStore>(new NonceStore(TimeSpan.FromMinutes(10)));
+
+// Admin key for /api/device/register
+builder.Services.AddSingleton(new DeviceAdminKey(cfg["DeviceRegistry:AdminApiKey"] ?? "dev-admin-key"));
+
+// ---------------------------------------------------------
+// Custom Extension: Registers listeners etc.
 // ---------------------------------------------------------
 builder.Services.AddSignalRListeners(cfg);
 
@@ -95,7 +106,7 @@ app.UseSwaggerUI();
 app.UseCors(ViteDev);
 
 // ---------------------------------------------------------
-// Map all endpoints via extension methods
+// Map all endpoints
 // ---------------------------------------------------------
 app.MapKioskEndpoints();
 app.MapOrderEndpoints();
@@ -103,7 +114,5 @@ app.MapPabEndpoints();
 app.MapQueueEndpoints();
 app.MapFluxEndpoints();
 app.MapOtherEndpoints();
-
-
 
 app.Run();
