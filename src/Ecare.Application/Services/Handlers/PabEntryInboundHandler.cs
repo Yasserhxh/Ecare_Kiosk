@@ -1,5 +1,4 @@
-﻿// Ecare.Application/Services/PabEntryInboundHandler.cs
-using Ecare.Application.Queries;
+﻿using Ecare.Application.Queries;
 using Ecare.Application.Services.Ecare.Application.Services;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
@@ -17,7 +16,6 @@ public sealed class PabEntryOutboundOptions
     public string Hub { get; set; } = "pabentry_data_hub";
     public string Method { get; set; } = "PabEntryDataEvent";
 }
-
 public sealed class PabEntryInboundHandler : ISignalRInboundHandler
 {
     private readonly ILogger<PabEntryInboundHandler> _log;
@@ -39,6 +37,7 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
 
     public async Task HandleAsync(object payload, CancellationToken ct)
     {
+        // Extract SLV
         string? slv = TryExtractCarteSlv(payload);
         if (string.IsNullOrWhiteSpace(slv))
         {
@@ -47,65 +46,66 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
             return;
         }
 
-        _log.LogInformation("PabEntryInboundHandler: Processing SLV={slv}", slv);
+        // Extract deviceId
+        string? deviceId = TryExtractDeviceId(payload);
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            _log.LogWarning("PabEntryInboundHandler: Missing deviceId for SLV={slv}", slv);
+            return;
+        }
+
+        _log.LogInformation("PabEntry: Processing SLV={slv} from device={device}", slv, deviceId);
 
         using var scope = _sp.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        // run your scan/query for PAB entry
-        var result = await mediator.Send(new PabEntryScanBySlvQuery(slv), ct);
+        // Run your scan/query for PAB entry
+        var result = await mediator.Send(new ScanBySlvQuery(slv), ct);
         if (!result.Success || result.Value is null)
         {
-            _log.LogWarning("PabEntryInboundHandler: Scan failed for SLV={slv}. Err={err}", slv, result.Error);
+            _log.LogWarning("PabEntry: Scan failed for SLV={slv}. Err={err}", slv, result.Error);
             return;
         }
 
         var vm = result.Value;
 
-        // shape payload exactly like your other broadcasts
-        var enriched = new
+        var outboundPayload = new
         {
-            @event = _outOpt.Method,             // "PabEntryDataEvent"
+            @event = "PabEntryDataEvent",
             site = "Asment-Temara-01",
-            kiosk = "pab-entry-pc-01",
+            kiosk = deviceId,
             slv = vm.CarteSLV,
             ts = DateTime.UtcNow,
-            driver = new { id = vm.DriverId, plate = vm.Plate },
-            client = new { name = vm.ClientName, sapOk = vm.SapOk },
-            order = vm.Order is null ? null : new
+            driver = new
             {
-                number = vm.Order.Number,
-                destination = vm.Order.Destination,
-                deliveryMode = vm.Order.DeliveryMode,
-                truckPlate = vm.Order.TruckPlate,
-                status = vm.Order.Status,
-                items = vm.Order.Items?.Select(i => new
-                {
-                    productId = i.ProductId,
-                    productName = i.ProductName,
-                    quantity = i.Quantity,
-                    unite = i.Unite
-                })
-            }
+                id = vm.DriverId,
+                name = vm.DriverName,
+                plate = vm.Plate
+            },
+            client = new
+            {
+                name = vm.ClientName,
+                sapOk = vm.SapOk,
+            },
+            order = vm.Order
         };
 
-        // broadcast to Azure SignalR
-        await SignalRHelper.BroadcastAsync(
-            _signalR,
-            hubName: _outOpt.Hub,        // "pabentry_data_hub"
-            methodName: _outOpt.Method,  // "PabEntryDataEvent"
-            payload: enriched,
-            logger: _log,
-            ct: ct
-        );
+        // Broadcast to specific device
+        //await SignalRHelper.BroadcastToDeviceAsync(
+        //    _signalR,
+        //    hubName: _outOpt.Hub,
+        //    methodName: _outOpt.Method,
+        //    deviceId: deviceId,
+        //    payload: outboundPayload,
+        //    logger: _log,
+        //    ct: ct
+        //);
 
-        _log.LogInformation("PabEntryInboundHandler: Broadcasted {method} to {hub} for SLV={slv}",
-            _outOpt.Method, _outOpt.Hub, slv);
+        _log.LogInformation("PabEntry: Sent to device={device}", deviceId);
     }
 
     private static string? TryExtractCarteSlv(object payload)
     {
-        // JSON element (from SignalR) path
         if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
         {
             if (el.TryGetProperty("carteSlv", out var v) && v.ValueKind == JsonValueKind.String)
@@ -114,9 +114,20 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
                 return v2.GetString();
         }
 
-        // POCO path
         var p = payload.GetType().GetProperty("carteSlv")
                  ?? payload.GetType().GetProperty("slv");
+        return p?.GetValue(payload)?.ToString();
+    }
+
+    private static string? TryExtractDeviceId(object payload)
+    {
+        if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
+        {
+            if (el.TryGetProperty("deviceId", out var v) && v.ValueKind == JsonValueKind.String)
+                return v.GetString();
+        }
+
+        var p = payload.GetType().GetProperty("deviceId");
         return p?.GetValue(payload)?.ToString();
     }
 }

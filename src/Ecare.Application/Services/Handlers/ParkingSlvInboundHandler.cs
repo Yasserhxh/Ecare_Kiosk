@@ -66,7 +66,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         {
             @event = "OrderDataEvent",
             site = "Asment-Temara-01",
-            kiosk = /* pick one */ deviceId /* or "parking-pc-01" */,
+            kiosk ="parking-pc-01",
             slv = vm.CarteSLV,
             ts = DateTime.UtcNow,
             driver = new
@@ -98,16 +98,16 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             }
         };
 
-        // ✅ Broadcast ONLY to this device's group
-        await SignalRHelper.BroadcastToDeviceAsync(
-            _signalR,
-            hubName: _outOpt.Hub,
-            methodName: _outOpt.Method,
-            deviceId: deviceId,
-            payload: outboundPayload,
-            logger: _log,
-            ct: ct
-        );
+        //Broadcast ONLY to this device's group
+        //await SignalRHelper.BroadcastToDeviceAsync(
+        //    _signalR,
+        //    hubName: _outOpt.Hub,
+        //    methodName: _outOpt.Method,
+        //    deviceId: deviceId,
+        //    payload: outboundPayload,
+        //    logger: _log,
+        //    ct: ct
+        //);
 
         _log.LogInformation(" Sent OrderDataEvent to device={device}", deviceId);
     }

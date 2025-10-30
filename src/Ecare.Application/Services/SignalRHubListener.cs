@@ -44,7 +44,7 @@
                         var json = payload is JsonElement je
                             ? JsonSerializer.Serialize(je)
                             : JsonSerializer.Serialize(payload);
-                        _log.LogInformation("📩 Inbound payload: {json}", json);
+                        _log.LogInformation("Inbound payload: {json}", json);
                     }
                     catch { /* ignore serialization errors */ }
                     return Task.CompletedTask;
@@ -143,7 +143,9 @@
             private async void OnInbound(object payload)
                 {
                     try
+
                     {
+
                         await _handler.HandleAsync(payload, CancellationToken.None);
                     }
                     catch (Exception ex)

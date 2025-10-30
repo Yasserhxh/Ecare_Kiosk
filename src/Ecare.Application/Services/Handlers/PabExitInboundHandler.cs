@@ -27,10 +27,10 @@ namespace Ecare.Application.Services.Handlers
         private readonly PabExitOutboundOptions _outOpt;
 
         public PabExitInboundHandler(
-        ILogger<PabExitInboundHandler> log,
-        IServiceProvider sp,
-        ServiceManager signalR,
-        IOptions<PabExitOutboundOptions> outOpt)
+            ILogger<PabExitInboundHandler> log,
+            IServiceProvider sp,
+            ServiceManager signalR,
+            IOptions<PabExitOutboundOptions> outOpt)
         {
             _log = log;
             _sp = sp;
@@ -40,74 +40,74 @@ namespace Ecare.Application.Services.Handlers
 
         public async Task HandleAsync(object payload, CancellationToken ct)
         {
+            // Extract SLV
             string? slv = TryExtractCarteSlv(payload);
             if (string.IsNullOrWhiteSpace(slv))
             {
-                _log.LogWarning("PabEntryInboundHandler: payload missing carteSlv. Raw={raw}",
+                _log.LogWarning("PabExitInboundHandler: payload missing carteSlv. Raw={raw}",
                     payload is JsonElement je ? JsonSerializer.Serialize(je) : payload.ToString());
                 return;
             }
 
-            _log.LogInformation("PabEntryInboundHandler: Processing SLV={slv}", slv);
+            // Extract deviceId
+            string? deviceId = TryExtractDeviceId(payload);
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                _log.LogWarning("PabExitInboundHandler: Missing deviceId for SLV={slv}", slv);
+                return;
+            }
+
+            _log.LogInformation("PabExit: Processing SLV={slv} from device={device}", slv, deviceId);
 
             using var scope = _sp.CreateScope();
             var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-            // run your scan/query for PAB entry
-            var result = await mediator.Send(new GetPabExitDataQuery(slv), ct);
+            var result = await mediator.Send(new ScanBySlvQuery(slv), ct);
             if (!result.Success || result.Value is null)
             {
-                _log.LogWarning("PabExitInboundHandler: Scan failed for SLV={slv}. Err={err}", slv, result.Error);
+                _log.LogWarning("PabExit: Scan failed for SLV={slv}. Err={err}", slv, result.Error);
                 return;
             }
 
             var vm = result.Value;
 
-            // shape payload exactly like your other broadcasts
-            var enriched = new
+            var outboundPayload = new
             {
-                @event = _outOpt.Method,              
+                @event = "PabExitDataEvent",
                 site = "Asment-Temara-01",
-                kiosk = "pab-exit-pc-01",
+                kiosk = deviceId,
                 slv = vm.CarteSLV,
-                firstWeight= vm.FirstWeight,
                 ts = DateTime.UtcNow,
-                driver = new { id = vm.DriverId, plate = vm.Plate },
-                client = new { name = vm.ClientName, sapOk = vm.SapOk },
-                order = vm.Order is null ? null : new
+                driver = new
                 {
-                    number = vm.Order.Number,
-                    destination = vm.Order.Destination,
-                    deliveryMode = vm.Order.DeliveryMode,
-                    truckPlate = vm.Order.TruckPlate,
-                    status = vm.Order.Status,
-                    items = vm.Order.Items?.Select(i => new
-                    {
-                        productId = i.ProductId,
-                        productName = i.ProductName,
-                        quantity = i.Quantity,
-                        unite = i.Unite
-                    })
-                }
+                    id = vm.DriverId,
+                    name = vm.DriverName,
+                    plate = vm.Plate
+                },
+                client = new
+                {
+                    name = vm.ClientName,
+                    sapOk = vm.SapOk
+                },
+                order = vm.Order
             };
 
-            // broadcast to Azure SignalR
-            await SignalRHelper.BroadcastAsync(
-                _signalR,
-                hubName: _outOpt.Hub,        // "pabentry_data_hub"
-                methodName: _outOpt.Method,  // "PabEntryDataEvent"
-                payload: enriched,
-                logger: _log,
-                ct: ct
-            );
+            // Broadcast to specific device
+            //await SignalRHelper.BroadcastToDeviceAsync(
+            //    _signalR,
+            //    hubName: _outOpt.Hub,
+            //    methodName: _outOpt.Method,
+            //    deviceId: deviceId,
+            //    payload: outboundPayload,
+            //    logger: _log,
+            //    ct: ct
+            //);
 
-            _log.LogInformation("PabEntryInboundHandler: Broadcasted {method} to {hub} for SLV={slv}",
-                _outOpt.Method, _outOpt.Hub, slv);
+            _log.LogInformation("PabExit: Sent to device={device}", deviceId);
         }
 
         private static string? TryExtractCarteSlv(object payload)
         {
-            // JSON element (from SignalR) path
             if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
             {
                 if (el.TryGetProperty("carteSlv", out var v) && v.ValueKind == JsonValueKind.String)
@@ -116,9 +116,20 @@ namespace Ecare.Application.Services.Handlers
                     return v2.GetString();
             }
 
-            // POCO path
             var p = payload.GetType().GetProperty("carteSlv")
                      ?? payload.GetType().GetProperty("slv");
+            return p?.GetValue(payload)?.ToString();
+        }
+
+        private static string? TryExtractDeviceId(object payload)
+        {
+            if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
+            {
+                if (el.TryGetProperty("deviceId", out var v) && v.ValueKind == JsonValueKind.String)
+                    return v.GetString();
+            }
+
+            var p = payload.GetType().GetProperty("deviceId");
             return p?.GetValue(payload)?.ToString();
         }
     }
