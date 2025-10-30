@@ -90,16 +90,16 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
             order = vm.Order
         };
 
-        // Broadcast to specific device
-        //await SignalRHelper.BroadcastToDeviceAsync(
-        //    _signalR,
-        //    hubName: _outOpt.Hub,
-        //    methodName: _outOpt.Method,
-        //    deviceId: deviceId,
-        //    payload: outboundPayload,
-        //    logger: _log,
-        //    ct: ct
-        //);
+        //Broadcast to specific device
+        await SignalRHelper.BroadcastToDeviceAsync(
+            _signalR,
+            hubName: _outOpt.Hub,
+            methodName: _outOpt.Method,
+            deviceId: deviceId,
+            payload: outboundPayload,
+            logger: _log,
+            ct: ct
+        );
 
         _log.LogInformation("PabEntry: Sent to device={device}", deviceId);
     }

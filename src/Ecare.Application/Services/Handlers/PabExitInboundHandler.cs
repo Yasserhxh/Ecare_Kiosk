@@ -93,15 +93,15 @@ namespace Ecare.Application.Services.Handlers
             };
 
             // Broadcast to specific device
-            //await SignalRHelper.BroadcastToDeviceAsync(
-            //    _signalR,
-            //    hubName: _outOpt.Hub,
-            //    methodName: _outOpt.Method,
-            //    deviceId: deviceId,
-            //    payload: outboundPayload,
-            //    logger: _log,
-            //    ct: ct
-            //);
+            await SignalRHelper.BroadcastToDeviceAsync(
+                _signalR,
+                hubName: _outOpt.Hub,
+                methodName: _outOpt.Method,
+                deviceId: deviceId,
+                payload: outboundPayload,
+                logger: _log,
+                ct: ct
+            );
 
             _log.LogInformation("PabExit: Sent to device={device}", deviceId);
         }
