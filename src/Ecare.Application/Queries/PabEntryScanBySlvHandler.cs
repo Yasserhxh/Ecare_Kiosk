@@ -140,14 +140,14 @@ public sealed class PabEntryScanBySlvHandler
                 }
             };
 
-            await SignalRHelper.BroadcastAsync(
-                _signalR,
-                hubName: "pabentry_data_hub",
-                methodName: "PabEntryDataEvent",
-                payload: payload,
-                logger: _log,
-                ct: ct
-            );
+            //await SignalRHelper.BroadcastAsync(
+            //    _signalR,
+            //    hubName: "pabentry_data_hub",
+            //    methodName: "PabEntryDataEvent",
+            //    payload: payload,
+            //    logger: _log,
+            //    ct: ct
+            //);
 
             _log.LogInformation("Broadcasted PabEntryDataEvent for SLV={slv}", vm.CarteSLV);
 

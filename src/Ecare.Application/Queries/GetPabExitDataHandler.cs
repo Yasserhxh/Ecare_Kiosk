@@ -157,14 +157,14 @@ public sealed class GetPabExitDataHandler : IRequestHandler<GetPabExitDataQuery,
             };
 
             // 8️⃣ Broadcast via Azure SignalR
-            await SignalRHelper.BroadcastAsync(
-                _signalR,
-                hubName: "pab_exit_data_hub",
-                methodName: "ExitDataEvent",
-                payload: payload,
-                logger: _log,
-                ct: ct
-            );
+            //await SignalRHelper.BroadcastAsync(
+            //    _signalR,
+            //    hubName: "pab_exit_data_hub",
+            //    methodName: "ExitDataEvent",
+            //    payload: payload,
+            //    logger: _log,
+            //    ct: ct
+            //);
 
             _log.LogInformation("Broadcasted OrderDataEvent for SLV={slv}", result.CarteSLV);
 

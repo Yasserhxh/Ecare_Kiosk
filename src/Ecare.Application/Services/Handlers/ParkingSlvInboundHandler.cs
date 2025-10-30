@@ -99,15 +99,15 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         };
 
         //Broadcast ONLY to this device's group
-        //await SignalRHelper.BroadcastToDeviceAsync(
-        //    _signalR,
-        //    hubName: _outOpt.Hub,
-        //    methodName: _outOpt.Method,
-        //    deviceId: deviceId,
-        //    payload: outboundPayload,
-        //    logger: _log,
-        //    ct: ct
-        //);
+        await SignalRHelper.BroadcastToDeviceAsync(
+            _signalR,
+            hubName: _outOpt.Hub,
+            methodName: _outOpt.Method,
+            deviceId: deviceId,
+            payload: outboundPayload,
+            logger: _log,
+            ct: ct
+        );
 
         _log.LogInformation(" Sent OrderDataEvent to device={device}", deviceId);
     }

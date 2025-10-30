@@ -64,13 +64,13 @@ WHERE Status BETWEEN 0 AND 1;";
             var grouped = await BuildGroupedSnapshotAsync(ct);
 
             // Broadcast to SignalR
-            await SignalRHelper.BroadcastAsync(
-                signalR,
-                hubName: "queue_data_hub",
-                methodName: "QueueDataEvent",
-                payload: grouped,
-                ct: ct,
-                logger: log);
+            //await SignalRHelper.BroadcastAsync(
+            //    signalR,
+            //    hubName: "queue_data_hub",
+            //    methodName: "QueueDataEvent",
+            //    payload: grouped,
+            //    ct: ct,
+            //    logger: log);
 
             log.LogInformation("Queue updated for Matricule={m}, affected={n}", request.Matricule, affected);
             return Result<int>.Ok(affected);

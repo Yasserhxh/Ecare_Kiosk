@@ -157,14 +157,14 @@ public sealed class GetOrderDetailsHandler : IRequestHandler<GetOrderDetailsQuer
             };
 
             // 8️⃣ Broadcast via Azure SignalR
-            await SignalRHelper.BroadcastAsync(
-                _signalR,
-                hubName: "loading_data_hub",
-                methodName: "LoadingDataEvent",
-                payload: payload,
-                logger: _log,
-                ct: ct
-            );
+            //await SignalRHelper.BroadcastAsync(
+            //    _signalR,
+            //    hubName: "loading_data_hub",
+            //    methodName: "LoadingDataEvent",
+            //    payload: payload,
+            //    logger: _log,
+            //    ct: ct
+            //);
 
             _log.LogInformation("Broadcasted OrderDataEvent for SLV={slv}", result.CarteSLV);
 
