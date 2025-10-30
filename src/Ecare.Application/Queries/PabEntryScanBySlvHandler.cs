@@ -93,15 +93,16 @@ public sealed class PabEntryScanBySlvHandler
 
             // 4) Build VM that your API returns
             var vm = new ScanBySlvVm(
-                equipement.Id,
-                equipement.Matricule,     // Plate
-                equipement.CarteSLV,
-                equipement.ChauffeurName,
-                // ClientName
-                client?.SapOk,            // SapOk
-                dto);
+                DriverId: equipement.Id,
+                DriverName: equipement.ChauffeurName,    // NEW
+                Plate: equipement.Matricule,
+                CarteSLV: equipement.CarteSLV,
+                ClientName: client?.Name ?? equipement.ClientName,
+                SapOk: client?.SapOk,
+                Order: dto
+            );
 
-            // 5) 🔊 Broadcast the exact event/data expected by your frontends
+            // 5) Broadcast the exact event/data expected by your frontends
             var payload = new
             {
                 @event = "PabEntryDataEvent",

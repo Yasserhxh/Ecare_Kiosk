@@ -119,22 +119,28 @@
                     await base.StopAsync(cancellationToken);
                 }
 
-                private async Task<(string url, string token)> NegotiateAsync(string hub, CancellationToken ct)
-                {
-                    var http = _http.CreateClient(nameof(SignalRHubListener));
-                    var negotiateUrl = $"{_opt.Value.NegotiateEndpoint}?hub={Uri.EscapeDataString(hub)}";
+            private async Task<(string url, string token)> NegotiateAsync(string hub, CancellationToken ct)
+            {
+                var http = _http.CreateClient(nameof(SignalRHubListener));
 
-                    _log.LogInformation("Negotiating at {url}", negotiateUrl);
-                    var resp = await http.GetFromJsonAsync<NegotiateResponse>(negotiateUrl, ct)
-                               ?? throw new InvalidOperationException("Negotiate returned null.");
+                //  Generate a unique deviceId for this backend listener instance
+                var listenerId = $"backend-listener-{hub}-{Guid.NewGuid():N}";
 
-                    if (string.IsNullOrWhiteSpace(resp.Url) || string.IsNullOrWhiteSpace(resp.AccessToken))
-                        throw new InvalidOperationException("Negotiate response missing url or accessToken.");
+                //  Add deviceId to query string
+                var negotiateUrl = $"{_opt.Value.NegotiateEndpoint}?hub={Uri.EscapeDataString(hub)}&deviceId={Uri.EscapeDataString(listenerId)}";
 
-                    return (resp.Url, resp.AccessToken);
-                }
+                _log.LogInformation("Negotiating at {url}", negotiateUrl);
 
-                private async void OnInbound(object payload)
+                var resp = await http.GetFromJsonAsync<NegotiateResponse>(negotiateUrl, ct)
+                           ?? throw new InvalidOperationException("Negotiate returned null.");
+
+                if (string.IsNullOrWhiteSpace(resp.Url) || string.IsNullOrWhiteSpace(resp.AccessToken))
+                    throw new InvalidOperationException("Negotiate response missing url or accessToken.");
+
+                return (resp.Url, resp.AccessToken);
+            }
+
+            private async void OnInbound(object payload)
                 {
                     try
                     {

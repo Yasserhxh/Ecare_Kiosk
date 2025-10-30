@@ -1,10 +1,10 @@
-﻿using MediatR;
-using Dapper;
+﻿using Dapper;
 using Ecare.Application.Dtos;
 using Ecare.Domain.Entities;
 using Ecare.Domain.ValueObjects;
 using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
+using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 using Ecare.Application.Services;
@@ -50,44 +50,35 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
         await _uow.BeginAsync(ct);
         try
         {
-            // 1️⃣ Lookup driver from Ecare_ClientEquipements
             var equipement = await _drivers.GetBySlvAsync(SlvId.From(request.Slv), _uow);
             if (equipement is null)
                 return Result<ScanBySlvVm>.Fail("Carte SLV inconnue/inactive");
 
-            // 2️⃣ Lookup client info
             var client = await _uow.Connection.QuerySingleOrDefaultAsync<Client>(
                 $@"SELECT TOP(1) * FROM {DbTableNames.Clients} WHERE RaisonSociale = @clientName",
-                new { clientName = equipement?.ClientName },
+                new { clientName = equipement.ClientName },
                 _uow.Transaction);
 
-            // 3️⃣ Lookup current order
             var order = await _orders.GetBySlvAsync(equipement.CarteSLV, _uow);
 
             OrderDto? dto = null;
-
             if (order is not null)
             {
-                // 4️⃣ Get order items
                 var orderItemsList = await _orderItems.GetByOrderIdAsync(order.Id, _uow);
-
-                // 5️⃣ Optimize: Fetch all product images in a single query
                 var productIds = orderItemsList.Select(i => i.ProductId).Distinct().ToArray();
                 var images = await GetImageUrlsAsync(productIds, _uow, ct);
 
-                // 6️⃣ Map order items
-                var orderItemsWithProducts = new List<OrderItemDto>();
+                var items = new List<OrderItemDto>();
                 foreach (var item in orderItemsList)
                 {
                     var product = await _ciments.GetByIdAsync(item.ProductId, _uow);
-                    var imageUrl = images.TryGetValue(item.ProductId, out var url) ? url : null;
-
-                    orderItemsWithProducts.Add(new OrderItemDto(
+                    images.TryGetValue(item.ProductId, out var imageUrl);
+                    items.Add(new OrderItemDto(
                         item.ProductId,
                         product?.Name,
                         item.Quantity,
                         item.Unite,
-                        imageUrl 
+                        imageUrl
                     ));
                 }
 
@@ -97,69 +88,22 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                     order.DeliveryMode,
                     order.TruckPlate,
                     order.Status,
-                    orderItemsWithProducts);
+                    items);
             }
 
             await _uow.CommitAsync(ct);
 
-            var result = new ScanBySlvVm(
-                equipement.Id,
-                equipement.Matricule,
-                equipement.CarteSLV,
-                client?.Name,
-                client?.SapOk,
-                dto);
-
-            // 7️⃣ Build SignalR payload
-            var payload = new
-            {
-                @event = "OrderDataEvent",
-                site = "Asment-Temara-01",
-                kiosk = "parking-pc-01",
-                slv = result.CarteSLV,
-                ts = DateTime.UtcNow,
-                driver = new
-                {
-                    id = result.DriverId,
-                    name = equipement.ChauffeurName,
-                    plate = equipement.Matricule
-                },
-                client = new
-                {
-                    name = equipement.ClientName,
-                    sapOk = client?.SapOk
-                },
-                order = result.Order is null ? null : new
-                {
-                    number = result.Order.Number,
-                    destination = result.Order.Destination,
-                    deliveryMode = result.Order.DeliveryMode,
-                    truckPlate = result.Order.TruckPlate,
-                    status = result.Order.Status,
-                    items = result.Order.Items.Select(i => new
-                    {
-                        productId = i.ProductId,
-                        productName = i.ProductName,
-                        quantity = i.Quantity,
-                        unite = i.Unite,
-                        imageUrl = i.ImageUrl 
-                    })
-                }
-            };
-
-            // 8️⃣ Broadcast via Azure SignalR
-            await SignalRHelper.BroadcastAsync(
-                _signalR,
-                hubName: "order_data_hub",
-                methodName: "OrderDataEvent",
-                payload: payload,
-                logger: _log,
-                ct: ct
+            var vm = new ScanBySlvVm(
+                DriverId: equipement.Id,
+                DriverName: equipement.ChauffeurName,    // NEW
+                Plate: equipement.Matricule,
+                CarteSLV: equipement.CarteSLV,
+                ClientName: client?.Name ?? equipement.ClientName,
+                SapOk: client?.SapOk,
+                Order: dto
             );
 
-            _log.LogInformation("Broadcasted OrderDataEvent for SLV={slv}", result.CarteSLV);
-
-            return Result<ScanBySlvVm>.Ok(result);
+            return Result<ScanBySlvVm>.Ok(vm);
         }
         catch (Exception ex)
         {
@@ -169,15 +113,11 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
         }
     }
 
-    // 🔹 Helper: Batch get all image URLs for product IDs
     private async Task<Dictionary<int, string?>> GetImageUrlsAsync(IEnumerable<int> productIds, IUnitOfWork uow, CancellationToken ct)
     {
-        if (!productIds.Any())
-            return new();
-
+        if (!productIds.Any()) return new();
         const string sql = @"SELECT Id, ImageUrl FROM [dbo].[EcareCiments] WHERE Id IN @ids";
         var cmd = new CommandDefinition(sql, new { ids = productIds }, transaction: uow.Transaction, cancellationToken: ct);
-
         var results = await uow.Connection.QueryAsync<(int Id, string? ImageUrl)>(cmd);
         return results.ToDictionary(x => x.Id, x => x.ImageUrl);
     }
