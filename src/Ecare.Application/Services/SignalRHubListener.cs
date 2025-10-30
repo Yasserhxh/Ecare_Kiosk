@@ -109,7 +109,7 @@ namespace Ecare.Application.Services
                 var outHub = string.IsNullOrWhiteSpace(_opt.Value.OutHub) ? _opt.Value.Hub : _opt.Value.OutHub!;
                 var outMethod = _opt.Value.OutMethod;
 
-                await SignalRHelper.SendToDeviceGroupAsync(
+                await SignalRHelper.BroadcastToDeviceAsync(
                     _manager, outHub, outMethod, deviceId, payload, _log, CancellationToken.None);
             }
             catch (Exception ex)

@@ -7,7 +7,6 @@ using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
-using Ecare.Application.Services;
 
 namespace Ecare.Application.Queries;
 

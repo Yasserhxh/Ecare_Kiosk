@@ -2,7 +2,7 @@
 using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.CreateKioskOrder;
 public sealed class CreateOrderAtKioskHandler(
     IKioskDriverRepository drivers,
     IKioskOrderRepository orders,

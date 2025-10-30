@@ -2,5 +2,5 @@ using MediatR;
 using Ecare.Shared;
 using System.ComponentModel.DataAnnotations;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.ConfirmOrder;
 public sealed record ConfirmOrderCommand([property:Required] string OrderNumber) : IRequest<Result>;

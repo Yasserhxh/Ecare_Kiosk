@@ -4,7 +4,7 @@ using Dapper;
 using Ecare.Shared;
 using MediatR;
 
-namespace Ecare.Application.Commands.Orders;
+namespace Ecare.Application.Commands.Orders.AffectOrder;
 
 
 

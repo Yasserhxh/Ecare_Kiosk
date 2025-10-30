@@ -1,12 +1,5 @@
 ﻿using Ecare.Application.Services;
-using Ecare.Application.Services.Ecare.Application.Services;
-using Ecare.Application.Services.Handlers;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Azure.SignalR.Management;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Ecare.Application.Services.Listners;
 
 namespace Ecare.Api.Extensions
 {

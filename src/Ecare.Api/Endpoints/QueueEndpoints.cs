@@ -1,8 +1,7 @@
 ﻿using Ecare.Application.Commands.Queue.CreateQueue;
 using Ecare.Application.Commands.Queue.PinTruck;
 using Ecare.Application.Commands.Queue.UpdateQueue;
-using Ecare.Application.Services;
-using Ecare.Infrastructure;
+using Ecare.Application.Services.Queue;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;

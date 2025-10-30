@@ -6,7 +6,7 @@ using Ecare.Domain.Entities;
 using Ecare.Infrastructure.Printing;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.Pab2WeighAndBl;
 public sealed class RecordPab2AndIssueBlHandler(IOrderRepository orders, IWeighRepository weighs, IBlPrinter printer, IUnitOfWork uow)
     : IRequestHandler<RecordPab2AndIssueBlCommand, Result<string>>
 {

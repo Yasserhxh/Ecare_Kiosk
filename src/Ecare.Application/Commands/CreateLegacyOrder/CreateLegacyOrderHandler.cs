@@ -2,7 +2,7 @@
 using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.CreateLegacyOrder;
 public sealed class CreateLegacyOrderHandler(
     IClientEquipementRepository equipements,
     ILegacyOrderWriter writer,

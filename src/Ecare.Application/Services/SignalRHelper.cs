@@ -1,17 +1,69 @@
-﻿// SignalRHelper.cs
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
-using System.Threading;
+using System.Reflection;
+using System.Text.Json;
 
 public static class SignalRHelper
 {
     private static readonly ConcurrentDictionary<string, ServiceHubContext> _hubCache = new();
-    private static readonly SemaphoreSlim _ctxLock = new(1, 1);
 
-    public static string DeviceGroup(string deviceId) => $"device:{deviceId}";
+    /// <summary>
+    /// Smart broadcast:
+    /// - If payload contains a string property "deviceId", sends ONLY to group "device:{deviceId}".
+    /// - Otherwise, broadcasts to ALL clients.
+    /// </summary>
+    public static async Task BroadcastAsync(
+        ServiceManager manager,
+        string hubName,
+        string methodName,
+        object payload,
+        ILogger? logger = null,
+        CancellationToken ct = default)
+    {
+        var hubCtx = await GetOrCreateHubContext(manager, hubName, logger, ct);
 
+        var deviceId = TryExtractDeviceId(payload);
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            // Prefer group targeting; works for browser tabs joined by negotiate
+            var group = $"device:{deviceId}";
+            await hubCtx.Clients.Group(group).SendAsync(methodName, payload, ct);
+            logger?.LogInformation("📡 Sent '{method}' to GROUP '{group}' on hub '{hub}'", methodName, group, hubName);
+
+            // Optional: also send to SignalR "User" (uncomment if you want dual targeting)
+            // await hubCtx.Clients.User(deviceId).SendAsync(methodName, payload, ct);
+            // logger?.LogInformation("📡 Sent '{method}' to USER '{user}' on hub '{hub}'", methodName, deviceId, hubName);
+
+            return;
+        }
+
+        // No deviceId → broadcast to everyone
+        await hubCtx.Clients.All.SendAsync(methodName, payload, ct);
+        logger?.LogInformation("📡 Broadcasted '{method}' to ALL on hub '{hub}'", methodName, hubName);
+    }
+
+    /// <summary>
+    /// Explicit device (USER) send (kept for callers that pass deviceId separately).
+    /// </summary>
+    public static async Task BroadcastToDeviceAsync(
+        ServiceManager manager,
+        string hubName,
+        string methodName,
+        string deviceId,
+        object payload,
+        ILogger? logger = null,
+        CancellationToken ct = default)
+    {
+        var hubCtx = await GetOrCreateHubContext(manager, hubName, logger, ct);
+        await hubCtx.Clients.User(deviceId).SendAsync(methodName, payload, ct);
+        logger?.LogInformation("📡 Sent '{method}' to USER '{device}' on hub '{hub}'", methodName, deviceId, hubName);
+    }
+
+    /// <summary>
+    /// Explicit device GROUP send (preferred if your negotiate adds user to group "device:{deviceId}").
+    /// </summary>
     public static async Task SendToDeviceGroupAsync(
         ServiceManager manager,
         string hubName,
@@ -21,21 +73,10 @@ public static class SignalRHelper
         ILogger? logger = null,
         CancellationToken ct = default)
     {
-        var ctx = await GetOrCreateHubContext(manager, hubName, logger, ct);
-        await ctx.Clients.Group(DeviceGroup(deviceId)).SendAsync(methodName, payload, ct);
-        logger?.LogInformation("📡 Sent to {hub}:{method} -> {group}", hubName, methodName, DeviceGroup(deviceId));
-    }
-
-    public static async Task EnsureUserInDeviceGroupAsync(
-        ServiceManager manager,
-        string hubName,
-        string deviceId,
-        ILogger? logger = null,
-        CancellationToken ct = default)
-    {
-        var ctx = await GetOrCreateHubContext(manager, hubName, logger, ct);
-        await ctx.UserGroups.AddToGroupAsync(deviceId, DeviceGroup(deviceId), ct);
-        logger?.LogInformation("🔗 Ensured user {user} in {group} on {hub}", deviceId, DeviceGroup(deviceId), hubName);
+        var hubCtx = await GetOrCreateHubContext(manager, hubName, logger, ct);
+        var group = $"device:{deviceId}";
+        await hubCtx.Clients.Group(group).SendAsync(methodName, payload, ct);
+        logger?.LogInformation("📡 Sent '{method}' to GROUP '{group}' on hub '{hub}'", methodName, group, hubName);
     }
 
     private static async Task<ServiceHubContext> GetOrCreateHubContext(
@@ -44,27 +85,34 @@ public static class SignalRHelper
         ILogger? logger,
         CancellationToken ct)
     {
-        if (_hubCache.TryGetValue(hubName, out var existing) && existing is not null)
-            return existing;
-
-        await _ctxLock.WaitAsync(ct);
-        try
+        if (!_hubCache.TryGetValue(hubName, out var hubCtx) || hubCtx is null)
         {
-            if (_hubCache.TryGetValue(hubName, out existing) && existing is not null)
-                return existing;
-
-            var created = await manager.CreateHubContextAsync(hubName, ct);
-            _hubCache[hubName] = created;
-            logger?.LogInformation("✅ Created hub context for {hub}", hubName);
-            return created;
+            hubCtx = await manager.CreateHubContextAsync(hubName, ct);
+            _hubCache[hubName] = hubCtx;
+            logger?.LogInformation("⚙️ Created hub context for {hub}", hubName);
         }
-        finally { _ctxLock.Release(); }
+        return hubCtx;
+    }
+
+    private static string? TryExtractDeviceId(object payload)
+    {
+        // JSON path
+        if (payload is JsonElement je && je.ValueKind == JsonValueKind.Object)
+        {
+            if (je.TryGetProperty("deviceId", out var v) && v.ValueKind == JsonValueKind.String)
+                return v.GetString();
+        }
+
+        // POCO reflection path
+        var prop = payload.GetType().GetProperty("deviceId", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        var val = prop?.GetValue(payload)?.ToString();
+        return string.IsNullOrWhiteSpace(val) ? null : val;
     }
 
     public static async Task DisposeAllAsync()
     {
         foreach (var kv in _hubCache)
-            try { await kv.Value.DisposeAsync(); } catch { }
+            await kv.Value.DisposeAsync();
         _hubCache.Clear();
     }
 }

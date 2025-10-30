@@ -1,5 +1,8 @@
-﻿using Ecare.Application.Commands;
-using Ecare.Application.Commands.Orders;
+﻿using Ecare.Application.Commands.CancelOrder;
+using Ecare.Application.Commands.ConfirmOrder;
+using Ecare.Application.Commands.CreateKioskOrder;
+using Ecare.Application.Commands.CreateLegacyOrder;
+using Ecare.Application.Commands.Orders.AffectOrder;
 using MediatR;
 
 namespace Ecare.Api.Endpoints;

@@ -3,7 +3,7 @@ using Ecare.Infrastructure.Repositories;
 using Ecare.Domain;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.ConfirmOrder;
 public sealed class ConfirmOrderHandler(IOrderRepository repo, IUnitOfWork uow)
     : IRequestHandler<ConfirmOrderCommand, Result>
 {

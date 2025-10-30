@@ -1,5 +1,6 @@
-﻿using Ecare.Application.Queries;
-using Ecare.Application.Services.Ecare.Application.Services;
+﻿// ParkingOutboundOptions.cs + ParkingSlvInboundHandler.cs
+using Ecare.Application.Queries;
+using Ecare.Application.Services;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,9 +10,10 @@ using System.Text.Json;
 
 public sealed class ParkingOutboundOptions
 {
-    public string Hub { get; set; } = "pabentry_data_hub";
-    public string Method { get; set; } = "PabEntryDataEvent";
+    public string Hub { get; set; } = "order_data_hub";  // FIX
+    public string Method { get; set; } = "OrderDataEvent"; // FIX
 }
+
 public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
 {
     private readonly ILogger<ParkingSlvInboundHandler> _log;
@@ -25,61 +27,45 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         ServiceManager signalR,
         IOptions<ParkingOutboundOptions> outOpt)
     {
-        _log = log;
-        _sp = sp;
-        _signalR = signalR;
-        _outOpt = outOpt.Value;
+        _log = log; _sp = sp; _signalR = signalR; _outOpt = outOpt.Value;
     }
 
     public async Task HandleAsync(object payload, CancellationToken ct)
     {
-        // Extract SLV
-        string? slv = TryExtractCarteSlv(payload);
+        var slv = TryExtract(payload, "carteSlv") ?? TryExtract(payload, "slv");
         if (string.IsNullOrWhiteSpace(slv))
         {
-            _log.LogWarning("Missing carteSlv in payload: {raw}", JsonSerializer.Serialize(payload));
+            _log.LogWarning("Parking: payload missing carteSlv/slv. Raw={raw}",
+                payload is JsonElement je ? JsonSerializer.Serialize(je) : payload?.ToString());
             return;
         }
 
-        // Extract deviceId
-        string? deviceId = TryExtractDeviceId(payload);
+        var deviceId = TryExtract(payload, "deviceId");
         if (string.IsNullOrWhiteSpace(deviceId))
         {
-            _log.LogWarning("Missing deviceId in payload for SLV={slv}", slv);
+            _log.LogWarning("Parking: payload missing deviceId for SLV={slv}", slv);
             return;
         }
-
-        _log.LogInformation("📥 Processing SLV={slv} from device={device}", slv, deviceId);
 
         using var scope = _sp.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-
         var result = await mediator.Send(new ScanBySlvQuery(slv), ct);
         if (!result.Success || result.Value is null)
         {
-            _log.LogWarning("Scan failed for SLV={slv}: {err}", slv, result.Error);
+            _log.LogWarning("Parking: Scan failed for SLV={slv}. Err={err}", slv, result.Error);
             return;
         }
 
         var vm = result.Value;
         var outboundPayload = new
         {
-            @event = "OrderDataEvent",
+            @event = _outOpt.Method,
             site = "Asment-Temara-01",
-            kiosk = /* pick one */ deviceId /* or "parking-pc-01" */,
+            kiosk = deviceId, // or your fixed label
             slv = vm.CarteSLV,
             ts = DateTime.UtcNow,
-            driver = new
-            {
-                id = vm.DriverId,
-                name = vm.DriverName,
-                plate = vm.Plate
-            },
-            client = new
-            {
-                name = vm.ClientName,
-                sapOk = vm.SapOk
-            },
+            driver = new { id = vm.DriverId, name = vm.DriverName, plate = vm.Plate },
+            client = new { name = vm.ClientName, sapOk = vm.SapOk },
             order = vm.Order is null ? null : new
             {
                 number = vm.Order.Number,
@@ -98,7 +84,6 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             }
         };
 
-        // ✅ Broadcast ONLY to this device's group
         await SignalRHelper.BroadcastToDeviceAsync(
             _signalR,
             hubName: _outOpt.Hub,
@@ -106,36 +91,18 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             deviceId: deviceId,
             payload: outboundPayload,
             logger: _log,
-            ct: ct
-        );
+            ct: ct);
 
-        _log.LogInformation(" Sent OrderDataEvent to device={device}", deviceId);
+        _log.LogInformation("Parking: sent {method} to {hub} for device={deviceId}, SLV={slv}",
+            _outOpt.Method, _outOpt.Hub, deviceId, slv);
     }
 
-    private static string? TryExtractCarteSlv(object payload)
+    private static string? TryExtract(object payload, string name)
     {
         if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
-        {
-            if (el.TryGetProperty("carteSlv", out var v) && v.ValueKind == JsonValueKind.String)
-                return v.GetString();
-            if (el.TryGetProperty("slv", out var v2) && v2.ValueKind == JsonValueKind.String)
-                return v2.GetString();
-        }
+            return el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
-        var p = payload.GetType().GetProperty("carteSlv")
-                 ?? payload.GetType().GetProperty("slv");
-        return p?.GetValue(payload)?.ToString();
-    }
-
-    private static string? TryExtractDeviceId(object payload)
-    {
-        if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
-        {
-            if (el.TryGetProperty("deviceId", out var v) && v.ValueKind == JsonValueKind.String)
-                return v.GetString();
-        }
-
-        var p = payload.GetType().GetProperty("deviceId");
+        var p = payload.GetType().GetProperty(name);
         return p?.GetValue(payload)?.ToString();
     }
 }

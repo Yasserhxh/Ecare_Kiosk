@@ -3,7 +3,7 @@ using Ecare.Infrastructure.Repositories;
 using Ecare.Domain.Entities;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.Pab1Weigh;
 public sealed class RecordPab1WeighHandler(IOrderRepository orders, IWeighRepository weighs, IUnitOfWork uow)
     : IRequestHandler<RecordPab1WeighCommand, Result>
 {

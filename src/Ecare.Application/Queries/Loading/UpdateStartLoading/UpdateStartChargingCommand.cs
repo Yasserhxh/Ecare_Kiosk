@@ -1,7 +1,7 @@
 ﻿using Ecare.Shared;
 using MediatR;
 
-namespace Ecare.Application.Commands.Flux;
+namespace Ecare.Application.Queries.Loading.UpdateStartLoading;
 
 public sealed record UpdateStartChargingCommand(
     string Matricule,

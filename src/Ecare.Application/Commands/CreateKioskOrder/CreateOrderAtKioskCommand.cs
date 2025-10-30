@@ -1,7 +1,7 @@
 ﻿using MediatR;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.CreateKioskOrder;
 public sealed record CreateOrderAtKioskCommand(string Slv, int ProductId, int ProductType, string ProductName, string Unit, decimal Quantity)
     : IRequest<Result<Guid>>;
 

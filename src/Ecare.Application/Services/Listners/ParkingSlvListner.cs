@@ -1,6 +1,5 @@
 ﻿// File: PabExitListener.cs
-using Ecare.Application.Services.Ecare.Application.Services;
-using Ecare.Application.Services.Handlers;
+using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,12 +14,12 @@ namespace Ecare.Application.Services
             ILogger<SignalRHubListener> log,
             IHttpClientFactory http,
             IOptionsMonitor<SignalRListenerOptions> options,
-            ParkingSlvInboundHandler handler)
+            ParkingSlvInboundHandler handler,
+            ServiceManager manager)
         {
             var opts = options.Get("Parking");
-            log.LogInformation("ParkingSlvListner constructor: Hub={Hub}, Method={Method}",
-                opts.Hub, opts.Method);
-            _inner = new SignalRHubListener(log, http, Options.Create(opts), handler);
+            log.LogInformation("ParkingSlvListner: Hub={Hub}, Method={Method}", opts.Hub, opts.Method);
+            _inner = new SignalRHubListener(log, http, Options.Create(opts), handler, manager);
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)

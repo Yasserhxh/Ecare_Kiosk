@@ -1,5 +1,4 @@
-﻿using System.Reflection;
-using Ecare.Infrastructure.Repositories;
+﻿using Ecare.Infrastructure.Repositories;
 
 namespace Ecare.Api.Extensions;
 

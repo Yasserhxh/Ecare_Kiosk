@@ -1,12 +1,11 @@
 ﻿using Dapper;
-using Ecare.Application.Commands.Queue.PinTruck;
-using Ecare.Application.Services;                
+using Ecare.Application.Services.Queue;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 
-namespace Ecare.Application.Commands.Queue.TogglePin;
+namespace Ecare.Application.Commands.Queue.PinTruck;
 
 public sealed class TogglePinByMatriculeHandler(
     IUnitOfWork uow,

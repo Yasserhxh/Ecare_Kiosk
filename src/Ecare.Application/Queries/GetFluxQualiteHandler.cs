@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using Ecare.Infrastructure.Repositories;
 using Ecare.Shared;
 using Ecare.Application.Dtos;
 using Dapper;

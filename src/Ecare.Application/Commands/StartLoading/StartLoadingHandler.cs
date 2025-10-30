@@ -3,7 +3,7 @@ using Ecare.Infrastructure.Repositories;
 using Ecare.Domain;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands;
+namespace Ecare.Application.Commands.StartLoading;
 public sealed class StartLoadingHandler(IOrderRepository orders, IUnitOfWork uow)
     : IRequestHandler<StartLoadingCommand, Result>
 {

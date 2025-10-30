@@ -1,7 +1,6 @@
 ﻿// Ecare.Application/Queries/PabEntryScanBySlvHandler.cs
 using Dapper;
 using Ecare.Application.Dtos;
-using Ecare.Application.Services;
 using Ecare.Domain.Entities;
 using Ecare.Domain.ValueObjects;
 using Ecare.Infrastructure.Repositories;

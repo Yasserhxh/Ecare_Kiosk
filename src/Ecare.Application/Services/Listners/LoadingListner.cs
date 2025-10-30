@@ -1,8 +1,8 @@
-﻿// File: PabExitListener.cs
-using Ecare.Application.Services.Handlers;
+﻿// Ecare.Application/Services/Listners/LoadingListner.cs
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Azure.SignalR.Management;
 
 namespace Ecare.Application.Services
 {
@@ -14,22 +14,18 @@ namespace Ecare.Application.Services
             ILogger<SignalRHubListener> log,
             IHttpClientFactory http,
             IOptionsMonitor<SignalRListenerOptions> options,
-            LoadingInboundHandler handler)
+            LoadingInboundHandler handler,
+            ServiceManager manager) // <-- inject
         {
             var opts = options.Get("Loading");
-            log.LogInformation("LoadingListener constructor: Hub={Hub}, Method={Method}",
-                opts.Hub, opts.Method);
-            _inner = new SignalRHubListener(log, http, Options.Create(opts), handler);
+            log.LogInformation("LoadingListener: Hub={Hub}, Method={Method}", opts.Hub, opts.Method);
+            _inner = new SignalRHubListener(log, http, Options.Create(opts), handler, manager); // <-- pass
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            return ((IHostedService)_inner).StartAsync(stoppingToken);
-        }
+            => ((IHostedService)_inner).StartAsync(stoppingToken);
 
         public override Task StopAsync(CancellationToken cancellationToken)
-        {
-            return _inner.StopAsync(cancellationToken);
-        }
+            => _inner.StopAsync(cancellationToken);
     }
 }

@@ -3,7 +3,7 @@ using Ecare.Shared;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace Ecare.Application.Commands.Flux;
+namespace Ecare.Application.Queries.Loading.UpdateStartLoading;
 
 public sealed class UpdateStartChargingHandler
     : IRequestHandler<UpdateStartChargingCommand, Result<int>>

@@ -1,12 +1,12 @@
 ﻿// Ecare.Application/Commands/Flux/UpdateFirstWeightByBonHandler.cs
 using Dapper;
-using Ecare.Application.Services;
+using Ecare.Application.Services.Queue;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 
-namespace Ecare.Application.Commands.Flux;
+namespace Ecare.Application.Commands.Queue.UpdateFirstWeight;
 
 public sealed class UpdateFirstWeightByBonHandler
     : IRequestHandler<UpdateFirstWeightByBonCommand, Result<int>>

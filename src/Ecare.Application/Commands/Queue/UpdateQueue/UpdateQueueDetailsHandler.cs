@@ -1,7 +1,6 @@
 ﻿// Ecare.Application/Commands/Queue/UpdateQueue/UpdateQueueDetailsHandler.cs
 using System.Data;
 using Dapper;
-using Ecare.Application.Services;
 using Ecare.Domain.ValueObjects; // QueueStatus enum (EnValidation=0, EncourTraitement=1)
 using Ecare.Shared;
 using MediatR;

@@ -1,5 +1,5 @@
 using FluentValidation;
-using Ecare.Application.Commands;
+using Ecare.Application.Commands.Pab1Weigh;
 
 namespace Ecare.Application.Validators;
 public sealed class RecordPab1WeighValidator : AbstractValidator<RecordPab1WeighCommand>

@@ -1,7 +1,7 @@
 ﻿using MediatR;
 using Ecare.Shared;
 
-namespace Ecare.Application.Commands.Orders;
+namespace Ecare.Application.Commands.Orders.AffectOrder;
 
 public sealed record CreateOrderFromFormCommand(
     string Matricule,           // form: Matricule

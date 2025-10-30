@@ -6,7 +6,7 @@ using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
-namespace Ecare.Application.Services
+namespace Ecare.Application.Services.Queue
 {
     /// <summary>
     /// Builds the grouped queue snapshot from dbo.Ecare_Queue and

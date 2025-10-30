@@ -1,4 +1,3 @@
-using Ecare.Domain;
 using Ecare.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

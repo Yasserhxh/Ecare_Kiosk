@@ -2,7 +2,7 @@
 using Ecare.Shared;
 using MediatR;
 
-namespace Ecare.Application.Commands.Flux.Create;
+namespace Ecare.Application.Commands.Flux;
 
 public sealed class CreateFluxEntryHandler(IUnitOfWork uow)
     : IRequestHandler<CreateFluxEntryCommand, Result<int>>

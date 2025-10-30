@@ -1,5 +1,3 @@
-using System;
-
 namespace Ecare.Domain.Entities;
 
 public class Shipping

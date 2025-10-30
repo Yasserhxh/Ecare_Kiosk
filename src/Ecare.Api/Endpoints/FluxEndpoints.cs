@@ -1,6 +1,8 @@
 ﻿using Ecare.Application.Commands.Flux;
-using Ecare.Application.Commands.Flux.Create;
+using Ecare.Application.Commands.Queue.UpdateFirstWeight;
+using Ecare.Application.Commands.Queue.UpdateSecondWeight;
 using Ecare.Application.Queries;
+using Ecare.Application.Queries.Loading.UpdateStartLoading;
 using MediatR;
 
 namespace Ecare.Api.Endpoints;

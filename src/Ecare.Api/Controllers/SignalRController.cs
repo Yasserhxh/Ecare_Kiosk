@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.SignalR.Management;
-using Microsoft.Azure.SignalR;
 
 namespace Ecare.Api.Controllers;
 

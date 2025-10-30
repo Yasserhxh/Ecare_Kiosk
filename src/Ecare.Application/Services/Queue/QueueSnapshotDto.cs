@@ -1,4 +1,4 @@
-﻿namespace Ecare.Application.Services;
+﻿namespace Ecare.Application.Services.Queue;
 
 public sealed record QueueItemDto(
     string? Matricule,

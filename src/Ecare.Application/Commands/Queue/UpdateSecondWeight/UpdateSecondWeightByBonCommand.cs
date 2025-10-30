@@ -1,7 +1,7 @@
 ﻿using Ecare.Shared;
 using MediatR;
 
-namespace Ecare.Application.Commands.Flux;
+namespace Ecare.Application.Commands.Queue.UpdateSecondWeight;
 
 public sealed record UpdateSecondWeightByBonCommand(
     string Matricule,

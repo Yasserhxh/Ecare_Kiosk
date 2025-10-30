@@ -2,7 +2,6 @@
 using Ecare.Api.Extensions; // <-- for AddSignalRListeners and AddRepositories
 using Ecare.Application;
 using Ecare.Application.Pipelines;
-using Ecare.Application.Services;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
 using Ecare.Infrastructure.Repositories;
