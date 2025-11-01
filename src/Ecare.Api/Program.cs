@@ -103,6 +103,7 @@ app.MapPabEndpoints();
 app.MapQueueEndpoints();
 app.MapFluxEndpoints();
 app.MapOtherEndpoints();
+app.MapLigneEndpoints();
 
 
 

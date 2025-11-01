@@ -103,7 +103,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             ct: ct
         );
 
-        _log.LogInformation("✅ Loading: Sent to device={device}", deviceId);
+        _log.LogInformation(" Loading: Sent to device={device}", deviceId);
     }
 
     private static string? TryExtractCarteSlv(object payload)
