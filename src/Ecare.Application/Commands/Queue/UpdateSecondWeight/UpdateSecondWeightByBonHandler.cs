@@ -1,5 +1,4 @@
-﻿// Ecare.Application/Commands/Flux/UpdateFirstWeightByBonHandler.cs
-using Dapper;
+﻿using Dapper;
 using Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
@@ -53,9 +52,30 @@ public sealed class UpdateSecondWeightByBonHandler
                 return Result<int>.Fail("No EcareFlux row matched Matricule + BonDeCommande.");
             }
 
+            const string sqlIncCapacity = @"
+                UPDATE L
+                SET    L.Capacity = L.Capacity + 1
+                FROM   dbo.Ecare_Ligne AS L
+                JOIN   dbo.EcareFlux  AS F
+                       ON F.Ligne = L.Nom
+                WHERE  F.Matricule = @Matricule
+                AND    F.BonDeCommande = @BonDeCommande;";
+
+            var ligneRows = await _uow.Connection.ExecuteAsync(
+                sqlIncCapacity,
+                new
+                {
+                    request.Matricule,
+                    request.BonDeCommande
+                },
+                _uow.Transaction);
+
+             
+            if (ligneRows == 0) { await _uow.RollbackAsync(ct); return Result<int>.Fail("No matching Ecare_Ligne for this flux (Ligne/Nom)."); }
+
             await _uow.CommitAsync(ct);
 
-            return Result<int>.Ok(fluxRows);
+            return Result<int>.Ok(fluxRows + ligneRows);
         }
         catch (Exception ex)
         {
