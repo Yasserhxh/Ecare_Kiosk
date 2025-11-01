@@ -53,7 +53,7 @@ public sealed class UpdateSecondWeightByBonHandler
                 return Result<int>.Fail("No EcareFlux row matched Matricule + BonDeCommande.");
             }
 
-            
+            await _uow.CommitAsync(ct);
 
             return Result<int>.Ok(fluxRows);
         }
