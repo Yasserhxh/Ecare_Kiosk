@@ -10,4 +10,5 @@ public sealed record QueueItemDto(
 
 public sealed record QueueGroupDto(
     string Name,
-    IReadOnlyList<QueueItemDto> Items);
+    IReadOnlyList<QueueItemDto> Items,
+    int Capacity);
