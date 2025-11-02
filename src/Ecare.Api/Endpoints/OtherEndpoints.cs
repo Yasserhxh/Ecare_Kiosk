@@ -25,8 +25,8 @@ public static class OtherEndpoints
             if (string.IsNullOrWhiteSpace(hub))
                 return Results.BadRequest("hub is required");
 
-            if (string.IsNullOrWhiteSpace(deviceId))
-                return Results.BadRequest("deviceId is required");
+            //if (string.IsNullOrWhiteSpace(deviceId))
+            //    return Results.BadRequest("deviceId is required");
 
             await using var hubContext = await manager.CreateHubContextAsync(hub, ct);
 

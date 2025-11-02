@@ -1,7 +1,12 @@
-﻿using Ecare.Application.Queries;
+﻿using Dapper;
+using Ecare.Application.Queries;
 using Ecare.Application.Services.Ecare.Application.Services;
+
+// using Ecare.Application.Services.Ecare.Application.Services; // <- looks accidental, you can remove
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,6 +17,7 @@ public sealed class ParkingOutboundOptions
     public string Hub { get; set; } = "pabentry_data_hub";
     public string Method { get; set; } = "PabEntryDataEvent";
 }
+
 public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
 {
     private readonly ILogger<ParkingSlvInboundHandler> _log;
@@ -62,13 +68,59 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         }
 
         var vm = result.Value;
+
+        // === SELECT * + rows>0 => IsInQueue ====================================
+        bool isInQueue = false;
+
+        if (!string.IsNullOrWhiteSpace(vm.Plate) && !string.IsNullOrWhiteSpace(vm.Order?.Number))
+        {
+            try
+            {
+                var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                var connStr =
+                       cfg.GetConnectionString("SqlServer")
+                    ?? cfg["ConnectionStrings:SqlServer"]
+                    ?? cfg["Db:ConnectionStrings:SqlServer"];
+
+                const string sql = @"
+SELECT *
+FROM dbo.EcareFlux WITH (NOLOCK)
+WHERE Matricule = @Plate
+  AND BonDeCommande = @OrderNumber;";
+
+                await using var conn = new SqlConnection(connStr);
+
+                // We don't need to map a type; just check if any row comes back
+                var rows = await conn.QueryAsync(
+                    new CommandDefinition(
+                        sql,
+                        new { Plate = vm.Plate, OrderNumber = vm.Order.Number },
+                        cancellationToken: ct));
+
+                isInQueue = rows.AsList().Count > 0;
+
+                _log.LogInformation("Queue check: order {order} / plate {plate} => IsInQueue={inQueue}",
+                    vm.Order.Number, vm.Plate, isInQueue);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed EcareFlux check for order={order}, plate={plate}",
+                    vm.Order?.Number, vm.Plate);
+            }
+        }
+        // =======================================================================
+
         var outboundPayload = new
         {
             @event = "OrderDataEvent",
             site = "Asment-Temara-01",
-            kiosk ="parking-pc-01",
+            kiosk = "parking-pc-01",
             slv = vm.CarteSLV,
             ts = DateTime.UtcNow,
+
+            // Capitalized as requested
+            IsInQueue = isInQueue,
+
             driver = new
             {
                 id = vm.DriverId,
@@ -98,7 +150,6 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             }
         };
 
-        //Broadcast ONLY to this device's group
         await SignalRHelper.BroadcastToDeviceAsync(
             _signalR,
             hubName: _outOpt.Hub,
