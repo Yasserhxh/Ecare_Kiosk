@@ -91,7 +91,7 @@ namespace Ecare.Application.Services
                     {
                         var items = g.OrderByDescending(i => i.IsPined)
                                      .ThenByDescending(i => i.PinedAt ?? DateTime.MinValue)
-                                     .ThenBy(i => i.CreatedAt)
+                                     .ThenByDescending(i => i.CreatedAt)
                                      .ToList();
 
                         // Capacity lookup (0 if product isn’t mapped to any line)
