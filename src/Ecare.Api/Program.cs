@@ -104,6 +104,7 @@ app.MapQueueEndpoints();
 app.MapFluxEndpoints();
 app.MapOtherEndpoints();
 app.MapLigneEndpoints();
+app.MapDeviceEndpoints();
 
 
 
