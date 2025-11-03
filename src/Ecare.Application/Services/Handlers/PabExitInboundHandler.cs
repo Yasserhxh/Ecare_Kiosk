@@ -1,5 +1,7 @@
-﻿using Ecare.Application.Queries;
+﻿using Dapper;
+using Ecare.Application.Queries;
 using Ecare.Application.Services.Ecare.Application.Services;
+using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,10 +73,49 @@ namespace Ecare.Application.Services.Handlers
 
             var vm = result.Value;
 
+            decimal? firstWeight = null;
+
+            try
+            {
+                var orderNumber = vm.Order?.Number;
+
+                if (!string.IsNullOrWhiteSpace(orderNumber))
+                {
+                    // Resolve UoW (or your connection provider) from the same scope
+                    var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                    const string SqlFirstWeight = @"
+            SELECT TOP(1) FirstWeight
+            FROM dbo.EcareFlux WITH (NOLOCK)
+            WHERE BonDeCommande = @BonDeCommande
+            ORDER BY Id DESC;";
+
+                    // Allow both numeric and string BonDeCommande
+                    object param =
+                        long.TryParse(orderNumber, out var bonNumeric)
+                            ? new { BonDeCommande = bonNumeric }
+                            : new { BonDeCommande = (object)orderNumber! };
+
+                    firstWeight = await uow.Connection.QueryFirstOrDefaultAsync<decimal?>(SqlFirstWeight, param);
+                    _log.LogInformation("PabExit: Found FirstWeight={firstWeight} for BDC={bdc}", firstWeight, orderNumber);
+                }
+                else
+                {
+                    _log.LogWarning("PabExit: vm.Order.Number is null/empty; skipping FirstWeight lookup.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "PabExit: Failed to fetch FirstWeight from EcareFlux.");
+            }
+
+
+
             var outboundPayload = new
             {
                 @event = "PabExitDataEvent",
                 site = "Asment-Temara-01",
+                firstWeight = firstWeight,
                 kiosk = deviceId,
                 slv = vm.CarteSLV,
                 ts = DateTime.UtcNow,
