@@ -86,7 +86,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                 SELECT *
                 FROM dbo.EcareFlux WITH (NOLOCK)
                 WHERE Matricule = @Plate
-                  AND FirstWeight IS NULL;
+                  AND FirstWeight IS NOT NULL;
                 ";
 
                 await using var conn = new SqlConnection(connStr);
