@@ -31,7 +31,7 @@ namespace Ecare.Infrastructure.Repositories
                 INNER JOIN Ecare_Zone_Chargement AS z ON l.ZoneChargementId = z.Id
                 INNER JOIN Ecare_LigneCiments AS lc ON lc.LigneId = l.Id
                 INNER JOIN EcareCiments AS c ON lc.CimentId = c.Id
-                WHERE c.Name  = @CimentName;";
+                WHERE c.Id  = @CimentName;";
 
             var result = await uow.Connection.QueryAsync<LigneCimentVm>(
                 sql,
