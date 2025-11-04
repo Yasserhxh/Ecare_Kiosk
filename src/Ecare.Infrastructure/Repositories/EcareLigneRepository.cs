@@ -9,7 +9,7 @@ namespace Ecare.Infrastructure.Repositories
     public class EcareLigneRepository
     {
         public async Task<IEnumerable<LigneCimentVm>> GetLignesByTypeAndCimentAsync(
-            string cimentName,
+            int produit,
             IUnitOfWork uow,
             CancellationToken ct = default)
         {
@@ -31,11 +31,11 @@ namespace Ecare.Infrastructure.Repositories
                 INNER JOIN Ecare_Zone_Chargement AS z ON l.ZoneChargementId = z.Id
                 INNER JOIN Ecare_LigneCiments AS lc ON lc.LigneId = l.Id
                 INNER JOIN EcareCiments AS c ON lc.CimentId = c.Id
-                WHERE c.Id  = @CimentName;";
+                WHERE c.Id  = @Id;";
 
             var result = await uow.Connection.QueryAsync<LigneCimentVm>(
                 sql,
-                new { CimentName = cimentName },
+                new { Id = produit},
                 transaction: uow.Transaction
             );
 

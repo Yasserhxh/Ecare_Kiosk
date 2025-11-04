@@ -1,5 +1,4 @@
-﻿// Ecare.Application/Commands/Flux/UpdateFirstWeightByBonHandler.cs
-using Dapper;
+﻿using Dapper;
 using Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
@@ -28,12 +27,14 @@ public sealed class UpdateSecondWeightByBonHandler
         await _uow.BeginAsync(ct);
         try
         {
-            // 1) Update EcareFlux by Matricule + BonDeCommande
             const string sqlFlux = @"
-                UPDATE dbo.EcareFlux
-                SET SecondWeight = @SecondWeight,
+            UPDATE dbo.EcareFlux
+            SET 
+                SecondWeight = @SecondWeight,
+                TotalCharged = @SecondWeight - @FirstWeight,
                 PabExitAt = @Now
-                WHERE Matricule = @Matricule
+            WHERE 
+                Matricule = @Matricule
                 AND BonDeCommande = @BonDeCommande;";
 
             var fluxRows = await _uow.Connection.ExecuteAsync(
@@ -43,6 +44,7 @@ public sealed class UpdateSecondWeightByBonHandler
                     request.Matricule,
                     request.BonDeCommande,
                     request.SecondWeight,
+                    request.FirstWeight,
                     Now = DateTime.Now
                 },
                 _uow.Transaction);
@@ -54,14 +56,14 @@ public sealed class UpdateSecondWeightByBonHandler
             }
 
             await _uow.CommitAsync(ct);
-
             return Result<int>.Ok(fluxRows);
         }
         catch (Exception ex)
         {
             try { await _uow.RollbackAsync(ct); } catch { }
-            _log.LogError(ex, "Failed to update FirstWeight for {Matricule}/{Bon}", request.Matricule, request.BonDeCommande);
-            return Result<int>.Fail("Database error while updating FirstWeight and queue status.");
+            _log.LogError(ex, "Failed to update SecondWeight for {Matricule}/{Bon}", request.Matricule, request.BonDeCommande);
+            return Result<int>.Fail("Database error while updating SecondWeight and queue status.");
         }
     }
+
 }
