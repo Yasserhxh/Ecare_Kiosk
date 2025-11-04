@@ -84,9 +84,8 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
 
                 const string sql = @"
                 SELECT *
-                FROM dbo.EcareFlux WITH (NOLOCK)
+                FROM dbo.Ecare_Queue 
                 WHERE Matricule = @Plate
-                 
                 ";
 
                 await using var conn = new SqlConnection(connStr);
