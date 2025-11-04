@@ -22,6 +22,7 @@ namespace Ecare.Application.Services
         Matricule,
         Qualite1,
         Status,
+        Nom_Chaufeur,
         CreatedAt,
         IsPined,
         PinedAt
