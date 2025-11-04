@@ -233,9 +233,9 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
         SELECT TOP(1)
             l.Id     AS LineId,
             f.Ligne  AS LineName
-        FROM dbo.Ecare_Flux f
+        FROM dbo.EcareFlux f
         LEFT JOIN dbo.Ecare_Ligne l
-          ON LTRIM(RTRIM(l.Name)) = LTRIM(RTRIM(f.Ligne))
+          ON LTRIM(RTRIM(l.Nom)) = LTRIM(RTRIM(f.Ligne))
         WHERE f.Matricule = @Plate
           AND (f.PabExitAt IS NULL OR f.SecondWeight IS NULL)
         ORDER BY f.Id DESC;
