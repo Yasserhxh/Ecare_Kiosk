@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Ecare.Application.Queries.AffectTruckToLigne
 {
-    public sealed record AffectTruckToLigneQuery(string Produit,string Matricule,int BonDeCommande) : IRequest<string>;
+    public sealed record AffectTruckToLigneQuery(int Produit,string Matricule,int BonDeCommande) : IRequest<string>;
      
     
 }

@@ -1,5 +1,4 @@
-﻿// Ecare.Application/Commands/Flux/UpdateFirstWeightByBonHandler.cs
-using Dapper;
+﻿using Dapper;
 using Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
@@ -32,6 +31,7 @@ public sealed class UpdateSecondWeightByBonHandler
             const string sqlFlux = @"
                 UPDATE dbo.EcareFlux
                 SET SecondWeight = @SecondWeight,
+                SET TotalCharged= @SecondWeight - @FirstWeight 
                 PabExitAt = @Now
                 WHERE Matricule = @Matricule
                 AND BonDeCommande = @BonDeCommande;";
@@ -43,6 +43,7 @@ public sealed class UpdateSecondWeightByBonHandler
                     request.Matricule,
                     request.BonDeCommande,
                     request.SecondWeight,
+                    request.FirstWeight,
                     Now = DateTime.Now
                 },
                 _uow.Transaction);

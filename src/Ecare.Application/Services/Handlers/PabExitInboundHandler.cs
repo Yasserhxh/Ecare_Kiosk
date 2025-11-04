@@ -85,10 +85,10 @@ namespace Ecare.Application.Services.Handlers
                     var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                     const string SqlFirstWeight = @"
-            SELECT TOP(1) FirstWeight
-            FROM dbo.EcareFlux WITH (NOLOCK)
-            WHERE BonDeCommande = @BonDeCommande
-            ORDER BY Id DESC;";
+                    SELECT TOP(1) FirstWeight
+                    FROM dbo.EcareFlux WITH (NOLOCK)
+                    WHERE BonDeCommande = @BonDeCommande
+                    ORDER BY Id DESC;";
 
                     // Allow both numeric and string BonDeCommande
                     object param =
