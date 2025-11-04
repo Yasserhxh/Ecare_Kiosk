@@ -72,7 +72,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         // === SELECT * + rows>0 => IsInQueue ====================================
         bool isInQueue = false;
 
-        if (!string.IsNullOrWhiteSpace(vm.Plate) && !string.IsNullOrWhiteSpace(vm.Order?.Number))
+        if (!string.IsNullOrWhiteSpace(vm.Plate))
         {
             try
             {
@@ -83,10 +83,11 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                     ?? cfg["Db:ConnectionStrings:SqlServer"];
 
                 const string sql = @"
-SELECT *
-FROM dbo.EcareFlux WITH (NOLOCK)
-WHERE Matricule = @Plate
-  AND BonDeCommande = @OrderNumber;";
+                SELECT *
+                FROM dbo.EcareFlux WITH (NOLOCK)
+                WHERE Matricule = @Plate
+                 
+                ";
 
                 await using var conn = new SqlConnection(connStr);
 
@@ -94,13 +95,12 @@ WHERE Matricule = @Plate
                 var rows = await conn.QueryAsync(
                     new CommandDefinition(
                         sql,
-                        new { Plate = vm.Plate, OrderNumber = vm.Order.Number },
+                        new { Plate = vm.Plate },
                         cancellationToken: ct));
 
                 isInQueue = rows.AsList().Count > 0;
 
-                _log.LogInformation("Queue check: order {order} / plate {plate} => IsInQueue={inQueue}",
-                    vm.Order.Number, vm.Plate, isInQueue);
+                _log.LogInformation("Queue check: order {order} / plate {plate} => IsInQueue={inQueue}");
             }
             catch (Exception ex)
             {
