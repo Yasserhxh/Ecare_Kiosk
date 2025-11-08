@@ -7,6 +7,7 @@ public sealed record CreateFluxEntryCommand(
     string? BonDeCommande,
     int? Quantity,
     string? Matricule,
+    int? CarteSlv,
     string? DriverName,
     string? ClientName,
     DateTime ParkedAt,
