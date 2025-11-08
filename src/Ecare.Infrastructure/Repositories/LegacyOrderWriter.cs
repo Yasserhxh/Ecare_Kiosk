@@ -5,8 +5,8 @@ namespace Ecare.Infrastructure.Repositories;
 
 public interface ILegacyOrderWriter
 {
-    Task<(int OrderId, int NumeroCommande)?> CreateOrderWithItemAsync(
-        int NumeroCommande,
+    Task<(int OrderId, string NumeroCommande)?> CreateOrderWithItemAsync(
+        string NumeroCommande,
         string slv,
         string truckPlate,
         int productId,
@@ -18,9 +18,9 @@ public interface ILegacyOrderWriter
 
 public sealed class LegacyOrderWriter : ILegacyOrderWriter
 {
-    public async Task<(int OrderId, int NumeroCommande)?> CreateOrderWithItemAsync(
+    public async Task<(int OrderId, string NumeroCommande)?> CreateOrderWithItemAsync(
         
-        int numeroCommande,
+        string numeroCommande,
         string slv,
         string truckPlate,
         int productId,
