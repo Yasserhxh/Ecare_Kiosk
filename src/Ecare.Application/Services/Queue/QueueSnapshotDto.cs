@@ -5,6 +5,7 @@ public sealed record QueueItemDto(
     string? Qualite1,
     Domain.ValueObjects.QueueStatus Status,
     string? Nom_Chaufeur,
+    int? CarteSlv,
     DateTime CreatedAt,
     bool IsPined,
     DateTime? PinedAt);

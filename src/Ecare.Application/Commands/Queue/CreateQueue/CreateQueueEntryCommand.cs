@@ -12,6 +12,7 @@ namespace Ecare.Application.Commands.Queue.CreateQueue
     public sealed record CreateQueueEntryCommand(
         string? Matricule,
         string? NomChauffeur,
+        int? CarteSlv,
         string? Qualite1,
         string? Qualite2,
         decimal? Quantite1,

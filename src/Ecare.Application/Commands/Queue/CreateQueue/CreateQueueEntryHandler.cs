@@ -36,6 +36,7 @@ public sealed class CreateQueueEntryHandler(
                 request.CreatedAt,
                 isPined: false,
                 pinedAt: null,
+                request.CarteSlv,
                 ct: ct);
 
             await uow.CommitAsync(ct);
@@ -73,7 +74,8 @@ public static class EcareQueueWriter
             Status,
             CreatedAt,
             IsPined,
-            PinedAt
+            PinedAt,
+            CarteSlv
         )
         OUTPUT INSERTED.Id
         VALUES
@@ -90,7 +92,8 @@ public static class EcareQueueWriter
             @Status,
             @CreatedAt,
             @IsPined,
-            @PinedAt
+            @PinedAt,
+            @CarteSlv
         );";
 
     public static async Task<int> InsertAsync(
@@ -108,6 +111,7 @@ public static class EcareQueueWriter
         DateTime createdAt,
         bool isPined,
         DateTime? pinedAt,
+        int? carteSlv,
         CancellationToken ct = default)
     {
         var p = new DynamicParameters();
@@ -124,6 +128,7 @@ public static class EcareQueueWriter
         p.Add("CreatedAt", createdAt, System.Data.DbType.DateTime2);
         p.Add("IsPined", isPined, System.Data.DbType.Boolean);   // BIT
         p.Add("PinedAt", pinedAt, System.Data.DbType.DateTime2); // nullable
+        p.Add("CarteSlv", carteSlv, System.Data.DbType.Int32);
 
         return await uow.Connection.ExecuteScalarAsync<int>(
             new CommandDefinition(InsertSql, p, uow.Transaction, cancellationToken: ct));
