@@ -105,6 +105,7 @@ app.MapFluxEndpoints();
 app.MapOtherEndpoints();
 app.MapLigneEndpoints();
 app.MapDeviceEndpoints();
+app.MapEcareEngineEndpoints();
 
 
 
