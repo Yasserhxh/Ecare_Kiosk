@@ -15,6 +15,7 @@ public class EcareDbContext(DbContextOptions<EcareDbContext> options) : DbContex
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Shipping> Shippings => Set<Shipping>();
     public DbSet<Cart> Carts => Set<Cart>();
+    public DbSet<EcareEngine> EcareEngines => Set<EcareEngine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
         => modelBuilder.ApplyConfigurationsFromAssembly(typeof(EcareDbContext).Assembly);
