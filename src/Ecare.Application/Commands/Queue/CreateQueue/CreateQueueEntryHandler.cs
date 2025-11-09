@@ -1,7 +1,6 @@
-﻿// Ecare.Application/Commands/Queue/CreateQueue/CreateQueueEntryHandler.cs
-using Dapper;
-using Ecare.Application.Services;                // <-- QueueSnapshot & SignalRHelper live here
-using Ecare.Domain.ValueObjects;               // QueueStatus enum
+﻿using Dapper;
+using Ecare.Application.Services;                
+using Ecare.Domain.ValueObjects;               
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;

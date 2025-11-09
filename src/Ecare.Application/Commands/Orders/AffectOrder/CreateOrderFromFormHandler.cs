@@ -1,22 +1,23 @@
-﻿using System.Data;
-using Dapper;
+﻿using Dapper;
 using Ecare.Shared;
 using MediatR;
+using System.Data;
 
 namespace Ecare.Application.Commands.Orders
 {
     public sealed class CreateOrderFromFormHandler(IUnitOfWork uow)
         : IRequestHandler<CreateOrderFromFormCommand, Result<int>>
     {
-        // Orders insert
+        // Insert into Orders (includes CarteSLV)
         private const string InsertOrderSql = @"
             INSERT INTO dbo.Orders
             (
-                ShippingId,         -- forced
+                ShippingId,
                 NumeroCommande,
-                DateCommande,       -- server-side
+                DateCommande,
                 ChauffeurNom,
                 PlaqueCamion,
+                CarteSLV,
                 Statut,
                 UserId,
                 NomComplet
@@ -29,53 +30,92 @@ namespace Ecare.Application.Commands.Orders
                 SYSUTCDATETIME(),
                 @ChauffeurNom,
                 @PlaqueCamion,
+                @CarteSLV,
                 @Statut,
                 @UserId,
                 @NomComplet
             );";
 
-        // OrderItems insert (ProductId = Quality, Quantity = QuantityT, Unite = 'Tonnes')
+        // OrderItems insert
         private const string InsertOrderItemSql = @"
             INSERT INTO dbo.Ecare_OrderItems (OrderId, ProductId, Quantity, Unite)
             VALUES (@OrderId, @ProductId, @Quantity, @Unite);";
 
+        // Update queue : CarteSlv column in Ecare_Queue
+        private const string UpdateQueueSql = @"
+            UPDATE dbo.Ecare_Queue
+            SET Status = 1
+            WHERE CarteSlv      = @CarteSLV
+              AND Matricule     = @PlaqueCamion
+              AND Nom_Chaufeur  = @ChauffeurNom
+              AND Status        = 0;";
+
         public async Task<Result<int>> Handle(CreateOrderFromFormCommand cmd, CancellationToken ct)
         {
             await uow.BeginAsync(ct);
+
             try
             {
-                // 1) Insert the Order
-                var pOrder = new DynamicParameters();
-                pOrder.Add("ShippingId", 1, DbType.Int32);                       // force 1
-                pOrder.Add("NumeroCommande", cmd.NumeroCommande, DbType.String);
-                pOrder.Add("ChauffeurNom", cmd.ChauffeurNom, DbType.String);
-                pOrder.Add("PlaqueCamion", cmd.Matricule, DbType.String);
-                pOrder.Add("Statut", "EnTraitement", DbType.String);
-                pOrder.Add("UserId", cmd.UserId, DbType.String);
-                pOrder.Add("NomComplet", cmd.ClientName, DbType.String);
+                // 1) Insert Order
+                var orderParams = new
+                {
+                    ShippingId = 1, // forced
+                    cmd.NumeroCommande,
+                    ChauffeurNom = cmd.ChauffeurNom,
+                    PlaqueCamion = cmd.Matricule,
+                    CarteSLV = cmd.CarteSLV,
+                    Statut = "EnTraitement",
+                    cmd.UserId,
+                    NomComplet = cmd.ClientName
+                };
 
                 var newOrderId = await uow.Connection.ExecuteScalarAsync<int>(
-                    new CommandDefinition(InsertOrderSql, pOrder, uow.Transaction, cancellationToken: ct));
+                    new CommandDefinition(
+                        InsertOrderSql,
+                        orderParams,
+                        uow.Transaction,
+                        cancellationToken: ct));
 
-                // 2) Optionally insert the Order Item if product & quantity provided
+                // 2) Insert OrderItem if provided
                 if (cmd.ProductId.HasValue && cmd.QuantityT.HasValue)
                 {
-                    var pItem = new DynamicParameters();
-                    pItem.Add("OrderId", newOrderId, DbType.Int32);
-                    pItem.Add("ProductId", cmd.ProductId.Value, DbType.Int32);   // ProductId is the Quality
-                    pItem.Add("Quantity", cmd.QuantityT.Value, DbType.Decimal);  // Quantity = QuantityT
-                    pItem.Add("Unite", "Tonnes", DbType.String);                 // Unit = 'Tonnes'
+                    var itemParams = new
+                    {
+                        OrderId = newOrderId,
+                        ProductId = cmd.ProductId.Value,
+                        Quantity = cmd.QuantityT.Value,
+                        Unite = "Tonnes"
+                    };
 
                     await uow.Connection.ExecuteAsync(
-                        new CommandDefinition(InsertOrderItemSql, pItem, uow.Transaction, cancellationToken: ct));
+                        new CommandDefinition(
+                            InsertOrderItemSql,
+                            itemParams,
+                            uow.Transaction,
+                            cancellationToken: ct));
                 }
+
+                // 3) Update Queue
+                var queueParams = new
+                {
+                    CarteSLV = cmd.CarteSLV,
+                    PlaqueCamion = cmd.Matricule,
+                    ChauffeurNom = cmd.ChauffeurNom   // <-- matches @ChauffeurNom in SQL
+                };
+
+                await uow.Connection.ExecuteAsync(
+                    new CommandDefinition(
+                        UpdateQueueSql,
+                        queueParams,
+                        uow.Transaction,
+                        cancellationToken: ct));
 
                 await uow.CommitAsync(ct);
                 return Result<int>.Ok(newOrderId);
             }
             catch
             {
-                try { await uow.RollbackAsync(ct); } catch { /* ignore */ }
+                try { await uow.RollbackAsync(ct); } catch { }
                 throw;
             }
         }

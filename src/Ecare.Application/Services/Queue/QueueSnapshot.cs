@@ -25,7 +25,8 @@ namespace Ecare.Application.Services
         Nom_Chaufeur,
         CreatedAt,
         IsPined,
-        PinedAt
+        PinedAt,
+        CarteSlv
         FROM dbo.Ecare_Queue
         WHERE Status BETWEEN 0 AND 1
         ORDER BY CreatedAt ASC; -- base order (oldest → newest)

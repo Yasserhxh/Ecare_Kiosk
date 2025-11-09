@@ -10,5 +10,6 @@ public sealed record CreateOrderFromFormCommand(
     string NumeroCommande,      // form: Bon de commande
     int? ProductId,             // form: Produit (optional)
     decimal? QuantityT,         // form: Quantité (T) (optional)
-    string UserId               // required by DB (who created)
+    string UserId,
+    int CarteSLV
 ) : IRequest<Result<int>>;
