@@ -98,7 +98,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 DriverName: equipement.ChauffeurName,    // NEW
                 Plate: equipement.Matricule,
                 CarteSLV: equipement.CarteSLV,
-                ClientName: client?.Name ?? equipement.ClientName,
+                ClientName: order?.NomComplet,
                 SapOk: client?.SapOk,
                 Order: dto
             );
