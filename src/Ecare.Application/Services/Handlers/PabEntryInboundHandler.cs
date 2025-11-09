@@ -1,11 +1,14 @@
-﻿using Ecare.Application.Queries;
+﻿using System.Text.Json;
+using Dapper;
+using Ecare.Application.Queries;
 using Ecare.Application.Services.Ecare.Application.Services;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Text.Json;
 
 namespace Ecare.Application.Services;
 
@@ -16,6 +19,7 @@ public sealed class PabEntryOutboundOptions
     public string Hub { get; set; } = "pabentry_data_hub";
     public string Method { get; set; } = "PabEntryDataEvent";
 }
+
 public sealed class PabEntryInboundHandler : ISignalRInboundHandler
 {
     private readonly ILogger<PabEntryInboundHandler> _log;
@@ -69,6 +73,16 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
 
         var vm = result.Value;
 
+        // Check EcareFlux (latest valid row for this SLV)
+        var flux = await GetLatestValidFluxAsync(scope, slv, ct);
+        if (flux is null)
+        {
+            // No matching flux row OR invalid row -> do not send anything.
+            _log.LogInformation(
+                "PabEntry: No valid EcareFlux row for SLV={slv} (no row, or Status <> 1, or FirstWeight NULL)", slv);
+            return;
+        }
+
         var outboundPayload = new
         {
             @event = "PabEntryDataEvent",
@@ -87,10 +101,16 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
                 name = vm.ClientName,
                 sapOk = vm.SapOk,
             },
-            order = vm.Order
+            order = vm.Order,
+
+            // From EcareFlux
+            firstWeight = flux.FirstWeight,
+            ligne = flux.Ligne,
+
+            // NEW: mark if second weight / charging is done
+            isSecondWeight = flux.TotalCharged.HasValue && flux.TotalCharged.Value > 0
         };
 
-        //Broadcast to specific device
         await SignalRHelper.BroadcastToDeviceAsync(
             _signalR,
             hubName: _outOpt.Hub,
@@ -103,6 +123,56 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
 
         _log.LogInformation("PabEntry: Sent to device={device}", deviceId);
     }
+
+    // ----------------- Flux helper (Dapper) -----------------
+
+    /// <summary>
+    /// Returns latest EcareFlux row for given CarteSlv with:
+    /// - Status = 1
+    /// - FirstWeight IS NOT NULL
+    /// Ordered by ParkedAt DESC (newest).
+    /// If no such row => null.
+    /// </summary>
+    private static async Task<FluxSnapshot?> GetLatestValidFluxAsync(
+        IServiceScope scope,
+        string carteSlv,
+        CancellationToken ct)
+    {
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var connStr = config.GetConnectionString("SqlServer");
+        if (string.IsNullOrWhiteSpace(connStr))
+            throw new InvalidOperationException("Missing 'SqlServer' connection string.");
+
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync(ct);
+
+        const string sql = @"
+            SELECT TOP(1)
+                FirstWeight,
+                Ligne,
+                TotalCharged
+            FROM dbo.EcareFlux
+            WHERE 
+                CarteSlv = @CarteSlv
+               
+                AND FirstWeight IS  NULL
+            ORDER BY ParkedAt DESC;";
+
+        return await conn.QueryFirstOrDefaultAsync<FluxSnapshot>(
+            new CommandDefinition(
+                sql,
+                new { CarteSlv = carteSlv },
+                cancellationToken: ct));
+    }
+
+    private sealed class FluxSnapshot
+    {
+        public decimal FirstWeight { get; init; }
+        public string Ligne { get; init; } = default!;
+        public decimal? TotalCharged { get; init; }
+    }
+
+    // ----------------- Helpers to extract fields from payload -----------------
 
     private static string? TryExtractCarteSlv(object payload)
     {

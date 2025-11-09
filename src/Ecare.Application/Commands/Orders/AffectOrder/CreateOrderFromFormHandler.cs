@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Ecare.Domain.Entities;
 using Ecare.Shared;
 using MediatR;
 using System.Data;
@@ -49,6 +50,21 @@ namespace Ecare.Application.Commands.Orders
               AND Matricule     = @PlaqueCamion
               AND Nom_Chaufeur  = @ChauffeurNom
               AND Status        = 0;";
+
+
+        private const string UpdateFlux = @"
+            UPDATE dbo.EcareFlux
+            SET 
+                BonDeCommande = @BonDeCommande,
+                Quantity      = @Quantity,
+                ClientName    = @ClientName,
+                OrderId       = @OrderId
+            WHERE 
+                CarteSlv = @CarteSlv
+                AND FirstWeight IS NULL
+                AND ParkedAt >= DATEADD(HOUR, -24, SYSUTCDATETIME());
+        ";
+
 
         public async Task<Result<int>> Handle(CreateOrderFromFormCommand cmd, CancellationToken ct)
         {
@@ -109,6 +125,24 @@ namespace Ecare.Application.Commands.Orders
                         queueParams,
                         uow.Transaction,
                         cancellationToken: ct));
+
+                // 4) Update Flux
+
+                var fluxparams = new
+                {
+                    BonDeCommande = cmd.NumeroCommande,
+                    Quantity = cmd.QuantityT,
+                    ClientName = cmd.ClientName,
+                    OrderId = newOrderId,
+                    CarteSlv = cmd.CarteSLV
+                };
+
+                await uow.Connection.ExecuteAsync(
+                   new CommandDefinition(
+                       UpdateFlux,
+                       fluxparams,
+                       uow.Transaction,
+                       cancellationToken: ct));
 
                 await uow.CommitAsync(ct);
                 return Result<int>.Ok(newOrderId);
