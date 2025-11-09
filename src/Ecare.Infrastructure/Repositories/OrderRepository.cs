@@ -9,7 +9,7 @@ public interface IOrderRepository
 {
     Task<Order?> GetByNumberAsync(string number, IUnitOfWork uow);
     Task<Order?> GetBySlvAsync(string slvCard, IUnitOfWork uow);
-    Task UpdateStatusAsync(Guid id, OrderStatus status, IUnitOfWork uow);
+    Task UpdateStatusAsync(int id, OrderStatus status, IUnitOfWork uow);
 }
 
 public sealed class OrderRepository : IOrderRepository
@@ -19,22 +19,23 @@ public sealed class OrderRepository : IOrderRepository
             $@"SELECT TOP(1)
                     Id,
                     ShippingId,
-                    NumeroCommande     AS Number,
-                    DateCommande       AS OrderedAt,
+                    NumeroCommande,
+                    DateCommande,
                     Destination,
-                    ModeDelivraison    AS DeliveryMode,
-                    EmplacementChargement AS LoadingLocation,
-                    MethodeChargement  AS LoadingMethod,
-                    HeureEnlevement    AS PickupTime,
-                    HeureDelivraison   AS DeliveryTime,
-                    CarteSLV           AS SlvCard,
-                    ChauffeurNom       AS DriverLastName,
-                    ChauffeurPrenom    AS DriverFirstName,
-                    PermisDeConduire   AS DriverLicense,
-                    PlaqueCamion       AS TruckPlate,
-                    Statut             AS Status,
+                    ModeDelivraison,
+                    EmplacementChargement,
+                    MethodeChargement,
+                    HeureEnlevement,
+                    HeureDelivraison,
+                    CarteSLV,
+                    ChauffeurNom,
+                    ChauffeurPrenom,
+                    PermisDeConduire,
+                    PlaqueCamion,
+                    Statut,
                     UserId,
-                    CAST(NULL AS decimal(18,3)) AS TargetQuantityTons
+                    Commentaire,
+                    NomComplet
                 FROM {DbTableNames.Orders}
                 WHERE NumeroCommande=@number",
             new { number },
@@ -45,31 +46,45 @@ public sealed class OrderRepository : IOrderRepository
             $@"SELECT TOP(1)
                     Id,
                     ShippingId,
-                    NumeroCommande     AS Number,
-                    DateCommande       AS OrderedAt,
+                    NumeroCommande,
+                    DateCommande,
                     Destination,
-                    ModeDelivraison    AS DeliveryMode,
-                    EmplacementChargement AS LoadingLocation,
-                    MethodeChargement  AS LoadingMethod,
-                    HeureEnlevement    AS PickupTime,
-                    HeureDelivraison   AS DeliveryTime,
-                    CarteSLV           AS SlvCard,
-                    ChauffeurNom       AS DriverLastName,
-                    ChauffeurPrenom    AS DriverFirstName,
-                    PermisDeConduire   AS DriverLicense,
-                    PlaqueCamion       AS TruckPlate,
-                    Statut             AS Status,
+                    ModeDelivraison,
+                    EmplacementChargement,
+                    MethodeChargement,
+                    HeureEnlevement,
+                    HeureDelivraison,
+                    CarteSLV,
+                    ChauffeurNom,
+                    ChauffeurPrenom,
+                    PermisDeConduire,
+                    PlaqueCamion,
+                    Statut,
                     UserId,
-                    CAST(NULL AS decimal(18,3)) AS TargetQuantityTons
+                    Commentaire,
+                    NomComplet
                 FROM {DbTableNames.Orders}
                 WHERE CarteSLV=@slvCard AND Statut<>@cancelled
                 ORDER BY DateCommande DESC",
-            new { slvCard, cancelled = OrderStatus.Annulee },
+            new { slvCard, cancelled = "Annulee" },
             uow.Transaction);
 
-    public Task UpdateStatusAsync(Guid id, OrderStatus status, IUnitOfWork uow)
-        => uow.Connection.ExecuteAsync(
+    public Task UpdateStatusAsync(int id, OrderStatus status, IUnitOfWork uow)
+    {
+        var statusString = status switch
+        {
+            OrderStatus.Cree => "Crée",
+            OrderStatus.Confirmee => "Confirmée",
+            OrderStatus.EnTraitement => "EnTraitement",
+            OrderStatus.Livre => "Livre",
+            OrderStatus.Termine => "Termine",
+            OrderStatus.Annulee => "Annulee",
+            _ => "Crée"
+        };
+
+        return uow.Connection.ExecuteAsync(
             $"UPDATE {DbTableNames.Orders} SET Statut=@status WHERE Id=@id",
-            new { id, status },
+            new { id, status = statusString },
             uow.Transaction);
+    }
 }
