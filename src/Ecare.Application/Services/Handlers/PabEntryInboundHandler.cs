@@ -147,14 +147,16 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
         await conn.OpenAsync(ct);
 
         const string sql = @"
-     SELECT TOP(1)
-         Ligne,
-         TotalCharged
-     FROM dbo.EcareFlux
-     WHERE 
-         CarteSlv = @CarteSlv
-         AND CAST(ParkedAt AS DATE) = CAST(GETDATE() AS DATE)
-     ORDER BY ParkedAt DESC;";
+         SELECT TOP(1)
+             Ligne,
+             TotalCharged,
+             FirstWeight
+         FROM dbo.EcareFlux
+         WHERE 
+             CarteSlv = @CarteSlv
+             AND CAST(ParkedAt AS DATE) = CAST(GETDATE() AS DATE)
+            AND StartChargingAt IS NULL
+         ORDER BY ParkedAt DESC;";
 
         return await conn.QueryFirstOrDefaultAsync<FluxSnapshot>(
             new CommandDefinition(
