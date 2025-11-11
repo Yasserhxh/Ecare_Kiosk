@@ -2,8 +2,6 @@ using Ecare.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Ecare.Infrastructure.Persistence.Configurations;
-
 public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
 {
     public void Configure(EntityTypeBuilder<Client> builder)
@@ -15,16 +13,20 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
         builder.Property(c => c.Client_Id)
             .HasColumnName("Client_Id");
 
-        builder.Property(c => c.Name)
-            .HasColumnName("Nom_Complet")
-            .HasMaxLength(200)
-            .IsRequired();
+        // Do NOT map computed property “Name”
+        builder.Ignore(c => c.Name);
+        builder.Ignore(c => c.SapCode);
+        builder.Ignore(c => c.SapOk);
 
-        builder.Property(c => c.SapCode)
-            .HasColumnName("CodeClientSap")
-            .HasMaxLength(50)
+        // Map actual persisted columns instead
+        builder.Property(c => c.Nom_Complet)
+            .HasMaxLength(200)
+            .HasColumnName("Nom_Complet")
             .IsRequired(false);
 
-        builder.Ignore(c => c.SapOk);
+        builder.Property(c => c.CodeClientSap)
+            .HasMaxLength(50)
+            .HasColumnName("CodeClientSap")
+            .IsRequired(false);
     }
 }

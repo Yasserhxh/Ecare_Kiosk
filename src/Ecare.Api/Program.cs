@@ -1,15 +1,24 @@
 ﻿using Ecare.Api.Endpoints; // <-- for endpoint extensions
 using Ecare.Api.Extensions; // <-- for AddSignalRListeners and AddRepositories
 using Ecare.Application;
+using Ecare.Application.Auth.Commands;
+using Ecare.Application.Auth.Queries;
+using Ecare.Application.Auth.Services;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Services;
+using Ecare.Domain.Entities;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
 using Ecare.Shared;
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
@@ -66,6 +75,31 @@ builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 builder.Services.AddRepositories();
 builder.Services.AddInfrastructureServices();
 
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
+            )
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+builder.Services.AddIdentity<ApplicationUser, ApplicationRole>()
+    .AddEntityFrameworkStores<EcareDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddScoped<JwtTokenService>();
+
 // ---------------------------------------------------------
 // Azure SignalR setup
 // ---------------------------------------------------------
@@ -85,6 +119,9 @@ builder.Services.AddSingleton<ServiceManager>(sp =>
 // ---------------------------------------------------------
 builder.Services.AddSignalRListeners(cfg);
 
+
+
+
 // ---------------------------------------------------------
 // Build + middleware
 // ---------------------------------------------------------
@@ -93,6 +130,9 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors(ViteDev);
+
+app.UseAuthentication();   // enables [Authorize]
+app.UseAuthorization();    // allows policy/role checks
 
 // ---------------------------------------------------------
 // Map all endpoints via extension methods
@@ -106,6 +146,11 @@ app.MapOtherEndpoints();
 app.MapLigneEndpoints();
 app.MapDeviceEndpoints();
 app.MapEcareEngineEndpoints();
+app.MapAuthEndpoints();
+
+
+
+
 
 
 

@@ -32,8 +32,8 @@ public class Order
     public TimeSpan? PickupTime => HeureEnlevement?.TimeOfDay;
     public TimeSpan? DeliveryTime => HeureDelivraison?.TimeOfDay;
     public string? SlvCard => CarteSLV;
-    public string? DriverLastName => ChauffeurNom;
-    public string? DriverFirstName => ChauffeurPrenom;
+    public string? DriverNom => ChauffeurNom;
+    public string? DriverPrenom => ChauffeurPrenom;
     public string? DriverLicense => PermisDeConduire;
     public string? TruckPlate => PlaqueCamion;
     public OrderStatus Status => Statut switch
