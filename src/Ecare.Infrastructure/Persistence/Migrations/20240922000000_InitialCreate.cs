@@ -46,8 +46,8 @@ namespace Ecare.Infrastructure.Persistence.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Slv = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    FirstName = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
-                    LastName = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
+                    Prenom = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
+                    Nom = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
                     Plate = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
                     ClientId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
                 },

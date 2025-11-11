@@ -59,6 +59,8 @@ namespace Ecare.Api.Extensions
                 services.AddSingleton(implementationType);
             }
 
+
+
             return services;
         }
     }
