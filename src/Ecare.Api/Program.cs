@@ -46,7 +46,38 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "Ecare API", Version = "v1" });
+
+    // JWT Bearer auth for Swagger
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer", // 👈 must be lowercase
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter your JWT token. Example: Bearer {token}"
+        // You can also say: "Enter only the token value" if you want them NOT to type 'Bearer '
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 
 // ---------------------------------------------------------
 // MediatR + Validation Pipelines
@@ -75,30 +106,59 @@ builder.Services.AddScoped<IUnitOfWork, DapperUnitOfWork>();
 builder.Services.AddRepositories();
 builder.Services.AddInfrastructureServices();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// Identity first
+builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
+{
+    // optional basic rules
+    options.User.RequireUniqueEmail = true;
+})
+    .AddEntityFrameworkStores<EcareDbContext>()
+    .AddDefaultTokenProviders();
+
+// Then Authentication with explicit defaults
+// Identity
+builder.Services.AddIdentityCore<ApplicationUser>(options =>
+{
+    options.User.RequireUniqueEmail = true;
+})
+    .AddRoles<ApplicationRole>()
+    .AddEntityFrameworkStores<EcareDbContext>()
+    .AddDefaultTokenProviders();
+
+
+// Authentication - FORCE JwtBearer as default
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+})
     .AddJwtBearer(options =>
     {
+        options.RequireHttpsMetadata = false; 
+        options.SaveToken = true;
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = cfg["Jwt:Issuer"],       // must be "EcareApi"
+            ValidAudience = cfg["Jwt:Audience"],   // must be "EcareClients"
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
-            )
+                Encoding.UTF8.GetBytes(cfg["Jwt:Key"]!)
+            ),
+            ClockSkew = TimeSpan.Zero
         };
     });
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddIdentity<ApplicationUser, ApplicationRole>()
-    .AddEntityFrameworkStores<EcareDbContext>()
-    .AddDefaultTokenProviders();
-
 builder.Services.AddScoped<JwtTokenService>();
+
+
+
 
 // ---------------------------------------------------------
 // Azure SignalR setup
