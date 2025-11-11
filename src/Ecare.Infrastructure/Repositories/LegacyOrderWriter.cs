@@ -10,24 +10,30 @@ public interface ILegacyOrderWriter
         string slv,
         string truckPlate,
         int productId,
-        decimal quantity,
-        string unit,
-        IUnitOfWork uow,
-        CancellationToken ct);
+        int? productId2 = null,
+        decimal quantity = 0,
+        decimal? quantity2 = null,
+        string unit = "T",
+        string? unit2 = null,
+        IUnitOfWork? uow = null,
+        CancellationToken ct = default);
 }
+
 
 public sealed class LegacyOrderWriter : ILegacyOrderWriter
 {
     public async Task<(int OrderId, string NumeroCommande)?> CreateOrderWithItemAsync(
-        
         string numeroCommande,
         string slv,
         string truckPlate,
         int productId,
-        decimal quantity,
-        string unit,
-        IUnitOfWork uow,
-        CancellationToken ct)
+        int? productId2 = null,
+        decimal quantity = 0,
+        decimal? quantity2 = null,
+        string unit = "T",
+        string? unit2 = null,
+        IUnitOfWork? uow = null,
+        CancellationToken ct = default)
     {
         //var numero = $"CMD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
 
@@ -74,6 +80,16 @@ public sealed class LegacyOrderWriter : ILegacyOrderWriter
             transaction: uow.Transaction,
             cancellationToken: ct);
         var rows = await uow.Connection.ExecuteAsync(insertItem);
+
+        if (productId2 != null && productId2 != 0)
+        {
+            var insertItem2 = new CommandDefinition(
+            $"INSERT INTO [dbo].[Ecare_OrderItems] (OrderId, ProductId, Quantity, Unite) VALUES (@OrderId,@ProductId,@Quantity,@Unite)",
+            new { OrderId = orderId.Value, ProductId = productId2, Quantity = quantity2, Unite = unit2 },
+            transaction: uow.Transaction,
+            cancellationToken: ct);
+            var rows2 = await uow.Connection.ExecuteAsync(insertItem2);
+        }
         return rows == 1 ? (orderId.Value,numeroCommande) : null;
     }
 }
