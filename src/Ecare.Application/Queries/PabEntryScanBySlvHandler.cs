@@ -79,7 +79,7 @@ public sealed class PabEntryScanBySlvHandler
                     ));
                 }
 
-                dto = new OrderDto(
+                dto = new OrderDto(order.Id,
                     order.Number,
                     order.Destination,
                     order.DeliveryMode,

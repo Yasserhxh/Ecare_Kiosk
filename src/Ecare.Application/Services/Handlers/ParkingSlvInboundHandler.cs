@@ -1,6 +1,8 @@
 ﻿using Dapper;
 using Ecare.Application.Queries;
 using Ecare.Application.Services.Ecare.Application.Services;
+using Ecare.Domain.Entities;
+
 
 // using Ecare.Application.Services.Ecare.Application.Services; // <- looks accidental, you can remove
 using MediatR;
@@ -133,6 +135,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             },
             order = vm.Order is null ? null : new
             {
+                OrderId=vm.Order.OrderId,
                 number = vm.Order.Number,
                 destination = vm.Order.Destination,
                 deliveryMode = vm.Order.DeliveryMode,
