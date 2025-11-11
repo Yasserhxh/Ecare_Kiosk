@@ -80,8 +80,8 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
             // No matching flux row OR invalid row -> do not send anything.
             _log.LogInformation(
                 "PabEntry: No valid EcareFlux row for SLV={slv} (no row, or Status <> 1, or FirstWeight NULL)", slv);
-            return;
         }
+       
 
         var outboundPayload = new
         {
@@ -104,12 +104,13 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
             order = vm.Order,
 
             // From EcareFlux
-            firstWeight = flux.FirstWeight,
-            ligne = flux.Ligne,
+            firstWeight = flux?.FirstWeight,
+            ligne = flux?.Ligne,
 
-            // NEW: mark if second weight / charging is done
-            isSecondWeight = flux.TotalCharged.HasValue && flux.TotalCharged.Value > 0
+            // Safe second-weight flag
+            isSecondWeight = (flux?.TotalCharged ?? 0) > 0
         };
+
 
         await SignalRHelper.BroadcastToDeviceAsync(
             _signalR,
@@ -154,9 +155,9 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
          FROM dbo.EcareFlux
          WHERE 
              CarteSlv = @CarteSlv
-             AND CAST(ParkedAt AS DATE) = CAST(GETDATE() AS DATE)
+              
             AND StartChargingAt IS NULL
-         ORDER BY ParkedAt DESC;";
+         ORDER BY ParkedAt ;";
 
         return await conn.QueryFirstOrDefaultAsync<FluxSnapshot>(
             new CommandDefinition(

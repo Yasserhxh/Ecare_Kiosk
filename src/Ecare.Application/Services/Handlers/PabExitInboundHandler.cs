@@ -91,10 +91,8 @@ namespace Ecare.Application.Services.Handlers
                     ORDER BY Id DESC;";
 
                     // Allow both numeric and string BonDeCommande
-                    object param =
-                        long.TryParse(orderNumber, out var bonNumeric)
-                            ? new { BonDeCommande = bonNumeric }
-                            : new { BonDeCommande = (object)orderNumber! };
+                    object param = new { BonDeCommande = orderNumber };
+                         
 
                     firstWeight = await uow.Connection.QueryFirstOrDefaultAsync<decimal?>(SqlFirstWeight, param);
                     _log.LogInformation("PabExit: Found FirstWeight={firstWeight} for BDC={bdc}", firstWeight, orderNumber);

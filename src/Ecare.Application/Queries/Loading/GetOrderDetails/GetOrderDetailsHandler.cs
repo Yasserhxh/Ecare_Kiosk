@@ -98,7 +98,7 @@ public sealed class GetOrderDetailsHandler : IRequestHandler<GetOrderDetailsQuer
                     ));
                 }
 
-                dto = new OrderDto(
+                dto = new OrderDto(order.Id,
                     order.Number,
                     order.Destination,
                     order.DeliveryMode,

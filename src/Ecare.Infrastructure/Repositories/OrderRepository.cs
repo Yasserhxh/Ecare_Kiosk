@@ -65,8 +65,9 @@ public sealed class OrderRepository : IOrderRepository
                     NomComplet
                 FROM {DbTableNames.Orders}
                 WHERE CarteSLV=@slvCard AND Statut<>@cancelled
+                AND Statut <> @termine
                 ORDER BY DateCommande DESC",
-            new { slvCard, cancelled = "Annulee" },
+            new { slvCard, cancelled = "Annulee", termine= "Termine" },
             uow.Transaction);
 
     public Task UpdateStatusAsync(int id, OrderStatus status, IUnitOfWork uow)

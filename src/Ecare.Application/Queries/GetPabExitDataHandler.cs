@@ -99,6 +99,7 @@ public sealed class GetPabExitDataHandler : IRequestHandler<GetPabExitDataQuery,
                 }
 
                 dto = new OrderDto(
+                    order.Id,
                     order.Number,
                     order.Destination,
                     order.DeliveryMode,

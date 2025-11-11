@@ -7,9 +7,9 @@ public sealed class CreateLegacyOrderHandler(
     IClientEquipementRepository equipements,
     ILegacyOrderWriter writer,
     IUnitOfWork uow)
-    : IRequestHandler<CreateLegacyOrderCommand, Result<string>>
+    : IRequestHandler<CreateLegacyOrderCommand, Result<int>>
 {
-    public async Task<Result<string>> Handle(CreateLegacyOrderCommand request, CancellationToken ct)
+    public async Task<Result<int>> Handle(CreateLegacyOrderCommand request, CancellationToken ct)
     {
         //if (request.Quantity <= 0) return Result<string>.Fail("Quantité invalide");
 
@@ -23,7 +23,7 @@ public sealed class CreateLegacyOrderHandler(
             //if (created is null) return Result<string>.Fail("Création commande échouée");
 
             await uow.CommitAsync(ct);
-            return Result<string>.Ok(created.Value.NumeroCommande);
+            return Result<int>.Ok(created.Value.OrderId);
         }
         catch
         {

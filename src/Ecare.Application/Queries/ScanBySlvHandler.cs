@@ -83,6 +83,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 }
 
                 dto = new OrderDto(
+                    order.Id,
                     order.Number,
                     order.Destination,
                     order.DeliveryMode,
@@ -98,7 +99,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 DriverName: equipement.ChauffeurName,    // NEW
                 Plate: equipement.Matricule,
                 CarteSLV: equipement.CarteSLV,
-                ClientName: order?.NomComplet,
+                ClientName: equipement.ClientName,
                 SapOk: client?.SapOk,
                 Order: dto
             );
