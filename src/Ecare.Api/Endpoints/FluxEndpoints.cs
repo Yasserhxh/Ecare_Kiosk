@@ -12,6 +12,7 @@ public static class FluxEndpoints
         app.MapGet("/flux/qualite", async (IMediator m, CancellationToken ct) =>
             await m.Send(new GetFluxQualiteQuery(), ct));
 
+
         app.MapPost("/flux", async (CreateFluxEntryCommand c, IMediator m, CancellationToken ct) =>
             await m.Send(c, ct));
 

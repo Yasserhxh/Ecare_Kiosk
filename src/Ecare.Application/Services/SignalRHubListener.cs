@@ -17,7 +17,7 @@
         {
             public sealed class SignalRListenerOptions
             {
-                /// <summary>Base negotiate endpoint, e.g. https://localhost:52831/signalr/negotiate</summary>
+                /// <summary>Base negotiate endpoint, e.g. https://localhost:52832/signalr/negotiate</summary>
                 public string NegotiateEndpoint { get; set; } = default!;
                 /// <summary>The hub name to listen on (passed to ?hub=...)</summary>
                 public string Hub { get; set; } = default!;
