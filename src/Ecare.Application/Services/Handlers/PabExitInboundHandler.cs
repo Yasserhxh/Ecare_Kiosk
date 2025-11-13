@@ -4,6 +4,8 @@ using Ecare.Application.Services.Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -72,6 +74,16 @@ namespace Ecare.Application.Services.Handlers
             }
 
             var vm = result.Value;
+
+            var flux = await GetLatestValidFluxAsync(scope, slv, ct);
+            if (flux is null || flux.FirstWeight is not null && flux.SecondWeight is not null)
+            {
+                // No matching flux row OR invalid row -> do not send anything.
+                _log.LogInformation(
+                    "PabEntry: No valid EcareFlux row for SLV={slv} (no row, or Status <> 1, or FirstWeight NULL)", slv);
+
+                return;
+            }
 
             decimal? firstWeight = null;
 
@@ -143,6 +155,48 @@ namespace Ecare.Application.Services.Handlers
             );
 
             _log.LogInformation("PabExit: Sent to device={device}", deviceId);
+        }
+
+
+        private static async Task<FluxSnapshot?> GetLatestValidFluxAsync(
+        IServiceScope scope,
+        string carteSlv,
+        CancellationToken ct)
+        {
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var connStr = config.GetConnectionString("SqlServer");
+            if (string.IsNullOrWhiteSpace(connStr))
+                throw new InvalidOperationException("Missing 'SqlServer' connection string.");
+
+            await using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync(ct);
+
+            const string sql = @"
+         SELECT TOP(1)
+             Ligne,
+             TotalCharged,
+              SecondWeight,
+             FirstWeight
+         FROM dbo.EcareFlux
+         WHERE 
+             CarteSlv = @CarteSlv
+              
+            AND PabExitAt IS NULL
+         ORDER BY ParkedAt ;";
+
+            return await conn.QueryFirstOrDefaultAsync<FluxSnapshot>(
+                new CommandDefinition(
+                    sql,
+                    new { CarteSlv = carteSlv },
+                    cancellationToken: ct));
+        }
+
+        private sealed class FluxSnapshot
+        {
+            public decimal? FirstWeight { get; init; }
+            public decimal? SecondWeight { get; init; }
+            public string Ligne { get; init; } = default!;
+            public decimal? TotalCharged { get; init; }
         }
 
         private static string? TryExtractCarteSlv(object payload)

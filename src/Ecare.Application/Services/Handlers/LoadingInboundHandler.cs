@@ -74,7 +74,16 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             _log.LogWarning("Loading: Scan failed for SLV={slv}. Err={err}", slv, result.Error);
             return;
         }
+        // Check EcareFlux (latest valid row for this SLV)
+        var flux = await GetLatestValidFluxAsync(scope, slv, ct);
+        if (flux is null || flux.FirstWeight is null)
+        {
+            // No matching flux row OR invalid row -> do not send anything.
+            _log.LogInformation(
+                "PabEntry: No valid EcareFlux row for SLV={slv} (no row, or Status <> 1, or FirstWeight NULL)", slv);
 
+            return;
+        }
         var vm = result.Value; // must include: CarteSLV, DriverId, DriverName, Plate, ClientName, SapOk, Order (optional)
 
         // -------------------------
@@ -245,5 +254,44 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
         return rowF is null
             ? (null, null)
             : ((int?)rowF.LineId, (string?)rowF.LineName);
+    }
+
+    private static async Task<FluxSnapshot?> GetLatestValidFluxAsync(
+        IServiceScope scope,
+        string carteSlv,
+        CancellationToken ct)
+    {
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var connStr = config.GetConnectionString("SqlServer");
+        if (string.IsNullOrWhiteSpace(connStr))
+            throw new InvalidOperationException("Missing 'SqlServer' connection string.");
+
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync(ct);
+
+        const string sql = @"
+         SELECT TOP(1)
+             Ligne,
+             TotalCharged,
+             FirstWeight
+         FROM dbo.EcareFlux
+         WHERE 
+             CarteSlv = @CarteSlv
+              
+            AND StartChargingAt IS NULL
+         ORDER BY ParkedAt ;";
+
+        return await conn.QueryFirstOrDefaultAsync<FluxSnapshot>(
+            new CommandDefinition(
+                sql,
+                new { CarteSlv = carteSlv },
+                cancellationToken: ct));
+    }
+
+    private sealed class FluxSnapshot
+    {
+        public decimal? FirstWeight { get; init; }
+        public string Ligne { get; init; } = default!;
+        public decimal? TotalCharged { get; init; }
     }
 }
