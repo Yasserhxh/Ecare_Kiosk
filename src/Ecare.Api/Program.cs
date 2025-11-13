@@ -227,6 +227,7 @@ try
     app.MapAuthEndpoints();
     app.MapBlobEndpoints();
     app.MapMobileAppEndpoints();
+    app.MapCementMatrixEndpoints();
 
     Console.WriteLine("✓ All endpoints mapped");
     Console.WriteLine("=== Starting application on https://localhost:7001 ===");
