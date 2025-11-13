@@ -80,6 +80,8 @@ public sealed class PabEntryInboundHandler : ISignalRInboundHandler
             // No matching flux row OR invalid row -> do not send anything.
             _log.LogInformation(
                 "PabEntry: No valid EcareFlux row for SLV={slv} (no row, or Status <> 1, or FirstWeight NULL)", slv);
+
+            return;
         }
        
 
