@@ -226,6 +226,7 @@ try
     app.MapEcareEngineEndpoints();
     app.MapAuthEndpoints();
     app.MapBlobEndpoints();
+    app.MapMobileAppEndpoints();
 
     Console.WriteLine("✓ All endpoints mapped");
     Console.WriteLine("=== Starting application on https://localhost:7001 ===");
