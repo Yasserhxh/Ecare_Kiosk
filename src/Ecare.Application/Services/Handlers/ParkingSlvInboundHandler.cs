@@ -86,8 +86,10 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
 
                 const string sql = @"
                 SELECT *
-                FROM dbo.Ecare_Queue 
+                FROM dbo.Ecare_Queue
                 WHERE Matricule = @Plate
+                  AND Status IN (0, 1);
+
                 ";
 
                 await using var conn = new SqlConnection(connStr);

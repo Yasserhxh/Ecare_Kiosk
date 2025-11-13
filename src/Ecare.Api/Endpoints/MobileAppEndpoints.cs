@@ -1,4 +1,5 @@
 ﻿using Ecare.Application.Commands.MobileCommands;
+using Ecare.Application.Queries.GetFluxStagesSummary;
 using Ecare.Application.Queries.MobileQueries.GetActiveChargings;
 using Ecare.Application.Queries.MobileQueries.GetChargementLines;
 using Ecare.Application.Queries.MobileQueries.GetFluxChargingDetails;
@@ -85,6 +86,24 @@ namespace Ecare.Api.Endpoints
             .ProducesProblem(StatusCodes.Status500InternalServerError)
             .WithSummary("Update MinusBag and PlusBag for a flux entry")
             .WithDescription("Updates the EcareFlux row with new MinusBag and PlusBag values based on Id.");
+
+            group.MapGet("/stages",
+            async Task<Results<Ok<IReadOnlyList<FluxStageSummary>>, ProblemHttpResult>>
+            ([FromQuery] string? type,
+             [FromServices] IMediator mediator,
+             CancellationToken ct) =>
+            {
+                var res = await mediator.Send(new GetFluxStagesSummaryQuery(type), ct);
+
+                if (!res.Success)
+                    return TypedResults.Problem(title: "Failed to load flux stage summary", detail: res.Error);
+
+                return TypedResults.Ok(res.Value!);
+            })
+            .Produces<IReadOnlyList<FluxStageSummary>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .WithSummary("Get grouped flux stages (PARC, USINE, CHARGEMENT, SORTIE)")
+            .WithDescription("Groups trucks by stage with timing details and aggregates, optionally filtered by product Type.");
 
             return app;
         }
