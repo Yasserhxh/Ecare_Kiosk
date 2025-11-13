@@ -7,6 +7,7 @@ using Ecare.Shared;
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using FluxStageSummary = Ecare.Application.Queries.MobileQueries.GetFluxChargingDetails.FluxStageSummary;
 
 namespace Ecare.Api.Endpoints
 {
@@ -33,25 +34,33 @@ namespace Ecare.Api.Endpoints
             .WithSummary("Active chargings grouped by matricule")
             .WithDescription("Returns unfinished chargings filtered optionally by Ligne and/or Type.");
 
-            group.MapGet("/charging/details/{efId:int}",
-            async Task<Results<Ok<FluxChargingGroupVm>, NotFound, ProblemHttpResult>>
-            ([FromRoute] int efId, [FromServices] IMediator mediator, CancellationToken ct) =>
+            group.MapGet("/charging/details",
+            async Task<Results<Ok<IReadOnlyList<FluxStageSummary>>, NotFound, ProblemHttpResult>>
+            ([FromQuery] string? type,
+             [FromServices] IMediator mediator,
+             CancellationToken ct) =>
             {
-                var res = await mediator.Send(new GetFluxChargingDetailsByIdQuery(efId), ct);
+                var res = await mediator.Send(new GetFluxChargingDetailsQuerie(type), ct);
 
                 if (!res.Success)
-                    return TypedResults.Problem(title: "Failed to load flux charging details", detail: res.Error);
+                    return TypedResults.Problem(
+                        title: "Failed to load flux charging details",
+                        detail: res.Error);
 
-                if (res.Value is null)
+                // res.Value ALWAYS has 4 stages, but may be empty if DB returns no rows
+                if (res.Value is null || res.Value.Count == 0)
                     return TypedResults.NotFound();
 
                 return TypedResults.Ok(res.Value);
             })
-            .Produces<FluxChargingGroupVm>(StatusCodes.Status200OK)
+            .Produces<IReadOnlyList<FluxStageSummary>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError)
-            .WithSummary("Charging details for a single EcareFlux row")
-            .WithDescription("Returns grouped product items and status for the specified EcareFlux Id.");
+            .WithSummary("Get Flux Charging Stage Summary")
+            .WithDescription("Returns the 4 charging stages (PARC, USINE, CHARGEMENT, SORTIE) with durations, optionally filtered by Type (VRAC | SAC).");
+
+
+
 
             group.MapGet("/chargement",
             async Task<Results<Ok<IReadOnlyList<ChargementLineVm>>, ProblemHttpResult>>
@@ -87,23 +96,38 @@ namespace Ecare.Api.Endpoints
             .WithSummary("Update MinusBag and PlusBag for a flux entry")
             .WithDescription("Updates the EcareFlux row with new MinusBag and PlusBag values based on Id.");
 
-            group.MapGet("/stages",
-            async Task<Results<Ok<IReadOnlyList<FluxStageSummary>>, ProblemHttpResult>>
-            ([FromQuery] string? type,
-             [FromServices] IMediator mediator,
-             CancellationToken ct) =>
+
+
+            group.MapGet("/dashboard",
+            async Task<IResult> (
+                [FromQuery] string? type,
+                [FromQuery] DateTime? dateFrom,
+                [FromQuery] DateTime? dateTo,
+                [FromServices] IMediator mediator,
+                CancellationToken ct) =>
             {
-                var res = await mediator.Send(new GetFluxStagesSummaryQuery(type), ct);
+                var res = await mediator.Send(
+                    new GetFluxChargingDetailsQuerie(type, dateFrom, dateTo),
+                    ct);
 
                 if (!res.Success)
-                    return TypedResults.Problem(title: "Failed to load flux stage summary", detail: res.Error);
+                {
+                    // 500 – internal error
+                    return Results.Problem(
+                        title: "Failed to load flux charging details",
+                        detail: res.Error,
+                        statusCode: StatusCodes.Status500InternalServerError);
+                }
 
-                return TypedResults.Ok(res.Value!);
+                // 200 – OK
+                return Results.Ok(res.Value);
             })
             .Produces<IReadOnlyList<FluxStageSummary>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status500InternalServerError)
-            .WithSummary("Get grouped flux stages (PARC, USINE, CHARGEMENT, SORTIE)")
-            .WithDescription("Groups trucks by stage with timing details and aggregates, optionally filtered by product Type.");
+            .WithSummary("Get flux charging stages summary")
+            .WithDescription("Returns the 4 stages (PARC, USINE, CHARGEMENT, SORTIE) with durations, filtered optionally by Type and date range (ParkedAt).");
+
+
 
             return app;
         }
