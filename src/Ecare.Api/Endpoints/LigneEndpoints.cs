@@ -20,6 +20,8 @@ namespace Ecare.Api.Endpoints
             .WithName("AffectTruckToLigne")
             .Produces(StatusCodes.Status200OK);
 
+
+
             return app;
         }
     }

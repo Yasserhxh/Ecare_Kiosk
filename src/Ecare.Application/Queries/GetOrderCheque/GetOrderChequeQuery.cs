@@ -7,8 +7,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Ecare.Application.Queries.GetCementLineMatrix
+namespace Ecare.Application.Queries.GetOrderCheque
 {
-    public sealed record GetCementLineMatrixQuery(string? Usine)
-        : IRequest<Result<CementMatrixVm>>;
+    public sealed record GetOrderChequesPagedQuery(int Page, int PageSize)
+    : IRequest<Result<OrderChequesPageVm>>;
 }
