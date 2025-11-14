@@ -37,11 +37,25 @@ namespace Ecare.Application.Queries.AffectTruckToLigne
                 .OrderByDescending(l => l.Capacity)
                 .FirstOrDefault();
 
-            if (best is null)
+            if (best is null || best.Capacity ==0)
             {
-                await _unitOfWork.RollbackAsync(cancellationToken);
+                
+
+                const string update = @"UPDATE EcareFlux SET FirstWeight = NULL, PabEntryAt= NULL WHERE Matricule = @Matricule AND BonDeCommande=@BonDeCommande;";
+
+                var up = await _unitOfWork.Connection.ExecuteAsync(
+                    update,
+                    new {Matricule = request.Matricule, BonDeCommande = request.BonDeCommande },
+                    transaction: _unitOfWork.Transaction
+                );
+
+                await _unitOfWork.CommitAsync(cancellationToken);
                 return "Aucune ligne disponible pour ce produit.";
+
+
             }
+
+            
 
             //Update EcareFlux table
             const string updateSql = @"UPDATE EcareFlux SET Ligne = @LigneNom WHERE Matricule = @Matricule AND BonDeCommande=@BonDeCommande;";

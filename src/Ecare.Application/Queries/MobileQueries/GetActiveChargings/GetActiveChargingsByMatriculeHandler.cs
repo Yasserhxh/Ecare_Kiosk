@@ -54,27 +54,51 @@ namespace Ecare.Application.Queries.MobileQueries.GetActiveChargings
                     .ToList();
 
                 var grouped = rows
-                    .GroupBy(r => r.Matricule)
-                    .ToDictionary(
-                        g => g.Key,
-                        g =>
-                        {
-                            var firstNonNullStart = g.Select(r => r.StartChargingAt).FirstOrDefault(d => d.HasValue);
-                            var anyCharging = g.Any(r => r.StartChargingAt.HasValue);
-                            var ligne = g.Select(r => r.Ligne).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
-                            var bonDeCoammande = g.Select(r => r.BonDeCommande).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
-                            var items = g.Select(r => new ChargingItemDto(r.Name, r.Quantity, r.Unite, r.Type)).ToList();
-                            var fluxIds = g.Select(r => r.Id).Distinct().ToList();
+    .GroupBy(r => new { r.Matricule, r.BonDeCommande }) // <-- clé composite
+    .ToDictionary(
+        g =>
+        {
+            // Clé du dictionnaire : "MATRICULE|BONDECOMMANDE"
+            var matricule = g.Key.Matricule ?? string.Empty;
+            var cmd = g.Key.BonDeCommande ?? string.Empty;
+            return string.IsNullOrWhiteSpace(cmd)
+                ? matricule
+                : $"{matricule}|{cmd}";
+        },
+        g =>
+        {
+            var firstNonNullStart = g
+                .Select(r => r.StartChargingAt)
+                .FirstOrDefault(d => d.HasValue);
 
-                            return new ChargingGroupVm(
-                                matricule: g.Key,
-                                isTcharging: anyCharging,
-                                startChargingAt: firstNonNullStart,
-                                ligne: ligne,
-                                bonDeCoammande: bonDeCoammande,
-                                fluxIds: fluxIds,
-                                items: items);
-                        });
+            var anyCharging = g.Any(r => r.StartChargingAt.HasValue);
+
+            var ligne = g
+                .Select(r => r.Ligne)
+                .FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
+
+            var bonDeCoammande = g
+                .Select(r => r.BonDeCommande)
+                .FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
+
+            var items = g
+                .Select(r => new ChargingItemDto(r.Name, r.Quantity, r.Unite, r.Type))
+                .ToList();
+
+            var fluxIds = g
+                .Select(r => r.Id)
+                .Distinct()
+                .ToList();
+
+            return new ChargingGroupVm(
+                matricule: g.Key.Matricule,
+                isTcharging: anyCharging,
+                startChargingAt: firstNonNullStart,
+                ligne: ligne,
+                bonDeCoammande: bonDeCoammande,
+                fluxIds: fluxIds,
+                items: items);
+        });
 
                 await _uow.CommitAsync(ct);
                 return Result<IReadOnlyDictionary<string, ChargingGroupVm>>.Ok(grouped);

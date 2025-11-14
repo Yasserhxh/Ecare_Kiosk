@@ -34,7 +34,7 @@ public sealed class UpdateSecondWeightByBonHandler
 
         try
         {
-            // 1) Update EcareFlux and capture related OrderIds
+            // 1) Update EcareFlux and capture related OrderIds + Ligne
             const string sqlFlux = @"
                 ;WITH x AS (
                     SELECT TOP (1) *
@@ -48,10 +48,9 @@ public sealed class UpdateSecondWeightByBonHandler
                     SecondWeight = @SecondWeight,
                     TotalCharged = @SecondWeight - @FirstWeight,
                     PabExitAt = @Now
-                OUTPUT INSERTED.OrderId;";
+                OUTPUT INSERTED.OrderId, INSERTED.Ligne;";
 
-
-            var orderIds = (await _uow.Connection.QueryAsync<int?>(
+            var fluxResults = (await _uow.Connection.QueryAsync<FluxUpdateRow>(
                     sqlFlux,
                     new
                     {
@@ -62,8 +61,11 @@ public sealed class UpdateSecondWeightByBonHandler
                         Now = DateTime.Now
                     },
                     _uow.Transaction))
-                .Where(id => id.HasValue)
-                .Select(id => id!.Value)
+                .ToList();
+
+            var orderIds = fluxResults
+                .Where(r => r.OrderId.HasValue)
+                .Select(r => r.OrderId!.Value)
                 .Distinct()
                 .ToArray();
 
@@ -88,6 +90,26 @@ public sealed class UpdateSecondWeightByBonHandler
                 },
                 _uow.Transaction);
 
+            // 3) Increment Capacity of the corresponding ligne(s)
+            var ligneNames = fluxResults
+                .Select(r => r.Ligne)
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .Distinct()
+                .ToArray();
+
+            if (ligneNames.Length > 0)
+            {
+                const string sqlCap = @"
+                    UPDATE dbo.Ecare_Ligne
+                    SET Capacity = Capacity + 1
+                    WHERE Nom IN @LigneNames;";
+
+                await _uow.Connection.ExecuteAsync(
+                    sqlCap,
+                    new { LigneNames = ligneNames },
+                    _uow.Transaction);
+            }
+
             await _uow.CommitAsync(ct);
 
             // You can return affectedOrders or orderIds.Length — they should be aligned.
@@ -99,11 +121,17 @@ public sealed class UpdateSecondWeightByBonHandler
 
             _log.LogError(
                 ex,
-                "Failed to update SecondWeight and close orders for {Matricule}/{Bon}",
+                "Failed to update SecondWeight, close orders and update capacity for {Matricule}/{Bon}",
                 request.Matricule,
                 request.BonDeCommande);
 
-            return Result<int>.Fail("Database error while updating SecondWeight and order statuses.");
+            return Result<int>.Fail("Database error while updating SecondWeight, order statuses and line capacity.");
         }
+    }
+
+    private sealed class FluxUpdateRow
+    {
+        public int? OrderId { get; init; }
+        public string? Ligne { get; init; }
     }
 }

@@ -16,6 +16,7 @@ namespace Ecare.Domain.ValueObjects
         int CarteSlv,
         decimal? FirstWeight,
         string Matricule,
+        DateTime? StartChargingAt,
         string ClientName,
         IReadOnlyList<ChargingItemVm> Items);
 }

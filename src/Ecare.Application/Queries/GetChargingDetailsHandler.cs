@@ -25,6 +25,7 @@ namespace Ecare.Application.Queries
                 EF.CarteSlv,
                 EF.FirstWeight,
                 EF.Matricule,
+                EF.StartChargingAt,
                 EF.ClientName,
                 OT.ProductId,
                 OT.Quantity,
@@ -76,6 +77,7 @@ namespace Ecare.Application.Queries
                     first.CarteSlv,
                     first.FirstWeight,
                     first.Matricule ?? string.Empty,
+                    first.StartChargingAt,
                     first.ClientName ?? string.Empty,
                     items);
 
@@ -100,6 +102,7 @@ namespace Ecare.Application.Queries
             public int CarteSlv { get; init; }
             public decimal? FirstWeight { get; init; }   // adapte le type si besoin
             public string? Matricule { get; init; }
+            public DateTime? StartChargingAt { get; init; }
             public string? ClientName { get; init; }
             public int ProductId { get; init; }
             public decimal Quantity { get; init; }       // idem
