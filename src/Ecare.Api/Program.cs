@@ -4,6 +4,7 @@ using Ecare.Api.Extensions;
 using Ecare.Application;
 using Ecare.Application.Auth.Services;
 using Ecare.Application.Pipelines;
+using Ecare.Application.Queries;
 using Ecare.Domain.Entities;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
@@ -228,6 +229,31 @@ try
     app.MapBlobEndpoints();
     app.MapMobileAppEndpoints();
     app.MapCementMatrixEndpoints();
+
+    app.MapGet("mobile/charging/details/{fluxid:int}", async (
+            int fluxid,
+            ISender sender,
+            CancellationToken ct) =>
+    {
+        var query = new GetChargingDetailsQuery(fluxid);
+        var result = await sender.Send(query, ct);
+
+        if (!result.Success)
+        {
+            return Results.BadRequest(new
+            {
+                success = false,
+                message = result.Error
+            });
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = result.Value
+        });
+    })
+        .WithName("GetMobileChargingDetails");
 
     Console.WriteLine("✓ All endpoints mapped");
     Console.WriteLine("=== Starting application on https://localhost:7001 ===");

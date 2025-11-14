@@ -1,4 +1,4 @@
-﻿using Ecare.Application.Queries.GetFluxStagesSummary;
+﻿using Ecare.Application.Queries.MobileQueries.GetFluxChargingDetails;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +39,7 @@ namespace Ecare.Application.Services.Handlers
                     using var scope = _sp.CreateScope();
                     var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-                    var result = await mediator.Send(new GetFluxStagesSummaryQuery(), stoppingToken);
+                    var result = await mediator.Send(new GetFluxChargingDetailsQuerie(), stoppingToken);
                     if (!result.Success)
                     {
                         _log.LogWarning("No flux data to broadcast: {error}", result.Error);

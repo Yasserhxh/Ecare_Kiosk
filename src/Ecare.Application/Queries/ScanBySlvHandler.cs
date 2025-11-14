@@ -54,10 +54,10 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
             if (equipement is null)
                 return Result<ScanBySlvVm>.Fail("Carte SLV inconnue/inactive");
 
-            var client = await _uow.Connection.QuerySingleOrDefaultAsync<Client>(
-                $@"SELECT TOP(1) * FROM {DbTableNames.Clients} WHERE RaisonSociale = @clientName",
-                new { clientName = equipement.ClientName },
-                _uow.Transaction);
+            //var client = await _uow.Connection.QuerySingleOrDefaultAsync<Client>(
+            //    $@"SELECT TOP(1) * FROM {DbTableNames.Clients} WHERE RaisonSociale = @clientName",
+            //    new { clientName = equipement.ClientName },
+            //    _uow.Transaction);
 
             var order = await _orders.GetBySlvAsync(equipement.CarteSLV, _uow);
 
@@ -100,7 +100,7 @@ public sealed class ScanBySlvHandler : IRequestHandler<ScanBySlvQuery, Result<Sc
                 Plate: equipement.Matricule,
                 CarteSLV: equipement.CarteSLV,
                 ClientName: equipement.ClientName,
-                SapOk: client?.SapOk,
+                SapOk: null,
                 Order: dto
             );
 
