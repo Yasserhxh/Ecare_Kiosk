@@ -9,103 +9,126 @@ namespace Ecare.Application.Queries.GetCementLineMatrix
     public sealed class GetCementLineMatrixHandler(
         IUnitOfWork uow,
         ILogger<GetCementLineMatrixHandler> log)
-        : IRequestHandler<GetCementLineMatrixQuery, Result<IReadOnlyList<CementMatrixRowVm>>>
+        : IRequestHandler<GetCementLineMatrixQuery, Result<CementMatrixVm>>
     {
-        public async Task<Result<IReadOnlyList<CementMatrixRowVm>>> Handle(
+        public async Task<Result<CementMatrixVm>> Handle(
             GetCementLineMatrixQuery request,
             CancellationToken ct)
         {
             const string sql = """
+            -- 1) Lignes + affectations
             SELECT
-                c.Id                                           AS CimentId,
-                CAST(c.Id AS nvarchar(10)) + ' - ' + c.Name    AS Product,
-                c.Type                                         AS Type,
-                l.Id                                           AS LigneId,
-                l.Nom                                          AS LineName,
-                z.Usine                                        AS Usine,
-                z.TypeActivite                                 AS TypeActivite,
-                l.Status                                       AS Status
-            FROM EcareCiments c
-            LEFT JOIN Ecare_LigneCiments lc
-                ON lc.CimentId = c.Id
-            LEFT JOIN Ecare_Ligne l
-                ON lc.LigneId = l.Id
-            LEFT JOIN Ecare_Zone_Chargement z
+                l.Id            AS LigneId,
+                l.Nom           AS LineName,
+                l.Status        AS Status,
+                l.Capacity      AS Capacity,
+                z.Usine         AS Usine,
+                z.TypeActivite  AS TypeActivite,
+                z.TypeOperation AS TypeOperation,
+                c.Id            AS CimentId,
+                c.Name          AS CimentName,
+                c.[Type]        AS CimentType
+            FROM Ecare_Ligne l
+            JOIN Ecare_Zone_Chargement z
                 ON l.ZoneChargementId = z.Id
-               AND (@Usine IS NULL OR z.Usine = @Usine)
-            ORDER BY c.Name, z.TypeActivite, l.Nom;
+            LEFT JOIN Ecare_LigneCiments lc
+                ON lc.LigneId = l.Id
+            LEFT JOIN EcareCiments c
+                ON c.Id = lc.CimentId
+            WHERE (@Usine IS NULL OR z.Usine = @Usine);
+
+            -- 2) Tous les produits
+            SELECT
+                c.Id,
+                c.Name,
+                c.[Type]
+            FROM EcareCiments c
+            ORDER BY c.Name;
             """;
 
             try
             {
-                // Make sure the connection is opened / created
-                await uow.BeginAsync(ct); // if your UoW uses this to open connection
+                await uow.BeginAsync(ct);
 
                 var conn = uow.Connection
                            ?? throw new InvalidOperationException("UnitOfWork.Connection is null in GetCementLineMatrixHandler.");
 
-                var rows = (await conn.QueryAsync<CementLineRow>(
-                        new CommandDefinition(
-                            sql,
-                            new { request.Usine },
-                            transaction: uow.Transaction,
-                            cancellationToken: ct)))
-                    .ToList();
+                using var multi = await conn.QueryMultipleAsync(
+                    new CommandDefinition(
+                        sql,
+                        new { request.Usine },
+                        transaction: uow.Transaction,
+                        cancellationToken: ct));
 
-                var grouped = rows
+                var lineRows = (await multi.ReadAsync<LineRow>()).ToList();
+                var products = (await multi.ReadAsync<CementVm>()).ToList();
+
+                var lines = lineRows
                     .GroupBy(r => new
                     {
-                        r.CimentId,
-                        Product = r.Product ?? string.Empty,
-                        Type = r.Type ?? string.Empty
+                        r.LigneId,
+                        Name = r.LineName ?? string.Empty,
+                        Status = r.Status ?? 0,
+                        Capacity = r.Capacity ?? 0,
+                        Usine = r.Usine ?? string.Empty,
+                        TypeActivite = r.TypeActivite ?? string.Empty,
+                        TypeOperation = r.TypeOperation ?? string.Empty
                     })
                     .Select(g =>
                     {
-                        var lines = g
-                            .Where(r => r.LigneId.HasValue)
-                            .Select(r => new CementLineVm(
-                                r.LigneId!.Value,
-                                r.LineName ?? string.Empty,
-                                r.Usine ?? string.Empty,
-                                r.TypeActivite ?? string.Empty,
-                                r.Status ?? 0,
-                                (r.Status ?? 0) == 1 ? "A" : "S"
-                            ))
-                            .OrderBy(l => l.TypeActivite)
-                            .ThenBy(l => l.LineName)
+                        var prods = g
+                            .Where(r => r.CimentId.HasValue)
+                            .Select(r => new LineProductVm(
+                                r.CimentId!.Value,
+                                r.CimentName ?? string.Empty,
+                                r.CimentType ?? string.Empty))
+                            .OrderBy(p => p.Name)
                             .ToList();
 
-                        return new CementMatrixRowVm(
-                            g.Key.CimentId,
-                            g.Key.Product,
-                            g.Key.Type,
-                            lines);
+                        return new LineVm(
+                            g.Key.LigneId,
+                            g.Key.Name,
+                            g.Key.Status,
+                            g.Key.Capacity,
+                            g.Key.Usine,
+                            g.Key.TypeActivite,
+                            g.Key.TypeOperation,
+                            prods);
                     })
-                    .OrderBy(x => x.Product)
+                    .OrderBy(l => l.TypeActivite)
+                    .ThenBy(l => l.Name)
                     .ToList();
+
+                var matrix = new CementMatrixVm(lines, products);
 
                 await uow.CommitAsync(ct);
 
-                return Result<IReadOnlyList<CementMatrixRowVm>>.Ok(grouped);
+                return Result<CementMatrixVm>.Ok(matrix);
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Error in GetCementLineMatrix for usine {Usine}", request.Usine);
+                log.LogError(ex,
+                    "Erreur lors du chargement de la matrice lignes/produits pour l'usine {Usine}",
+                    request.Usine);
+
                 await uow.RollbackAsync(ct);
-                return Result<IReadOnlyList<CementMatrixRowVm>>.Fail("Erreur lors du chargement de la matrice de lignes ciment.");
+                return Result<CementMatrixVm>.Fail("Erreur lors du chargement de la configuration des lignes.");
             }
         }
 
-        private sealed class CementLineRow
+        private sealed class LineRow
         {
-            public int CimentId { get; init; }
-            public string? Product { get; init; }
-            public string? Type { get; init; }
-            public int? LigneId { get; init; }
+            public int LigneId { get; init; }
             public string? LineName { get; init; }
+            public int? Status { get; init; }
+            public int? Capacity { get; init; }
             public string? Usine { get; init; }
             public string? TypeActivite { get; init; }
-            public int? Status { get; init; }
+            public string? TypeOperation { get; init; }
+
+            public int? CimentId { get; init; }
+            public string? CimentName { get; init; }
+            public string? CimentType { get; init; }
         }
     }
 }

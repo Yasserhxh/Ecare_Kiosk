@@ -1,6 +1,9 @@
 ﻿using Dapper;
+using Ecare.Application.Queries.GetCementLineMatrix;
+using Ecare.Domain.ValueObjects;
 using Ecare.Shared;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,115 +12,129 @@ using System.Threading.Tasks;
 
 namespace Ecare.Application.Queries.GetFluxStagesSummary
 {
-    public sealed class GetFluxStagesSummaryHandler
-    : IRequestHandler<GetFluxStagesSummaryQuery, Result<IReadOnlyList<FluxStageSummary>>>
+    public sealed class GetCementLineMatrixHandler(
+        IUnitOfWork uow,
+        ILogger<GetCementLineMatrixHandler> log)
+        : IRequestHandler<GetCementLineMatrixQuery, Result<CementMatrixVm>>
     {
-        private readonly IUnitOfWork _uow;
-        public GetFluxStagesSummaryHandler(IUnitOfWork uow) => _uow = uow;
-
-        public async Task<Result<IReadOnlyList<FluxStageSummary>>> Handle(GetFluxStagesSummaryQuery request, CancellationToken ct)
+        public async Task<Result<CementMatrixVm>> Handle(
+            GetCementLineMatrixQuery request,
+            CancellationToken ct)
         {
-            const string sql = @"
-SELECT 
-    e.Id,
-    e.Matricule,
-    e.ClientName,
-    e.Ligne,
-    ec.Type,
-    e.ParkedAt,
-    e.PabEntryAt,
-    e.StartChargingAt,
-    e.FinishedChargingAt,
-    e.PabExitAt
-FROM dbo.EcareFlux e
-LEFT JOIN dbo.Orders o ON e.OrderId = o.Id
-LEFT JOIN dbo.Ecare_OrderItems oi ON o.Id = oi.OrderId
-LEFT JOIN dbo.EcareCiments ec ON ec.Id = oi.ProductId
-WHERE e.ParkedAt IS NOT NULL
-  AND (@Type IS NULL OR ec.Type = @Type);";
+            const string sql = """
+            -- 1) Lignes + affectations
+            SELECT
+                l.Id            AS LigneId,
+                l.Nom           AS LineName,
+                l.Status        AS Status,
+                l.Capacity      AS Capacity,
+                z.Usine         AS Usine,
+                z.TypeActivite  AS TypeActivite,
+                z.TypeOperation AS TypeOperation,
+                c.Id            AS CimentId,
+                c.Name          AS CimentName,
+                c.[Type]        AS CimentType
+            FROM Ecare_Ligne l
+            JOIN Ecare_Zone_Chargement z
+                ON l.ZoneChargementId = z.Id
+            LEFT JOIN Ecare_LigneCiments lc
+                ON lc.LigneId = l.Id
+            LEFT JOIN EcareCiments c
+                ON c.Id = lc.CimentId
+            WHERE (@Usine IS NULL OR z.Usine = @Usine);
+
+            -- 2) Tous les produits
+            SELECT
+                c.Id,
+                c.Name,
+                c.[Type]
+            FROM EcareCiments c
+            ORDER BY c.Name;
+            """;
 
             try
             {
-                await _uow.BeginAsync(ct);
-                var rows = (await _uow.Connection.QueryAsync(sql, new { request.Type }, _uow.Transaction)).ToList();
-                await _uow.CommitAsync(ct);
+                await uow.BeginAsync(ct);
 
-                var now = DateTime.Now;
+                var conn = uow.Connection
+                           ?? throw new InvalidOperationException("UnitOfWork.Connection is null in GetCementLineMatrixHandler.");
 
-                var items = rows.Select(r =>
-                {
-                    string stage;
-                    DateTime refTime;
+                using var multi = await conn.QueryMultipleAsync(
+                    new CommandDefinition(
+                        sql,
+                        new { request.Usine },
+                        transaction: uow.Transaction,
+                        cancellationToken: ct));
 
-                    var parked = (DateTime?)r.ParkedAt;
-                    var entry = (DateTime?)r.PabEntryAt;
-                    var start = (DateTime?)r.StartChargingAt;
-                    var finish = (DateTime?)r.FinishedChargingAt;
+                var lineRows = (await multi.ReadAsync<LineRow>()).ToList();
+                var products = (await multi.ReadAsync<CementVm>()).ToList();
 
-                    if (parked != null && entry == null)
+                var lines = lineRows
+                    .GroupBy(r => new
                     {
-                        stage = "PARC";
-                        refTime = parked.Value;
-                    }
-                    else if (entry != null && start == null)
-                    {
-                        stage = "USINE";
-                        refTime = entry.Value;
-                    }
-                    else if (start != null && finish == null)
-                    {
-                        stage = "CHARGEMENT";
-                        refTime = start.Value;
-                    }
-                    else if (finish != null)
-                    {
-                        stage = "SORTIE";
-                        refTime = finish.Value;
-                    }
-                    else
-                    {
-                        stage = "UNKNOWN";
-                        refTime = parked ?? now;
-                    }
-
-                    var mins = (now - refTime).TotalMinutes;
-
-                    return new
-                    {
-                        Stage = stage,
-                        Matricule = (string)r.Matricule,
-                        ClientName = (string?)r.ClientName,
-                        Ligne = (string?)r.Ligne,
-                        Type = (string?)r.Type,
-                        MinutesInStage = mins
-                    };
-                }).ToList();
-
-                var grouped = items
-                    .GroupBy(x => x.Stage)
+                        r.LigneId,
+                        Name = r.LineName ?? string.Empty,
+                        Status = r.Status ?? 0,
+                        Capacity = r.Capacity ?? 0,
+                        Usine = r.Usine ?? string.Empty,
+                        TypeActivite = r.TypeActivite ?? string.Empty,
+                        TypeOperation = r.TypeOperation ?? string.Empty
+                    })
                     .Select(g =>
                     {
-                        var trucks = g.Select(x => new FluxStageItem(
-                            x.Matricule, x.ClientName, x.Ligne, x.Type, DateTime.Now.AddMinutes(-x.MinutesInStage), x.MinutesInStage)).ToList();
+                        var prods = g
+                            .Where(r => r.CimentId.HasValue)
+                            .Select(r => new LineProductVm(
+                                r.CimentId!.Value,
+                                r.CimentName ?? string.Empty,
+                                r.CimentType ?? string.Empty))
+                            .OrderBy(p => p.Name)
+                            .ToList();
 
-                        return new FluxStageSummary(
-                            Stage: g.Key,
-                            TruckCount: trucks.Count,
-                            MinMinutes: trucks.Min(x => x.MinutesInStage),
-                            MaxMinutes: trucks.Max(x => x.MinutesInStage),
-                            AvgMinutes: trucks.Average(x => x.MinutesInStage),
-                            Trucks: trucks);
+                        return new LineVm(
+                            g.Key.LigneId,
+                            g.Key.Name,
+                            g.Key.Status,
+                            g.Key.Capacity,
+                            g.Key.Usine,
+                            g.Key.TypeActivite,
+                            g.Key.TypeOperation,
+                            prods);
                     })
-                    .OrderBy(s => s.Stage)
+                    .OrderBy(l => l.TypeActivite)
+                    .ThenBy(l => l.Name)
                     .ToList();
 
-                return Result<IReadOnlyList<FluxStageSummary>>.Ok(grouped);
+                var matrix = new CementMatrixVm(lines, products);
+
+                await uow.CommitAsync(ct);
+
+                return Result<CementMatrixVm>.Ok(matrix);
             }
             catch (Exception ex)
             {
-                await _uow.RollbackAsync(ct);
-                return Result<IReadOnlyList<FluxStageSummary>>.Fail($"Query failed: {ex.Message}");
+                log.LogError(ex,
+                    "Erreur lors du chargement de la matrice lignes/produits pour l'usine {Usine}",
+                    request.Usine);
+
+                await uow.RollbackAsync(ct);
+                return Result<CementMatrixVm>.Fail("Erreur lors du chargement de la configuration des lignes.");
             }
+        }
+
+        private sealed class LineRow
+        {
+            public int LigneId { get; init; }
+            public string? LineName { get; init; }
+            public int? Status { get; init; }
+            public int? Capacity { get; init; }
+            public string? Usine { get; init; }
+            public string? TypeActivite { get; init; }
+            public string? TypeOperation { get; init; }
+
+            public int? CimentId { get; init; }
+            public string? CimentName { get; init; }
+            public string? CimentType { get; init; }
         }
     }
 }
