@@ -6,7 +6,8 @@
 
     namespace Ecare.Application.Services
     {
-        using Microsoft.AspNetCore.SignalR.Client;
+    using global::Ecare.Domain.ValueObjects;
+    using Microsoft.AspNetCore.SignalR.Client;
         using Microsoft.Extensions.Hosting;
         using Microsoft.Extensions.Logging;
         using Microsoft.Extensions.Options;
@@ -141,18 +142,28 @@
             }
 
             private async void OnInbound(object payload)
+            {
+                try
                 {
-                    try
+                    ParkingInboundDto dto;
 
+                    // Payload from SignalR is ALWAYS a JsonElement
+                    if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
                     {
+                        dto = JsonSerializer.Deserialize<ParkingInboundDto>(el)!;
+                    }
+                    else
+                    {
+                        dto = JsonSerializer.Deserialize<ParkingInboundDto>(payload.ToString()!)!;
+                    }
 
-                        await _handler.HandleAsync(payload, CancellationToken.None);
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.LogError(ex, "Inbound handler failed");
-                    }
+                    await _handler.HandleAsync(dto, CancellationToken.None);
                 }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex, "Inbound handler failed");
+                }
+            }
 
                 private sealed record NegotiateResponse(string Url, string AccessToken);
             }

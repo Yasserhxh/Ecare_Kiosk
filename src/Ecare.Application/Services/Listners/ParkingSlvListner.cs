@@ -1,36 +1,30 @@
-﻿// File: PabExitListener.cs
-using Ecare.Application.Services.Ecare.Application.Services;
-using Ecare.Application.Services.Handlers;
+﻿using Ecare.Application.Services.Ecare.Application.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Ecare.Application.Services
+namespace Ecare.Application.Services;
+
+public sealed class ParkingSlvListener : BackgroundService
 {
-    public sealed class ParkingSlvListner : BackgroundService
+    private readonly SignalRHubListener _inner;
+
+    public ParkingSlvListener(
+        ILogger<SignalRHubListener> log,
+        IHttpClientFactory http,
+        IOptionsMonitor<SignalRListenerOptions> options,
+        ParkingSlvInboundHandler handler)
     {
-        private readonly SignalRHubListener _inner;
+        var opt = options.Get("Parking");
+        log.LogInformation("Initializing ParkingSlvListener: Hub={Hub}, Method={Method}",
+            opt.Hub, opt.Method);
 
-        public ParkingSlvListner(
-            ILogger<SignalRHubListener> log,
-            IHttpClientFactory http,
-            IOptionsMonitor<SignalRListenerOptions> options,
-            ParkingSlvInboundHandler handler)
-        {
-            var opts = options.Get("Parking");
-            log.LogInformation("ParkingSlvListner constructor: Hub={Hub}, Method={Method}",
-                opts.Hub, opts.Method);
-            _inner = new SignalRHubListener(log, http, Options.Create(opts), handler);
-        }
-
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            return ((IHostedService)_inner).StartAsync(stoppingToken);
-        }
-
-        public override Task StopAsync(CancellationToken cancellationToken)
-        {
-            return _inner.StopAsync(cancellationToken);
-        }
+        _inner = new SignalRHubListener(log, http, Options.Create(opt), handler);
     }
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        => ((IHostedService)_inner).StartAsync(stoppingToken);
+
+    public override Task StopAsync(CancellationToken token)
+        => _inner.StopAsync(token);
 }

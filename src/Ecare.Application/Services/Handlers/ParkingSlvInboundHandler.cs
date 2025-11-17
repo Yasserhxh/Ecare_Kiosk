@@ -1,10 +1,8 @@
 ﻿using Dapper;
 using Ecare.Application.Queries;
+using Ecare.Application.Queries.ParkingScan;
 using Ecare.Application.Services.Ecare.Application.Services;
-using Ecare.Domain.Entities;
-
-
-// using Ecare.Application.Services.Ecare.Application.Services; // <- looks accidental, you can remove
+using Ecare.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Data.SqlClient;
@@ -25,172 +23,131 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
     private readonly ILogger<ParkingSlvInboundHandler> _log;
     private readonly IServiceProvider _sp;
     private readonly ServiceManager _signalR;
-    private readonly ParkingOutboundOptions _outOpt;
+    private readonly ParkingOutboundOptions _opt;
 
     public ParkingSlvInboundHandler(
         ILogger<ParkingSlvInboundHandler> log,
         IServiceProvider sp,
-        ServiceManager signalR,
-        IOptions<ParkingOutboundOptions> outOpt)
+        ServiceManager mgr,
+        IOptions<ParkingOutboundOptions> opt)
     {
         _log = log;
         _sp = sp;
-        _signalR = signalR;
-        _outOpt = outOpt.Value;
+        _signalR = mgr;
+        _opt = opt.Value;
     }
 
     public async Task HandleAsync(object payload, CancellationToken ct)
     {
-        // Extract SLV
-        string? slv = TryExtractCarteSlv(payload);
-        if (string.IsNullOrWhiteSpace(slv))
+        // -------- PARSE INPUT ----------------
+        if (payload is not ParkingInboundDto dto)
         {
-            _log.LogWarning("Missing carteSlv in payload: {raw}", JsonSerializer.Serialize(payload));
+            _log.LogWarning("Invalid inbound payload");
             return;
         }
 
-        // Extract deviceId
-        string? deviceId = TryExtractDeviceId(payload);
-        if (string.IsNullOrWhiteSpace(deviceId))
+        string? slv = dto.carteSlv ?? dto.slv;
+        string? deviceId = dto.deviceId;
+
+        if (string.IsNullOrWhiteSpace(slv) || string.IsNullOrWhiteSpace(deviceId))
         {
-            _log.LogWarning("Missing deviceId in payload for SLV={slv}", slv);
+            _log.LogWarning("Missing SLV or deviceId");
             return;
         }
-
-        _log.LogInformation("📥 Processing SLV={slv} from device={device}", slv, deviceId);
 
         using var scope = _sp.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
-        var result = await mediator.Send(new ScanBySlvQuery(slv), ct);
-        if (!result.Success || result.Value is null)
+        var scan = await mediator.Send(new ScanByRfidQuery(slv), ct);
+
+        if (scan.Code == "RFID_NOT_FOUND")
         {
-            _log.LogWarning("Scan failed for SLV={slv}: {err}", slv, result.Error);
+            await Send(deviceId, new { @event = "Error", slv, error = "RFID_NOT_FOUND" }, ct);
             return;
         }
 
-        var vm = result.Value;
-
-        // === SELECT * + rows>0 => IsInQueue ====================================
-        bool isInQueue = false;
-
-        if (!string.IsNullOrWhiteSpace(vm.Plate))
+        // ==========================================================
+        // CASE 1: MULTIPLE CLIENTS
+        // ==========================================================
+        if (scan.Clients.Count > 1)
         {
-            try
+            await Send(deviceId, new
             {
-                var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-                var connStr =
-                       cfg.GetConnectionString("SqlServer")
-                    ?? cfg["ConnectionStrings:SqlServer"]
-                    ?? cfg["Db:ConnectionStrings:SqlServer"];
+                @event = "SelectClient",
+                slv,
+                clients = scan.Clients
+            }, ct);
 
-                const string sql = @"
-                SELECT *
-                FROM dbo.Ecare_Queue
-                WHERE Matricule = @Plate
-                  AND Status IN (0, 1);
-
-                ";
-
-                await using var conn = new SqlConnection(connStr);
-
-                // We don't need to map a type; just check if any row comes back
-                var rows = await conn.QueryAsync(
-                    new CommandDefinition(
-                        sql,
-                        new { Plate = vm.Plate },
-                        cancellationToken: ct));
-
-                isInQueue = rows.AsList().Count > 0;
-
-                _log.LogInformation("Queue check: order {order} / plate {plate} => IsInQueue={inQueue}");
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "Failed EcareFlux check for order={order}, plate={plate}",
-                    vm.Order?.Number, vm.Plate);
-            }
+            _log.LogInformation("MULTIPLE_CLIENTS → Sent SelectClient");
+            return;
         }
-        // =======================================================================
 
-        var outboundPayload = new
+        // ==========================================================
+        // CASE 2: SINGLE CLIENT + MULTIPLE CHANTIERS
+        // ==========================================================
+        if (scan.Clients.Count == 1 && scan.Chantiers.Count > 1)
+        {
+            await Send(deviceId, new
+            {
+                @event = "SelectChantier",
+                slv,
+                client = scan.Clients[0],
+                chantiers = scan.Chantiers
+            }, ct);
+
+            _log.LogInformation("MULTIPLE_CHANTIERS → Sent SelectChantier");
+            return;
+        }
+
+        // ==========================================================
+        // CASE 3: FULL FLOW (ONE CLIENT + ONE CHANTIER)
+        // ==========================================================
+        bool isInQueue = await CheckQueueAsync(scan.Truck?.Matricule, cfg);
+
+        await Send(deviceId, new
         {
             @event = "OrderDataEvent",
-            site = "Asment-Temara-01",
-            kiosk = "parking-pc-01",
-            slv = vm.CarteSLV,
+            slv,
             ts = DateTime.UtcNow,
-
-            // Capitalized as requested
             IsInQueue = isInQueue,
 
-            driver = new
+            driver = scan.Truck is null ? null : new
             {
-                id = vm.DriverId,
-                name = vm.DriverName,
-                plate = vm.Plate
+                id = scan.Truck.TruckId,
+                name = $"{scan.Truck.DriverPrenom} {scan.Truck.DriverNom}",
+                plate = scan.Truck.Matricule
             },
-            client = new
-            {
-                name = vm.ClientName,
-                sapOk = vm.SapOk
-            },
-            order = vm.Order is null ? null : new
-            {
-                OrderId=vm.Order.OrderId,
-                number = vm.Order.Number,
-                destination = vm.Order.Destination,
-                deliveryMode = vm.Order.DeliveryMode,
-                truckPlate = vm.Order.TruckPlate,
-                status = vm.Order.Status,
-                items = vm.Order.Items.Select(i => new
-                {
-                    productId = i.ProductId,
-                    productName = i.ProductName,
-                    quantity = i.Quantity,
-                    unite = i.Unite,
-                    imageUrl = i.ImageUrl
-                })
-            }
-        };
 
-        await SignalRHelper.BroadcastToDeviceAsync(
-            _signalR,
-            hubName: _outOpt.Hub,
-            methodName: _outOpt.Method,
-            deviceId: deviceId,
-            payload: outboundPayload,
-            logger: _log,
-            ct: ct
-        );
+            client = scan.Clients.FirstOrDefault(),
+            chantier = scan.Chantiers.FirstOrDefault(),
+            order = scan.Order,
+            items = scan.Items
 
-        _log.LogInformation(" Sent OrderDataEvent to device={device}", deviceId);
+        }, ct);
     }
 
-    private static string? TryExtractCarteSlv(object payload)
+    // ----------------- SMALL HELPERS -----------------
+    private Task Send(string deviceId, object payload, CancellationToken ct)
     {
-        if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
-        {
-            if (el.TryGetProperty("carteSlv", out var v) && v.ValueKind == JsonValueKind.String)
-                return v.GetString();
-            if (el.TryGetProperty("slv", out var v2) && v2.ValueKind == JsonValueKind.String)
-                return v2.GetString();
-        }
-
-        var p = payload.GetType().GetProperty("carteSlv")
-                 ?? payload.GetType().GetProperty("slv");
-        return p?.GetValue(payload)?.ToString();
+        return SignalRHelper.BroadcastToDeviceAsync(
+            _signalR, _opt.Hub, _opt.Method, deviceId, payload, _log, ct);
     }
 
-    private static string? TryExtractDeviceId(object payload)
+    private static async Task<bool> CheckQueueAsync(string? plate, IConfiguration cfg)
     {
-        if (payload is JsonElement el && el.ValueKind == JsonValueKind.Object)
-        {
-            if (el.TryGetProperty("deviceId", out var v) && v.ValueKind == JsonValueKind.String)
-                return v.GetString();
-        }
+        if (string.IsNullOrWhiteSpace(plate)) return false;
 
-        var p = payload.GetType().GetProperty("deviceId");
-        return p?.GetValue(payload)?.ToString();
+        const string sql = @"
+            IF EXISTS (
+                SELECT 1 FROM dbo.Ecare_Queue
+                WHERE Matricule = @Plate AND Status IN (0,1)
+            ) SELECT 1 ELSE SELECT 0;
+        ";
+
+        await using var conn = new SqlConnection(cfg.GetConnectionString("SqlServer"));
+        return await conn.ExecuteScalarAsync<bool>(sql, new { Plate = plate });
     }
 }
+
+

@@ -5,6 +5,7 @@ using Ecare.Application;
 using Ecare.Application.Auth.Services;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
+using Ecare.Application.Queries.ParkingScan;
 using Ecare.Domain.Entities;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
@@ -229,6 +230,13 @@ try
     app.MapBlobEndpoints();
     app.MapMobileAppEndpoints();
     app.MapCementMatrixEndpoints();
+
+    app.MapGet("/scan/{rfid}", async (string rfid, IMediator mediator) =>
+    {
+        var result = await mediator.Send(new ScanByRfidQuery(rfid));
+        return Results.Ok(result);
+    });
+
 
     app.MapGet("mobile/charging/details/{fluxid:int}", async (
             int fluxid,

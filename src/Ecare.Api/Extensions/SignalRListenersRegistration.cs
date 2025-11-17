@@ -54,8 +54,8 @@ namespace Ecare.Api.Extensions
             services.AddHostedService<PabEntryListener>();
             services.AddHostedService<PabExitListener>();
             services.AddHostedService<LoadingListner>();
-            services.AddHostedService<ParkingSlvListner>();
-            services.AddHostedService<FluxRealtimeTicker>();
+            services.AddHostedService<ParkingSlvListener>();
+            //services.AddHostedService<FluxRealtimeTicker>();
 
 
             return services;
