@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Ecare.Application.Queries.MultiClientOrders.Ecare.Application.Queries.MultiClientOrders;
 using Ecare.Domain.ValueObjects;
 using Ecare.Shared;
 using MediatR;
@@ -26,97 +27,101 @@ namespace Ecare.Application.Queries.MultiClientOrders
             _log = log;
         }
 
-        public async Task<Result<MultiClientOrdersVm>> Handle(MultiClientOrdersQuery request, CancellationToken ct)
+        public async Task<Result<MultiClientOrdersVm>> Handle(
+            MultiClientOrdersQuery request,
+            CancellationToken ct)
         {
-            try
+            var connStr = _cfg.GetConnectionString("SqlServer");
+            using var conn = new SqlConnection(connStr);
+
+            var rows = await conn.QueryAsync<dynamic>(
+                "sp_GetParkingScanData",
+                new { RfidCard = request.Slv },
+                commandType: CommandType.StoredProcedure);
+
+            if (!rows.Any())
+                return Result<MultiClientOrdersVm>.Fail("NO_DATA");
+
+            var vm = new MultiClientOrdersVm { Slv = request.Slv };
+
+            // extract driver
+            var row0 = rows.First();
+            vm.Driver = new DriverVm
             {
-                string connStr = _cfg.GetConnectionString("SqlServer")!;
-                using var conn = new SqlConnection(connStr);
+                DriverId = row0.DriverId,
+                Nom = row0.DriverNom,
+                Prenom = row0.DriverPrenom,
+                Plate = row0.TruckPlate,
+            };
 
-                var rows = (await conn.QueryAsync<ParkingScanRow>(
-                    "sp_GetParkingScanData",
-                    new { RfidCard = request.Slv },
-                    commandType: CommandType.StoredProcedure
-                )).AsList();
+            // Build client/chantier/order tree
+            var clientMap = new Dictionary<int, ClientNode>();
 
-                if (rows.Count == 0)
-                    return Result<MultiClientOrdersVm>.Fail("NO_DATA");
-
-                return Result<MultiClientOrdersVm>.Ok(BuildResponse(request.Slv, rows));
-            }
-            catch (Exception ex)
+            foreach (var r in rows)
             {
-                _log.LogError(ex, "MultiClientOrders SP failed");
-                return Result<MultiClientOrdersVm>.Fail(ex.Message);
-            }
-        }
+                if (r.ClientId == null)
+                    continue;
 
-        private MultiClientOrdersVm BuildResponse(string slv, List<ParkingScanRow> rows)
-        {
-            var vm = new MultiClientOrdersVm { Slv = slv };
-
-            var clientGroups = rows
-                .GroupBy(r => new { r.ClientId, r.ClientCode, r.ClientName });
-
-            foreach (var cg in clientGroups)
-            {
-                var client = new ClientNode
+                if (!clientMap.TryGetValue((int)r.ClientId, out var client))
                 {
-                    ClientId = cg.Key.ClientId ?? 0,
-                    ClientCode = cg.Key.ClientCode,
-                    ClientName = cg.Key.ClientName,
-                    Chantiers = new()
-                };
-
-                var chantierGroups = cg
-                    .GroupBy(r => new { r.ChantierId, r.ChantierCode, r.ChantierName });
-
-                foreach (var chg in chantierGroups)
-                {
-                    var chantier = new ChantierNode
+                    client = new ClientNode
                     {
-                        ChantierId = chg.Key.ChantierId ?? 0,
-                        ChantierCode = chg.Key.ChantierCode,
-                        ChantierName = chg.Key.ChantierName
+                        ClientId = r.ClientId,
+                        ClientCode = r.ClientCode,
+                        ClientName = r.ClientName
                     };
+                    clientMap[r.ClientId] = client;
+                }
 
-                    var orderGroups = chg.GroupBy(r => r.OrderId);
-
-                    foreach (var og in orderGroups)
+                // chantier
+                if (r.ChantierId != null)
+                {
+                    var chantier = client.Chantiers.FirstOrDefault(x => x.ChantierId == r.ChantierId);
+                    if (chantier == null)
                     {
-                        if (og.Key is null) continue;
+                        chantier = new ChantierNode
+                        {
+                            ChantierId = r.ChantierId,
+                            ChantierCode = r.ChantierCode,
+                            ChantierName = r.ChantierName
+                        };
+                        client.Chantiers.Add(chantier);
+                    }
 
-                        var first = og.First();
+                    // order
+                    if (r.OrderId != null && chantier.Order == null)
+                    {
                         chantier.Order = new OrderNode
                         {
-                            OrderId = first.OrderId ?? 0,
-                            Number = first.OrderNumber,
-                            Destination = first.Destination,
-                            DeliveryMode = first.DeliveryMode,
-                            TruckPlate = first.OrderTruckPlate,
-                            Status = first.OrderStatus,
-                            Items = og
-                                .Where(r => r.ProductId != null)
-                                .Select(r => new OrderItemNode
-                                {
-                                    ProductId = r.ProductId ?? 0,
-                                    ProductName = r.ProductName,
-                                    Quantity = r.Quantity ?? 0,
-                                    Unite = r.Unite,
-                                    ImageUrl = r.ImageUrl
-                                })
-                                .ToList()
+                            OrderId = r.OrderId,
+                            Number = r.OrderNumber,
+                            Destination = r.Destination,
+                            DeliveryMode = r.DeliveryMode,
+                            TruckPlate = r.OrderTruckPlate,
+                            Status = r.OrderStatus,
+                            Items = new List<OrderItemNode>()
                         };
                     }
 
-                    client.Chantiers.Add(chantier);
+                    // items
+                    if (r.OrderId != null && r.ProductId != null)
+                    {
+                        chantier.Order.Items.Add(new OrderItemNode
+                        {
+                            ProductId = r.ProductId,
+                            ProductName = r.ProductName,
+                            Quantity = r.Quantity,
+                            Unite = r.Unite,
+                            ImageUrl = r.ImageUrl
+                        });
+                    }
                 }
-
-                vm.Clients.Add(client);
             }
 
-            return vm;
+            vm.Clients = clientMap.Values.ToList();
+            return Result<MultiClientOrdersVm>.Ok(vm);
         }
     }
+
 
 }

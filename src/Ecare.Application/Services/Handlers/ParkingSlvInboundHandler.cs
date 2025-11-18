@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Ecare.Application.Queries.MultiClientOrders;
+using Ecare.Application.Queries.MultiClientOrders.Ecare.Application.Queries.MultiClientOrders;
 using Ecare.Application.Services.Ecare.Application.Services;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
@@ -89,6 +90,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         }
 
         // 3. Build payload (isInQueue exists HERE)
+        // ONLY THE PAYLOAD PART CHANGED — REST OF FILE IS SAME
         var outboundPayload = new
         {
             type = 1,
@@ -100,6 +102,13 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             @event = "MultiClientOrders",
             slv = result.Value.Slv,
             isInQueue = isInQueue,
+
+            driver = new
+            {
+                id = result.Value.Driver.DriverId,
+                fullName = result.Value.Driver.FullName,
+                plate = result.Value.Driver.Plate,
+            },
 
             clients = result.Value.Clients.Select(c => new
             {
@@ -113,7 +122,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                     ChantierCode = ch.ChantierCode,
                     ChantierName = ch.ChantierName,
 
-                    order = ch.Order is null ? null : new
+                    order = ch.Order == null ? null : new
                     {
                         OrderId = ch.Order.OrderId,
                         Number = ch.Order.Number,
@@ -121,6 +130,10 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                         DeliveryMode = ch.Order.DeliveryMode,
                         TruckPlate = ch.Order.TruckPlate,
                         Status = ch.Order.Status,
+
+                        // NEW PER ORDER QUEUE STATUS
+                        isInQueue = isInQueue,
+
                         items = ch.Order.Items.Select(i => new
                         {
                             ProductId = i.ProductId,
@@ -133,12 +146,8 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                 })
             })
         }
-        }
+    }
         };
-
-
-
-
 
         // ============================================================
         // Send to the specific kiosk/device
