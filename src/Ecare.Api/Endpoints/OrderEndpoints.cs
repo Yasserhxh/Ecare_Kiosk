@@ -1,4 +1,5 @@
 ﻿using Ecare.Application.Commands;
+using Ecare.Application.Commands.CreateLegacyOrderLegend;
 using Ecare.Application.Commands.Orders;
 using Ecare.Application.Commands.Orders.UpdateOrder;
 using MediatR;
@@ -47,6 +48,21 @@ public static class OrderEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
+
+
+        //New Confirm Endpoint 
+        app.MapPost("/legend-orders", async (
+        CreateLegacyOrderLegendCommand cmd,
+        IMediator mediator) =>
+            {
+                var result = await mediator.Send(cmd);
+
+                if (!result.Success)
+                    return Results.BadRequest(result.Error);
+
+                return Results.Ok(new { id = result.Value });
+            });
+
 
         return app;
     }
