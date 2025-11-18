@@ -69,7 +69,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         if (!result.Success || result.Value is null)
         {
             _log.LogWarning("❌ No data returned for SLV={slv}", slv);
-            await SendError(deviceId, slv, "NO_DATA", ct);
+             
             return;
         }
 
@@ -181,10 +181,11 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             ?? cfg["Db:ConnectionStrings:SqlServer"];
 
         const string sql = @"
-            SELECT TOP 1 1
-            FROM dbo.Ecare_Queue
-            WHERE Matricule = @Plate AND Status IN (0,1);
-        ";
+        SELECT TOP 1 1
+        FROM dbo.Ecare_Order_Legend
+        WHERE Matricule = @Plate
+          AND Step = 1;
+    ";
 
         await using var conn = new SqlConnection(connStr);
 
@@ -193,33 +194,6 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         return found.HasValue;
     }
 
-    private async Task SendError(string deviceId, string slv, string error, CancellationToken ct)
-    {
-        var errPayload = new
-        {
-            type = 1,
-            target = "OrderDataEvent",
-            arguments = new object[]
-            {
-                new
-                {
-                    @event = "Error",
-                    slv,
-                    error
-                }
-            }
-        };
-
-        await SignalRHelper.BroadcastToDeviceAsync(
-            _signalR,
-            _opt.Hub,
-            _opt.Method,
-            deviceId,
-            errPayload,
-            _log,
-            ct
-        );
-    }
 
     private static string? TryExtractCarteSlv(object payload)
     {
