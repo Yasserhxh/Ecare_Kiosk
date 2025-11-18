@@ -229,6 +229,7 @@ try
     app.MapBlobEndpoints();
     app.MapMobileAppEndpoints();
     app.MapCementMatrixEndpoints();
+    app.MapLegendOrderEndpoints();
 
     app.MapGet("mobile/charging/details/{fluxid:int}", async (
             int fluxid,
