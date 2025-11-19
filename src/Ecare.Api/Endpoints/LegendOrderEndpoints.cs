@@ -1,5 +1,7 @@
 ﻿using Ecare.Application.Commands.CreateLegacyOrderLegend;
+using Ecare.Application.Commands.GeneratePlombs;
 using Ecare.Application.Commands.Legend;
+using Ecare.Application.Commands.LegendExtraSac;
 using MediatR;
 
 namespace Ecare.Api.Endpoints
@@ -78,6 +80,29 @@ namespace Ecare.Api.Endpoints
                     success = true,
                     updatedOrderId = result.Value?.UpdatedOrderId
                 });
+            });
+
+            group.MapPost("/legend/extrasac", async (
+            UpdateExtraSacCommand cmd,
+            IMediator mediator) =>
+            {
+                var result = await mediator.Send(cmd);
+
+                if (!result.Success)
+                    return Results.BadRequest(result.Error);
+
+                return Results.Ok(new { success = true });
+            });
+
+
+            app.MapPost("/plombs/generate", async (
+            GeneratePlombsCommand cmd,
+            IMediator mediator) =>
+            {
+                var result = await mediator.Send(cmd);
+                return result.Success
+                    ? Results.Ok(result.Value)
+                    : Results.BadRequest(result.Error);
             });
 
 
