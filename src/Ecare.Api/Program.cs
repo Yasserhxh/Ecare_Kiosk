@@ -6,6 +6,7 @@ using Ecare.Application.Auth.Services;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
 using Ecare.Domain.Entities;
+using Ecare.Domain.ValueObjects;
 using Ecare.Infrastructure;
 using Ecare.Infrastructure.Persistence;
 using Ecare.Infrastructure.Storage;
@@ -256,8 +257,7 @@ try
     })
         .WithName("GetMobileChargingDetails");
 
-    Console.WriteLine("✓ All endpoints mapped");
-    Console.WriteLine("=== Starting application on https://localhost:7001 ===");
+    
 
     app.Run();
 }

@@ -8,7 +8,7 @@ using System.Data;
 namespace Ecare.Application.Commands.CreateLegacyOrderLegend
 {
     public sealed class CreateLegacyOrderLegendHandler
-        : IRequestHandler<CreateLegacyOrderLegendCommand, Result<int>>
+    : IRequestHandler<CreateLegacyOrderLegendCommand, Result<int>>
     {
         private readonly string _connString;
 
@@ -43,9 +43,9 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                 p.Add("@Quantite2", request.Quantite2);
 
                 p.Add("@TypeProduit", request.TypeProduit);
+                p.Add("@ChequeImg", request.ChequeImg);   // ★ NEW
                 p.Add("@AddedToQueueAt", request.AddedToQueueAt);
 
-                // SP returns: InsertedId
                 int legendId = await conn.ExecuteScalarAsync<int>(
                     "sp_InitLegacyOrder",
                     p,
@@ -60,4 +60,5 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
             }
         }
     }
+
 }
