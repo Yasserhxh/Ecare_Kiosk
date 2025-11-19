@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Ecare.Application.Queries;
+using Ecare.Application.Queries.PabExitScan;
 using Ecare.Application.Services.Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
@@ -44,118 +45,93 @@ namespace Ecare.Application.Services.Handlers
 
         public async Task HandleAsync(object payload, CancellationToken ct)
         {
-            // Extract SLV
-            string? slv = TryExtractCarteSlv(payload);
-            if (string.IsNullOrWhiteSpace(slv))
-            {
-                _log.LogWarning("PabExitInboundHandler: payload missing carteSlv. Raw={raw}",
-                    payload is JsonElement je ? JsonSerializer.Serialize(je) : payload.ToString());
-                return;
-            }
-
-            // Extract deviceId
+            string? rfid = TryExtractCarteSlv(payload);
             string? deviceId = TryExtractDeviceId(payload);
-            if (string.IsNullOrWhiteSpace(deviceId))
-            {
-                _log.LogWarning("PabExitInboundHandler: Missing deviceId for SLV={slv}", slv);
-                return;
-            }
 
-            _log.LogInformation("PabExit: Processing SLV={slv} from device={device}", slv, deviceId);
+            if (string.IsNullOrWhiteSpace(rfid) || string.IsNullOrWhiteSpace(deviceId))
+                return;
 
             using var scope = _sp.CreateScope();
             var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-            var result = await mediator.Send(new ScanBySlvQuery(slv), ct);
+            var result = await mediator.Send(
+                new PabExitScanQuery(rfid), ct);
+
             if (!result.Success || result.Value is null)
             {
-                _log.LogWarning("PabExit: Scan failed for SLV={slv}. Err={err}", slv, result.Error);
+                _log.LogWarning("Exit PAB: No data for RFID={rfid}", rfid);
                 return;
             }
 
             var vm = result.Value;
 
-            var flux = await GetLatestValidFluxAsync(scope, slv, ct);
-            if (flux is null || flux.FirstWeight is not null && flux.SecondWeight is not null)
-            {
-                // No matching flux row OR invalid row -> do not send anything.
-                _log.LogInformation(
-                    "PabEntry: No valid EcareFlux row for SLV={slv} (no row, or Status <> 1, or FirstWeight NULL)", slv);
-
-                return;
-            }
-
-            decimal? firstWeight = null;
-
-            try
-            {
-                var orderNumber = vm.Order?.Number;
-
-                if (!string.IsNullOrWhiteSpace(orderNumber))
-                {
-                    // Resolve UoW (or your connection provider) from the same scope
-                    var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-                    const string SqlFirstWeight = @"
-                    SELECT TOP(1) FirstWeight
-                    FROM dbo.EcareFlux WITH (NOLOCK)
-                    WHERE BonDeCommande = @BonDeCommande
-                    ORDER BY Id DESC;";
-
-                    // Allow both numeric and string BonDeCommande
-                    object param = new { BonDeCommande = orderNumber };
-                         
-
-                    firstWeight = await uow.Connection.QueryFirstOrDefaultAsync<decimal?>(SqlFirstWeight, param);
-                    _log.LogInformation("PabExit: Found FirstWeight={firstWeight} for BDC={bdc}", firstWeight, orderNumber);
-                }
-                else
-                {
-                    _log.LogWarning("PabExit: vm.Order.Number is null/empty; skipping FirstWeight lookup.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "PabExit: Failed to fetch FirstWeight from EcareFlux.");
-            }
-
-
-
             var outboundPayload = new
             {
                 @event = "PabExitDataEvent",
                 site = "Asment-Temara-01",
-                firstWeight = firstWeight,
                 kiosk = deviceId,
                 slv = vm.CarteSLV,
                 ts = DateTime.UtcNow,
+
                 driver = new
                 {
                     id = vm.DriverId,
-                    name = vm.DriverName,
+                    name = vm.DriverFullName,
                     plate = vm.Plate
                 },
+
                 client = new
                 {
-                    name = vm.ClientName,
-                    sapOk = vm.SapOk
+                    name = vm.ClientName
                 },
-                order = vm.Order
+
+                produit1 = new
+                {
+                    name = vm.Produit1,
+                    qty = vm.Quantite1,
+                    image = vm.Produit1Image
+                },
+
+                produit2 = new
+                {
+                    name = vm.Produit2,
+                    qty = vm.Quantite2,
+                    image = vm.Produit2Image
+                },
+
+                premierePoid = vm.PremierePoid,
+                deuxiemePoid = vm.DeuxiemePoid,
+                ligne = vm.Ligne,
+                bonDeCommande = vm.BonDeCommande,
+                bonDeLivraison = vm.BonDeLivraison,
+
+                times = new
+                {
+                    parking = vm.ParkingAt,
+                    pabEntry = vm.PabEntryAt,
+                    start = vm.StartChargingAt,
+                    finish = vm.FinishedChargingAt,
+                    exit = vm.PabExitAt,
+                    elapsedParking = vm.ElapsedTimeParking,
+                    elapsedCharging = vm.ElapsedInPab_Charging,
+                    elapsedExit = vm.ElapsedTimeInF_Exit,
+                    total = vm.TotalTimeInCercuit
+                }
             };
 
-            // Broadcast to specific device
+            // broadcast to the device
             await SignalRHelper.BroadcastToDeviceAsync(
                 _signalR,
-                hubName: _outOpt.Hub,
-                methodName: _outOpt.Method,
-                deviceId: deviceId,
-                payload: outboundPayload,
-                logger: _log,
-                ct: ct
-            );
+                _outOpt.Hub,
+                _outOpt.Method,
+                deviceId,
+                outboundPayload,
+                _log,
+                ct);
 
-            _log.LogInformation("PabExit: Sent to device={device}", deviceId);
+            _log.LogInformation("Exit PAB sent for RFID={rfid} device={device}", rfid, deviceId);
         }
+
 
 
         private static async Task<FluxSnapshot?> GetLatestValidFluxAsync(
