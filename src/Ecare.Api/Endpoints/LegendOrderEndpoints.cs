@@ -35,6 +35,23 @@ namespace Ecare.Api.Endpoints
                 });
             });
 
+            group.MapPost("/legend/start-charging", async (
+            StartChargingCommand cmd, IMediator mediator) =>
+            {
+                var result = await mediator.Send(cmd);
+                return result.Success ? Results.Ok(new { success = true })
+                                      : Results.BadRequest(result.Error);
+            });
+
+            group.MapPost("/legend/finish-charging", async (
+                FinishChargingCommand cmd, IMediator mediator) =>
+            {
+                var result = await mediator.Send(cmd);
+                return result.Success ? Results.Ok(new { success = true })
+                                      : Results.BadRequest(result.Error);
+            });
+
+
 
 
             return app;
