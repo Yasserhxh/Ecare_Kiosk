@@ -51,6 +51,23 @@ namespace Ecare.Api.Endpoints
                                       : Results.BadRequest(result.Error);
             });
 
+            group.MapPost("/legend/second-weight", async (
+                UpdateSecondWeightCommand cmd,
+                IMediator mediator) =>
+            {
+                var result = await mediator.Send(cmd);
+
+                if (!result.Success)
+                    return Results.BadRequest(new { success = false, error = result.Error });
+
+                return Results.Ok(new
+                {
+                    success = true,
+                    updatedOrderId = result.Value?.UpdatedOrderId
+                });
+            });
+
+
 
 
 
