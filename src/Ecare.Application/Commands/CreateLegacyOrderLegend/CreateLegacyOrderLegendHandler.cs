@@ -3,12 +3,7 @@ using Ecare.Shared;
 using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Ecare.Application.Commands.CreateLegacyOrderLegend
 {
@@ -20,7 +15,7 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
         public CreateLegacyOrderLegendHandler(IConfiguration cfg)
         {
             _connString = cfg.GetConnectionString("SqlServer")
-                         ?? throw new InvalidOperationException("Missing SqlServer connection string");
+                ?? throw new InvalidOperationException("Missing SqlServer connection string");
         }
 
         public async Task<Result<int>> Handle(
@@ -32,34 +27,36 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                 await using var conn = new SqlConnection(_connString);
                 await conn.OpenAsync(ct);
 
-                var parameters = new DynamicParameters();
-                parameters.Add("@BonDeCommande", request.BonDeCommande);
-                parameters.Add("@OrderId", request.OrderId);
-                parameters.Add("@ClientName", request.ClientName);
-                parameters.Add("@Chantier", request.Chantier);
-                parameters.Add("@Matricule", request.Matricule);
-                parameters.Add("@RFIDCard", request.RFIDCard);
-                parameters.Add("@TypeCamion", request.TypeCamion);
-                parameters.Add("@NombrePlombs", request.NombrePlombs);
-                parameters.Add("@Produit1", request.Produit1);
-                parameters.Add("@Quantite1", request.Quantite1);
-                parameters.Add("@Produit2", request.Produit2);
-                parameters.Add("@Quantite2", request.Quantite2);
-                parameters.Add("@TypeProduit", request.TypeProduit);
-                parameters.Add("@AddedToQueueAt", request.AddedToQueueAt);
+                var p = new DynamicParameters();
 
-                // Stored procedure returns InsertedId
-                int insertedId = await conn.ExecuteScalarAsync<int>(
+                p.Add("@BonDeCommande", request.BonDeCommande);
+                p.Add("@ClientName", request.ClientName);
+                p.Add("@Chantier", request.Chantier);
+                p.Add("@Matricule", request.Matricule);
+                p.Add("@RFIDCard", request.RFIDCard);
+                p.Add("@TypeCamion", request.TypeCamion);
+                p.Add("@NombrePlombs", request.NombrePlombs);
+
+                p.Add("@Produit1", request.Produit1);
+                p.Add("@Quantite1", request.Quantite1);
+                p.Add("@Produit2", request.Produit2);
+                p.Add("@Quantite2", request.Quantite2);
+
+                p.Add("@TypeProduit", request.TypeProduit);
+                p.Add("@AddedToQueueAt", request.AddedToQueueAt);
+
+                // SP returns: InsertedId
+                int legendId = await conn.ExecuteScalarAsync<int>(
                     "sp_InitLegacyOrder",
-                    parameters,
+                    p,
                     commandType: CommandType.StoredProcedure
                 );
 
-                return Result<int>.Ok(insertedId);
+                return Result<int>.Ok(legendId);
             }
             catch (Exception ex)
             {
-                return Result<int>.Fail($"Error while inserting legend order: {ex.Message}");
+                return Result<int>.Fail("LEGEND_INIT_ERROR: " + ex.Message);
             }
         }
     }
