@@ -51,17 +51,7 @@ public static class OrderEndpoints
 
 
         //New Confirm Endpoint 
-        app.MapPost("/legend-orders", async (
-        CreateLegacyOrderLegendCommand cmd,
-        IMediator mediator) =>
-            {
-                var result = await mediator.Send(cmd);
-
-                if (!result.Success)
-                    return Results.BadRequest(result.Error);
-
-                return Results.Ok(new { id = result.Value });
-            });
+       
 
 
         return app;

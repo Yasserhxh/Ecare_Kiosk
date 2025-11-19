@@ -1,4 +1,5 @@
-﻿using Ecare.Application.Commands.Legend;
+﻿using Ecare.Application.Commands.CreateLegacyOrderLegend;
+using Ecare.Application.Commands.Legend;
 using MediatR;
 
 namespace Ecare.Api.Endpoints
@@ -9,6 +10,18 @@ namespace Ecare.Api.Endpoints
 
             var group = app.MapGroup("/legend")
                 .WithTags("Order Legend");
+
+            group.MapPost("/legend-orders", async (
+               CreateLegacyOrderLegendCommand cmd,
+               IMediator mediator) =>
+            {
+                var result = await mediator.Send(cmd);
+
+                if (!result.Success)
+                    return Results.BadRequest(result.Error);
+
+                return Results.Ok(new { id = result.Value });
+            });
 
             group.MapPost("/legend/first-weight", async (
             UpdateAfterFirstWeightCommand cmd,
