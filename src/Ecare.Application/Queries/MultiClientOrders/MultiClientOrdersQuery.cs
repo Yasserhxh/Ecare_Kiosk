@@ -18,6 +18,7 @@ namespace Ecare.Application.Queries.MultiClientOrders
         public sealed class MultiClientOrdersVm
         {
             public string Slv { get; set; } = string.Empty;
+            public string TypeCamion { get; set; } = "";
             public DriverVm Driver { get; set; } = new();
             public List<ClientNode> Clients { get; set; } = new();
         }

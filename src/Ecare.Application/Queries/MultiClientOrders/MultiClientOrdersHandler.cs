@@ -28,6 +28,9 @@ namespace Ecare.Application.Queries.MultiClientOrders
             var connStr = _cfg.GetConnectionString("SqlServer");
             using var conn = new SqlConnection(connStr);
 
+            // ---------------------------------------------------------
+            // Execute Stored Procedure
+            // ---------------------------------------------------------
             var rows = await conn.QueryAsync<dynamic>(
                 "sp_GetParkingScanData",
                 new { RfidCard = request.Slv },
@@ -36,30 +39,35 @@ namespace Ecare.Application.Queries.MultiClientOrders
             if (!rows.Any())
                 return Result<MultiClientOrdersVm>.Fail("NO_DATA");
 
-            var vm = new MultiClientOrdersVm { Slv = request.Slv };
+            var first = rows.First();
 
             // ---------------------------------------------------------
-            //  DRIVER (root)
+            // BUILD ROOT VIEWMODEL
             // ---------------------------------------------------------
-            var first = rows.First();
-            vm.Driver = new DriverVm
+            var vm = new MultiClientOrdersVm
             {
-                DriverId = first.DriverId,
-                Nom = first.DriverNom,
-                Prenom = first.DriverPrenom,
-                Plate = first.TruckPlate
+                Slv = request.Slv,
+                TypeCamion = first.TruckTypeName ?? "",   
+
+                Driver = new DriverVm
+                {
+                    DriverId = first.DriverId,
+                    Nom = first.DriverNom,
+                    Prenom = first.DriverPrenom,
+                    Plate = first.TruckPlate
+                }
             };
 
             // ---------------------------------------------------------
-            //  CLIENT → CHANTIER → ORDER → ITEMS
+            // BUILD CLIENT → CHANTIER → ORDER → ITEMS
             // ---------------------------------------------------------
             var clientMap = new Dictionary<int, ClientNode>();
 
             foreach (var r in rows)
             {
-                // ===========================
+                // ------------------------------
                 // 1) Client
-                // ===========================
+                // ------------------------------
                 if (r.ClientId == null)
                     continue;
 
@@ -74,9 +82,9 @@ namespace Ecare.Application.Queries.MultiClientOrders
                     clientMap[r.ClientId] = client;
                 }
 
-                // ===========================
+                // ------------------------------
                 // 2) Chantier
-                // ===========================
+                // ------------------------------
                 if (r.ChantierId != null)
                 {
                     var chantier =
@@ -93,12 +101,11 @@ namespace Ecare.Application.Queries.MultiClientOrders
                         client.Chantiers.Add(chantier);
                     }
 
-                    // ===========================
+                    // ------------------------------
                     // 3) Order
-                    // ===========================
+                    // ------------------------------
                     if (r.OrderId != null)
                     {
-                        // Ensure chantier.Order always exists
                         if (chantier.Order == null)
                         {
                             chantier.Order = new OrderNode
@@ -113,9 +120,9 @@ namespace Ecare.Application.Queries.MultiClientOrders
                             };
                         }
 
-                        // ===========================
-                        // 4) Items
-                        // ===========================
+                        // ------------------------------
+                        // 4) Item
+                        // ------------------------------
                         if (r.ProductId != null)
                         {
                             chantier.Order.Items.Add(new OrderItemNode
@@ -131,7 +138,9 @@ namespace Ecare.Application.Queries.MultiClientOrders
                 }
             }
 
+            // Final result
             vm.Clients = clientMap.Values.ToList();
+
             return Result<MultiClientOrdersVm>.Ok(vm);
         }
     }

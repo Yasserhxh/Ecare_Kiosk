@@ -17,10 +17,24 @@ namespace Ecare.Api.Endpoints
                 var result = await mediator.Send(cmd);
 
                 if (!result.Success)
-                    return Results.BadRequest(result.Error);
+                    return Results.BadRequest(new
+                    {
+                        success = false,
+                        error = result.Error
+                    });
 
-                return Results.Ok(new { success = true });
+                return Results.Ok(new
+                {
+                    success = true,
+                    ligne = new
+                    {
+                        id = result.Value!.LigneId,
+                        name = result.Value.LigneName,
+                        imageUrl = result.Value.LigneImageUrl
+                    }
+                });
             });
+
 
 
             return app;

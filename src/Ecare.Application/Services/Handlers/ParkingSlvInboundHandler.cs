@@ -95,6 +95,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                 {
                     @event = "MultiClientOrders",
                     slv = result.Value.Slv,
+                    typeCamion = result.Value.TypeCamion,
                     isInQueue = isInQueue,
 
                     driver = new

@@ -9,22 +9,26 @@ using System.Data;
 namespace Ecare.Application.Commands.Legend;
 
 public sealed class UpdateAfterFirstWeightHandler
-    : IRequestHandler<UpdateAfterFirstWeightCommand, Result<bool>>
+    : IRequestHandler<UpdateAfterFirstWeightCommand, Result<FirstWeightResultVm>>
 {
     private readonly IConfiguration _cfg;
     private readonly ILogger<UpdateAfterFirstWeightHandler> _log;
 
-    public UpdateAfterFirstWeightHandler(IConfiguration cfg, ILogger<UpdateAfterFirstWeightHandler> log)
+    public UpdateAfterFirstWeightHandler(
+        IConfiguration cfg,
+        ILogger<UpdateAfterFirstWeightHandler> log)
     {
         _cfg = cfg;
         _log = log;
     }
 
-    public async Task<Result<bool>> Handle(UpdateAfterFirstWeightCommand request, CancellationToken ct)
+    public async Task<Result<FirstWeightResultVm>> Handle(
+        UpdateAfterFirstWeightCommand request,
+        CancellationToken ct)
     {
         var connStr = _cfg.GetConnectionString("SqlServer");
         if (string.IsNullOrWhiteSpace(connStr))
-            return Result<bool>.Fail("Missing SQL connection string");
+            return Result<FirstWeightResultVm>.Fail("Missing SQL connection string");
 
         await using var conn = new SqlConnection(connStr);
 
@@ -38,20 +42,26 @@ public sealed class UpdateAfterFirstWeightHandler
 
         try
         {
-            var rows = await conn.ExecuteAsync(
+            // ⭐ stored procedure returns exactly ONE ROW:
+            // LigneId, LigneName, LigneImageUrl
+            var row = await conn.QueryFirstOrDefaultAsync<FirstWeightResultVm>(
                 "sp_UpdateAfterFirstWeight",
                 p,
-                commandType: CommandType.StoredProcedure);
+                commandType: CommandType.StoredProcedure
+            );
 
-            if (rows == 0)
-                return Result<bool>.Fail("NO_MATCHING_ROW");
+            if (row is null)
+                return Result<FirstWeightResultVm>.Fail("NO_MATCHING_ROW");
 
-            return Result<bool>.Ok(true);
+            return Result<FirstWeightResultVm>.Ok(row);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Error while running sp_UpdateAfterFirstWeight for RFID {rfid}", request.RfidCard);
-            return Result<bool>.Fail("SP_ERROR");
+            _log.LogError(ex,
+                "Error running sp_UpdateAfterFirstWeight for RFID={rfid}",
+                request.RfidCard);
+
+            return Result<FirstWeightResultVm>.Fail("SP_ERROR");
         }
     }
 }
