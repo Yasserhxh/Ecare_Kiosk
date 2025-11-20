@@ -5,6 +5,7 @@ using Ecare.Application;
 using Ecare.Application.Auth.Services;
 using Ecare.Application.Pipelines;
 using Ecare.Application.Queries;
+using Ecare.Application.Queries.PartnerTruck;
 using Ecare.Domain.Entities;
 using Ecare.Domain.ValueObjects;
 using Ecare.Infrastructure;
@@ -230,9 +231,11 @@ try
     app.MapBlobEndpoints();
     app.MapDriversEndpoints();
     app.MapTruckEndpoints();
+    app.MapPartnerEndpoints();
     app.MapMobileAppEndpoints();
     app.MapCementMatrixEndpoints();
     app.MapLegendOrderEndpoints();
+    app.MapPartnerTruckEndpoints();
 
     app.MapGet("mobile/charging/details/{fluxid:int}", async (
             int fluxid,
@@ -259,7 +262,10 @@ try
     })
         .WithName("GetMobileChargingDetails");
 
-    
+   
+
+
+
 
     app.Run();
 }
