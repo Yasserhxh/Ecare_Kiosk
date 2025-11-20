@@ -1,0 +1,15 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Ecare.Application.Queries.GetTruckTypes
+{
+    public sealed class TruckTypeDropdownVm
+    {
+        public int Id { get; set; }
+        public string Type { get; set; } = default!;
+    }
+
+}
