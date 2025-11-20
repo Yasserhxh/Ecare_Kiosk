@@ -228,6 +228,8 @@ try
     app.MapEcareEngineEndpoints();
     app.MapAuthEndpoints();
     app.MapBlobEndpoints();
+    app.MapDriversEndpoints();
+    app.MapTruckEndpoints();
     app.MapMobileAppEndpoints();
     app.MapCementMatrixEndpoints();
     app.MapLegendOrderEndpoints();
