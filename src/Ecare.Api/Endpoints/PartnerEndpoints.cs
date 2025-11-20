@@ -1,5 +1,6 @@
 ﻿using Ecare.Application.Commands.Partner;
 using Ecare.Application.Queries.GetPartner;
+using Ecare.Application.Queries.PartnerDropdown;
 using MediatR;
 
 namespace Ecare.Api.Endpoints
@@ -40,6 +41,17 @@ namespace Ecare.Api.Endpoints
             {
                 var query = new GetPartnersQuery(page, pageSize, code, name, partnerType);
                 var result = await med.Send(query, ct);
+
+                return result.Success
+                    ? Results.Ok(result.Value)
+                    : Results.BadRequest(new { error = result.Error });
+            });
+
+            group.MapGet("/dropdown", async (
+                IMediator med,
+                CancellationToken ct) =>
+            {
+                var result = await med.Send(new GetPartnersDropdownQuery(), ct);
 
                 return result.Success
                     ? Results.Ok(result.Value)
