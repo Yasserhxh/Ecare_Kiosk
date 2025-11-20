@@ -1,6 +1,4 @@
 ﻿using Dapper;
-using Ecare.Application.Queries.GetDrivers;
-using Ecare.Application.Queries.GetTruck;
 using Ecare.Shared;
 using MediatR;
 using System;
@@ -9,31 +7,26 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Ecare.Application.Commands.CreateEcareTruck
+namespace Ecare.Application.Commands.Partner
 {
-    public sealed class CreateTruckHandler
-    : IRequestHandler<CreateTruckCommand, Result<int>>
+    public sealed class CreatePartnerHandler
+    : IRequestHandler<CreatePartnerCommand, Result<int>>
     {
         private readonly IUnitOfWork _uow;
 
-        public CreateTruckHandler(IUnitOfWork uow)
+        public CreatePartnerHandler(IUnitOfWork uow)
         {
             _uow = uow;
         }
 
-        public async Task<Result<int>> Handle(CreateTruckCommand request, CancellationToken ct)
+        public async Task<Result<int>> Handle(CreatePartnerCommand request, CancellationToken ct)
         {
             const string sql = @"
-            INSERT INTO Ecare_Truck
-            (
-                Matricule, PTAC, TARE, RfidCard,
-                TruckTypeId, DriverId, NumberOfSeals
-            )
+            INSERT INTO Ecare_Partner
+            (Code, Name, PartnerType, DateCreation, Actif)
             VALUES
-            (
-                @Matricule, @PTAC, @TARE, @RfidCard,
-                @TruckTypeId, @DriverId, @NumberOfSeals
-            );
+            (@Code, @Name, @PartnerType, GETDATE(), 1);
+
             SELECT CAST(SCOPE_IDENTITY() AS INT);
         ";
 
@@ -58,4 +51,5 @@ namespace Ecare.Application.Commands.CreateEcareTruck
             }
         }
     }
+
 }
