@@ -11,26 +11,31 @@ public static class QueueSnapshot
     private const string HubName = "queue_data_hub";
     private const string MethodName = "QueueDataEvent";
 
-    public sealed record LegendRow(
-        int Id,
-        int? OrderId,
-        string ClientName,
-        string Chantier,
-        string Matricule,
-        int RFIDCard,
-        string TypeCamion,
-        int? NombrePlombs,
-        string? Produit1,
-        int? Quantite1,
-        bool IsPined,
-        DateTime? PinedAt,
-        DateTime AddedToQueueAt,
-        DateTime? FirstPlaceAt,
-        decimal? TimeElapsedInFirstPlace,
-        int Step,
-        string TruckType,
-        DateTime ParkingAt
-    );
+    public sealed class LegendRow
+    {
+        public int Id { get; set; }
+        public int? OrderId { get; set; }
+        public string ClientName { get; set; }
+        public string Chantier { get; set; }
+        public string Matricule { get; set; }
+        public string RFIDCard { get; set; }
+        public string? TypeCamion { get; set; }
+        public int? NombrePlombs { get; set; }
+        public string? Produit1 { get; set; }
+        public double? Quantite1 { get; set; }
+        public bool IsPined { get; set; }
+        public DateTime? PinedAt { get; set; }
+        public DateTime AddedToQueueAt { get; set; }
+        public DateTime? FirstPlaceAt { get; set; }
+        public decimal? TimeElapsedInFirstPlace { get; set; }
+        public int Step { get; set; }
+        public string? TruckType { get; set; }
+        public DateTime ParkingAt { get; set; }
+        public string ChauffeurName { get; set; }
+
+        public LegendRow() { } // REQUIRED BY DAPPER
+    }
+
 
     public sealed record QueueItem(
         string Matricule,
@@ -38,7 +43,8 @@ public static class QueueSnapshot
         bool IsPined,
         DateTime? PinedAt,
         DateTime AddedToQueueAt,
-        string TruckType
+        string TruckType,
+        string chauffeurNom
     );
 
     public sealed record QueueGroup(
@@ -70,21 +76,21 @@ public static class QueueSnapshot
         // EN VALIDATION VRAC (TruckType = Citerne AND no Produit1)
         var enValidationVrac = rows
             .Where(r => r.Produit1 is null &&
-                        r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
+                        r.TypeCamion.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(r => r.IsPined)
             .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
             .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType,r.ChauffeurName))
             .ToList();
 
         // EN VALIDATION SAC (TruckType ≠ Citerne AND no Produit1)
         var enValidationSac = rows
             .Where(r => r.Produit1 is null &&
-                        !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
+                        !r.TypeCamion.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(r => r.IsPined)
             .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
             .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType,r.ChauffeurName))
             .ToList();
 
         /* ============================================================
@@ -98,7 +104,7 @@ public static class QueueSnapshot
                     var items = g.OrderByDescending(r => r.IsPined)
                                  .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
                                  .ThenBy(r => r.AddedToQueueAt)
-                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType))
+                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType,r.ChauffeurName))
                                  .ToList();
 
                     // Compute capacity per product
