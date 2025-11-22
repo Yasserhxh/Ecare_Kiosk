@@ -42,11 +42,11 @@ public sealed class LegendSnapshotVm
 
     // Products
     public string Produit1 { get; set; } = string.Empty;
-    public int? Quantite1 { get; set; }
+    public double? Quantite1 { get; set; }
     public string? Produit1Image { get; set; }
 
     public string Produit2 { get; set; } = string.Empty;
-    public int? Quantite2 { get; set; }
+    public double? Quantite2 { get; set; }
     public string? Produit2Image { get; set; }
 
     // Ligne image

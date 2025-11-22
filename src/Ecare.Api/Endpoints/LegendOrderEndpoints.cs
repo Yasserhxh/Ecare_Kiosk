@@ -1,9 +1,14 @@
-﻿using Ecare.Application.Commands.CreateLegacyOrderLegend;
+﻿using Dapper;
+using Ecare.Application.Commands.CreateLegacyOrderLegend;
 using Ecare.Application.Commands.GeneratePlombs;
 using Ecare.Application.Commands.Legend;
 using Ecare.Application.Commands.LegendExtraSac;
+using Ecare.Application.Commands.MergeParkingWithSap;
+using Ecare.Application.Commands.ProcessParking;
 using Ecare.Application.Commands.UpdateOrderLegend;
+using Ecare.Application.Queries.GetOrderBySapCode;
 using MediatR;
+using System.Data;
 
 namespace Ecare.Api.Endpoints
 {
@@ -13,6 +18,28 @@ namespace Ecare.Api.Endpoints
 
             var group = app.MapGroup("/legend")
                 .WithTags("Order Legend");
+
+            group.MapPost("/parking/process", async (
+               ProcessParkingCommand cmd,
+               IMediator mediator,
+               CancellationToken ct) =>
+            {
+                var result = await mediator.Send(cmd, ct);
+
+                if (!result.Success)
+                    return Results.BadRequest(new
+                    {
+                        success = false,
+                        error = result.Error
+                    });
+
+                return Results.Ok(new
+                {
+                    success = true,
+                    value = result.Value
+                });
+            });
+
 
             group.MapPost("/legend-orders", async (
                CreateLegacyOrderLegendCommand cmd,
@@ -119,8 +146,37 @@ namespace Ecare.Api.Endpoints
                     : Results.BadRequest(new { error = result.Error });
             });
 
+            group.MapGet("/orders/by-sap/{codeSapCommande}", async (
+            string codeSapCommande,
+            IMediator mediator) =>
+            {
+                var result = await mediator.Send(new GetOrderBySapCodeQuery(codeSapCommande));
+
+                return result.Success
+                    ? Results.Ok(result.Value)
+                    : Results.NotFound(result.Error);
+            });
+
+            group.MapPost("/merge/order", async (MergeParkingRequest req, IMediator mediator) =>
+            {
+                var result = await mediator.Send(
+                    new MergeParkingWithSapCommand(req.Matricule, req.CodeSapCommande));
+
+                return result.Success
+                    ? Results.Ok(new { updated = result.Value })
+                    : Results.BadRequest(result.Error);
+            });
+
 
             return app;
         }
+
+        public sealed class MergeParkingRequest
+        {
+            public string Matricule { get; set; } = "";
+            public string CodeSapCommande { get; set; } = "";
+        }
     }
+
+    
 }

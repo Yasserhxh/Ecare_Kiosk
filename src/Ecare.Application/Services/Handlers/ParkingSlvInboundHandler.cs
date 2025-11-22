@@ -1,15 +1,13 @@
-﻿using Dapper;
-using Ecare.Application.Queries.MultiClientOrders;
-using Ecare.Application.Queries.MultiClientOrders.Ecare.Application.Queries.MultiClientOrders;
+﻿using Ecare.Application.Queries.ParkingScanOrderLegend;  // ParkingScanQuery
 using Ecare.Application.Services.Ecare.Application.Services;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using static Ecare.Application.Queries.ParkingScanOrderLegend.ParkingScanModels;
 
 public sealed class ParkingOutboundOptions
 {
@@ -36,9 +34,9 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         _opt = opt.Value;
     }
 
-    // ============================================================
+    // ======================================================================
     // MAIN ENTRY POINT
-    // ============================================================
+    // ======================================================================
     public async Task HandleAsync(object payload, CancellationToken ct)
     {
         string? slv = TryExtractCarteSlv(payload);
@@ -46,108 +44,36 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
 
         if (string.IsNullOrWhiteSpace(slv))
         {
-            _log.LogWarning("❌ Missing SLV in inbound payload");
+            _log.LogWarning("ParkingInbound: Missing SLV in payload");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(deviceId))
         {
-            _log.LogWarning("❌ Missing deviceId for SLV={slv}", slv);
+            _log.LogWarning("ParkingInbound: Missing deviceId for SLV={slv}", slv);
             return;
         }
 
-        _log.LogInformation("📥 Received inbound parking scan SLV={slv} device={deviceId}", slv, deviceId);
+        _log.LogInformation("ParkingInbound: SLV={slv} device={deviceId}", slv, deviceId);
 
         using var scope = _sp.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        // ============================================================
-        // Execute query handler (reads stored procedure)
-        // ============================================================
-        var result = await mediator.Send(new MultiClientOrdersQuery(slv), ct);
+        // Call query that returns one of the 4 CASES
+        var response = await mediator.Send(new ParkingScanQuery(slv), ct);
 
-        if (!result.Success || result.Value is null)
+        if (!response.Success || response.Value == null)
         {
-            _log.LogWarning("❌ No data returned for SLV={slv}", slv);
+            _log.LogWarning("ParkingInbound: No scan result for SLV={slv}", slv);
             return;
         }
 
-        // 1. Extract plate
-        string truckPlate = result.Value.Driver.Plate ?? "";
+        var scan = response.Value;
 
-        // 2. Check queue (NOW USING Ecare_Order_Legend)
-        bool isInQueue = false;
-        
-        
-        isInQueue = await CheckQueueFast(truckPlate, scope, ct);
-        
+        // Build simplified frontend-friendly payload
+        var outboundPayload = BuildParkingPayload(slv, deviceId, scan);
 
-        // ============================================================
-        // BUILD PAYLOAD
-        // ============================================================
-        var outboundPayload = new
-        {
-            type = 1,
-            target = "OrderDataEvent",
-            arguments = new[]
-            {
-                new
-                {
-                    @event = "MultiClientOrders",
-                    slv = result.Value.Slv,
-                    typeCamion = result.Value.TypeCamion,
-                    isInQueue = isInQueue,
-
-                    driver = new
-                    {
-                        id = result.Value.Driver.DriverId,
-                        fullName = result.Value.Driver.FullName,
-                        plate = result.Value.Driver.Plate,
-                    },
-
-                    clients = result.Value.Clients.Select(c => new
-                    {
-                        ClientId = c.ClientId,
-                        ClientCode = c.ClientCode,
-                        ClientName = c.ClientName,
-
-                        chantiers = c.Chantiers.Select(ch => new
-                        {
-                            ChantierId = ch.ChantierId,
-                            ChantierCode = ch.ChantierCode,
-                            ChantierName = ch.ChantierName,
-
-                            order = ch.Order == null ? null : new
-                            {
-                                OrderId = ch.Order.OrderId,
-                                Number = ch.Order.Number,
-                                Destination = ch.Order.Destination,
-                                DeliveryMode = ch.Order.DeliveryMode,
-                                TruckPlate = ch.Order.TruckPlate,
-                                Status = ch.Order.Status,
-
-                                // NEW — queue status per order
-                                isInQueue = isInQueue,
-
-                                items = (ch.Order.Items ?? new List<OrderItemNode>())
-                                    .Select(i => new
-                                    {
-                                        ProductId = i.ProductId,
-                                        ProductName = i.ProductName,
-                                        Quantity = i.Quantity,
-                                        Unite = i.Unite,
-                                        ImageUrl = i.ImageUrl
-                                    })
-                            }
-                        })
-                    })
-                }
-            }
-        };
-
-        // ============================================================
-        // SEND TO SPECIFIC DEVICE
-        // ============================================================
+        // BROADCAST
         await SignalRHelper.BroadcastToDeviceAsync(
             _signalR,
             _opt.Hub,
@@ -158,63 +84,102 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             ct
         );
 
-        _log.LogInformation("Sent MultiClientOrders for SLV={slv} to device={deviceId}", slv, deviceId);
+        _log.LogInformation("ParkingInbound: Sent payload for SLV={slv} -> device={deviceId}", slv, deviceId);
     }
 
-    // ============================================================
-    // QUEUE CHECK (NOW IN Ecare_Order_Legend)
-    // ============================================================
-    private async Task<bool> CheckQueueFast(string? plate, IServiceScope scope, CancellationToken ct)
+    // ======================================================================
+    // 4-CASE PAYLOAD BUILDER
+    // ======================================================================
+    private object BuildParkingPayload(string slv, string deviceId, ScanResultVm scan)
     {
-        if (string.IsNullOrWhiteSpace(plate))
-            return false;
+        // -----------------------------------------
+        // CASE 2 — ORDER FOUND
+        // -----------------------------------------
+        var withOrder = scan.Clients.FirstOrDefault(c => c.Order != null);
+        if (withOrder != null)
+        {
+            return new
+            {
+                @event = "ORDER_FOUND",
+                slv,
+                order = withOrder.Order
+            };
+        }
 
-        var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-        var connStr =
-            cfg.GetConnectionString("SqlServer")
-            ?? cfg["ConnectionStrings:SqlServer"]
-            ?? cfg["Db:ConnectionStrings:SqlServer"];
+        // -----------------------------------------
+        // CASE 1 — NO CLIENTS + NO ORDER
+        // -----------------------------------------
+        if (scan.Clients.Count == 0)
+        {
+            return new
+            {
+                @event = "NO_ORDER_NO_CLIENT",
+                slv
+            };
+        }
 
-        const string sql = @"
-            SELECT TOP 1 1
-            FROM dbo.Ecare_Order_Legend
-            WHERE Matricule = @Plate
-              AND Step = 1;   -- waiting in parking
-        ";
+        // There are equipment rows
+        var first = scan.Clients.First();
 
-        await using var conn = new SqlConnection(connStr);
-        var found = await conn.ExecuteScalarAsync<int?>(sql, new { Plate = plate });
-        return found.HasValue;
+        // -----------------------------------------
+        // CASE 4 — Equipment exists BUT ClientName is NULL or EMPTY
+        // -----------------------------------------
+        if (string.IsNullOrWhiteSpace(first.ClientName))
+        {
+            return new
+            {
+                @event = "NO_CLIENT_BUT_EQUIPMENT_FOUND",
+                slv,
+                matricule = first.Matricule,
+                chauffeur = first.ChauffeurName
+            };
+        }
+
+        // -----------------------------------------
+        // CASE 3 — CLIENTS + CHANTIERS (NO ORDER)
+        // -----------------------------------------
+        return new
+        {
+            @event = "CLIENTS_WITH_CHANTIERS",
+            slv,
+            clients = scan.Clients.Select(c => new
+            {
+                clientName = c.ClientName,
+                codeClientSAP = c.CodeSapClient,
+                matricule = c.Matricule,
+                chauffeur = c.ChauffeurName,
+                chantiers = c.Chantiers.Select(ch => new
+                {
+                    codeSapChantier = ch.CodeSapChantier,
+                    nomChantier = ch.NomChantier
+                })
+            })
+        };
     }
 
-    // ============================================================
+    // ======================================================================
     // HELPERS
-    // ============================================================
+    // ======================================================================
     private static string? TryExtractCarteSlv(object payload)
     {
         if (payload is JsonElement el)
         {
-            if (el.TryGetProperty("carteSlv", out var v1) && v1.ValueKind == JsonValueKind.String)
-                return v1.GetString();
-            if (el.TryGetProperty("slv", out var v2) && v2.ValueKind == JsonValueKind.String)
-                return v2.GetString();
+            if (el.TryGetProperty("carteSlv", out var c1)) return c1.GetString();
+            if (el.TryGetProperty("slv", out var c2)) return c2.GetString();
         }
 
-        var p = payload.GetType().GetProperty("carteSlv")
-              ?? payload.GetType().GetProperty("slv");
-
-        return p?.GetValue(payload)?.ToString();
+        return payload.GetType().GetProperty("slv")?.GetValue(payload)?.ToString()
+            ?? payload.GetType().GetProperty("carteSlv")?.GetValue(payload)?.ToString();
     }
 
     private static string? TryExtractDeviceId(object payload)
     {
-        if (payload is JsonElement el &&
-            el.TryGetProperty("deviceId", out var v) &&
-            v.ValueKind == JsonValueKind.String)
-        {
+        if (payload is JsonElement el && el.TryGetProperty("deviceId", out var v))
             return v.GetString();
-        }
 
-        return payload.GetType().GetProperty("deviceId")?.GetValue(payload)?.ToString();
+        return payload.GetType()
+            .GetProperty("deviceId")
+            ?.GetValue(payload)
+            ?.ToString();
     }
 }
