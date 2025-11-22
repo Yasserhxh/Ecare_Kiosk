@@ -3,7 +3,6 @@ using Ecare.Shared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Ecare.Application.Services;
 
