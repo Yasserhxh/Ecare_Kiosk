@@ -2,6 +2,7 @@
 using Ecare.Application.Commands.GeneratePlombs;
 using Ecare.Application.Commands.Legend;
 using Ecare.Application.Commands.LegendExtraSac;
+using Ecare.Application.Commands.UpdateOrderLegend;
 using MediatR;
 
 namespace Ecare.Api.Endpoints
@@ -106,7 +107,17 @@ namespace Ecare.Api.Endpoints
             });
 
 
+            group.MapPut("/legend", async (
+            UpdateOrderLegendCommand cmd,
+            IMediator med,
+            CancellationToken ct) =>
+            {
+                var result = await med.Send(cmd, ct);
 
+                return result.Success
+                    ? Results.Ok(new { message = result.Value })
+                    : Results.BadRequest(new { error = result.Error });
+            });
 
 
             return app;
