@@ -130,7 +130,7 @@ public sealed class ProcessParkingCommandHandler
                      BonDeCommande, SacNumber,
                      CodeSapProduit1, CodeSapProduit2,
                      CodeSapChantier, CodeSapClient,
-                     ParkingAt, Step, AddedToQueueAt)
+                     ParkingAt, Step, AddedToQueueAt,ChequeImg)
                     VALUES
                     (
                         @ClientName,
@@ -161,7 +161,8 @@ public sealed class ProcessParkingCommandHandler
 
                         @Now,
                         1,
-                        @Now2
+                        @Now2,
+                        @ChequeImage
                     );
                 ";
 
@@ -189,7 +190,8 @@ public sealed class ProcessParkingCommandHandler
                         r.CodeSapChantier,
                         r.CodeSapClient,
                         Now = DateTime.Now,
-                        Now2 = DateTime.Now
+                        Now2 = DateTime.Now,
+                        r.ChequeImage
                     },
                     _uow.Transaction
                 );

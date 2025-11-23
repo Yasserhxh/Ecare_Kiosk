@@ -30,11 +30,11 @@ public sealed class UpdateFirstWeightByBonHandler
         {
             // 1) Update EcareFlux by Matricule + BonDeCommande
             const string sqlFlux = @"
-UPDATE dbo.EcareFlux
-SET FirstWeight = @FirstWeight,
-    PabEntryAt = @Now
-WHERE Matricule = @Matricule
-  AND BonDeCommande = @BonDeCommande;";
+            UPDATE dbo.EcareFlux
+            SET FirstWeight = @FirstWeight,
+                PabEntryAt = @Now
+            WHERE Matricule = @Matricule
+              AND BonDeCommande = @BonDeCommande;";
 
             var fluxRows = await _uow.Connection.ExecuteAsync(
                 sqlFlux,

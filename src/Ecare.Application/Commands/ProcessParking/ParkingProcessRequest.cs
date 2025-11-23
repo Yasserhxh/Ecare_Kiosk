@@ -28,11 +28,12 @@ namespace Ecare.Application.Commands.ProcessParking
         public string? TypeCamion { get; set; }
         public int? NombrePlombs { get; set; }
 
-        public string? BonDeCommande { get; set; }        // Used for SAP purchNoC
-        public int? SacNumber { get; set; }                // Optional
+        public string? BonDeCommande { get; set; }         
+        public int? SacNumber { get; set; }                 
 
-        public string? CodeSapProduit1 { get; set; }       // always 100104
-        public string? CodeSapProduit2 { get; set; }       // always 100104
+        public string? CodeSapProduit1 { get; set; } = "100104";      
+        public string? CodeSapProduit2 { get; set; } = "100104";
+        public string? ChequeImage { get; set; }
     }
 
 }
