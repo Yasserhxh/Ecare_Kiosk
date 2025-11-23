@@ -27,7 +27,8 @@ namespace Ecare.Application.Queries.GetCementLineMatrix
                 z.TypeOperation AS TypeOperation,
                 c.Id            AS CimentId,
                 c.Name          AS CimentName,
-                c.[Type]        AS CimentType
+                c.[Type]        AS CimentType,
+                lc.Actif        AS ActifProduct
             FROM Ecare_Ligne l
             JOIN Ecare_Zone_Chargement z
                 ON l.ZoneChargementId = z.Id
@@ -81,7 +82,8 @@ namespace Ecare.Application.Queries.GetCementLineMatrix
                             .Select(r => new LineProductVm(
                                 r.CimentId!.Value,
                                 r.CimentName ?? string.Empty,
-                                r.CimentType ?? string.Empty))
+                                r.CimentType ?? string.Empty,
+                                r.ActifProduct ?? false))
                             .OrderBy(p => p.Name)
                             .ToList();
 
@@ -129,6 +131,8 @@ namespace Ecare.Application.Queries.GetCementLineMatrix
             public int? CimentId { get; init; }
             public string? CimentName { get; init; }
             public string? CimentType { get; init; }
+
+            public bool? ActifProduct { get; init; }   // NEW
         }
     }
 }

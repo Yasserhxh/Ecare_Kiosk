@@ -1,5 +1,4 @@
 ﻿using Ecare.Application.Commands.MobileCommands;
-using Ecare.Application.Queries.GetFluxStagesSummary;
 using Ecare.Application.Queries.MobileQueries.GetActiveChargings;
 using Ecare.Application.Queries.MobileQueries.GetChargementLines;
 using Ecare.Application.Queries.MobileQueries.GetFluxChargingDetails;
