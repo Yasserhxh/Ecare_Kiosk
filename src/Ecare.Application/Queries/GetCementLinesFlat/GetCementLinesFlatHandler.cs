@@ -22,14 +22,15 @@ namespace Ecare.Application.Queries.GetCementLinesFlat
         {
             const string sql = """
             SELECT
-                z.Usine                 AS ZoneName,       -- Nom de la zone de chargement
-                z.TypeOperation         AS OperationType,  -- Type d'opération
-                l.Id                    AS LigneId,
-                l.Nom                   AS LineName,       -- Nom de la ligne
-                l.Status                AS LineStatus,     -- Statut de la ligne
-                l.Capacity              AS LineCapacity,   -- Capacité de la ligne
-                c.Id                    AS CimentId,
-                c.Name                  AS ProductName     -- Nom du produit
+                z.Usine AS ZoneName,
+                z.TypeOperation AS OperationType,
+                l.Id AS LigneId,
+                l.Nom AS LineName,
+                l.Status AS LineStatus,
+                l.Capacity AS LineCapacity,
+
+                STRING_AGG(c.Name, ', ') WITHIN GROUP (ORDER BY c.Name) AS Products
+
             FROM Ecare_Ligne l
             JOIN Ecare_Zone_Chargement z
                 ON l.ZoneChargementId = z.Id
@@ -37,12 +38,21 @@ namespace Ecare.Application.Queries.GetCementLinesFlat
                 ON lc.LigneId = l.Id
             LEFT JOIN EcareCiments c
                 ON c.Id = lc.CimentId
-            WHERE (@Usine IS NULL OR UPPER(z.Usine) = UPPER(@Usine))
+
+            WHERE ('ASMENT-TEMARA' IS NULL OR UPPER(z.Usine) = UPPER('ASMENT-TEMARA'))
+
+            GROUP BY
+                z.Usine,
+                z.TypeOperation,
+                l.Id,
+                l.Nom,
+                l.Status,
+                l.Capacity
+
             ORDER BY
                 z.Usine,
-                z.TypeActivite,
-                l.Nom,
-                c.Name;
+                z.TypeOperation,
+                l.Nom;
             """;
 
             try

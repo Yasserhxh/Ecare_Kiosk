@@ -1,5 +1,6 @@
 ﻿using Ecare.Application.Commands.AffectCimentToLigne;
 using Ecare.Application.Commands.ChangeLigneCapacity;
+using Ecare.Application.Commands.ToggleLigneCiment;
 using Ecare.Application.Commands.ToggleLigneStatus;
 using Ecare.Application.Queries.GetCementLineMatrix;
 using Ecare.Application.Queries.GetCementLinesFlat;
@@ -151,7 +152,25 @@ public static class CementMatrixEndpoints
         })
         .WithName("GetOrderChequesPaged");
 
+        app.MapPut("/ligne/{ligneId}/ciment/{cimentId}/toggle",
+        async (int ligneId, int cimentId, IMediator mediator) =>
+        {
+            var result = await mediator.Send(
+                new ToggleLigneCimentCommand(ligneId, cimentId));
 
+            return result.Success
+                ? Results.Ok(new
+                {
+                    LigneId = ligneId,
+                    CimentId = cimentId,
+                    NewActif = result.Value
+                })
+                : Results.BadRequest(result.Error);
+        })
+        .WithName("ToggleLigneCiment")
+        .WithTags("Lignes")
+        .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status400BadRequest);
 
 
         return app;
