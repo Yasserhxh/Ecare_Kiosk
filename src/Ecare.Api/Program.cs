@@ -239,6 +239,17 @@ try
     app.MapChantierEndpoints();
     app.MapProduitEndpoints();
 
+    app.MapGet("/time", () =>
+    {
+        return new
+        {
+            ServerLocalTime = DateTime.Now,
+            ServerUtc = DateTime.UtcNow,
+            Timezone = TimeZoneInfo.Local.StandardName
+        };
+    });
+
+
     app.MapGet("mobile/charging/details/{fluxid:int}", async (
             int fluxid,
             ISender sender,
