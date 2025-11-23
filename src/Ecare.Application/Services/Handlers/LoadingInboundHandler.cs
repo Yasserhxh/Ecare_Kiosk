@@ -71,15 +71,16 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
 
         var vm = result.Value;
 
-        // ====================================================================================
-        // BUILD FINAL PAYLOAD (SAME FORMAT AS BEFORE)
-        // ====================================================================================
+     
+        // BUILD FINAL PAYLOAD 
+        
 
         var payloadOut = new
         {
             @event = "LoadingDataEvent",
             site = "Asment-Temara-01",
             kiosk = deviceId,
+            step = vm.Step,
             slv = vm.RFIDCard.ToString(),
             ts = DateTime.UtcNow,
 
@@ -92,7 +93,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             client = new
             {
                 name = vm.ClientName,
-                sapOk = true // ❗ If you want, we can map real SapOk later
+                sapOk = true 
             },
 
             firstWeight = vm.PremierePoid,
