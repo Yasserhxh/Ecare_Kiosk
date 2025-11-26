@@ -1,0 +1,147 @@
+﻿using Dapper;
+using Ecare.Application.Queries.MultiClientOrders.Ecare.Application.Queries.MultiClientOrders;
+using Ecare.Shared;
+using MediatR;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System.Data;
+
+namespace Ecare.Application.Queries.MultiClientOrders
+{
+    public sealed class MultiClientOrdersHandler
+        : IRequestHandler<MultiClientOrdersQuery, Result<MultiClientOrdersVm>>
+    {
+        private readonly IConfiguration _cfg;
+        private readonly ILogger<MultiClientOrdersHandler> _log;
+
+        public MultiClientOrdersHandler(IConfiguration cfg, ILogger<MultiClientOrdersHandler> log)
+        {
+            _cfg = cfg;
+            _log = log;
+        }
+
+        public async Task<Result<MultiClientOrdersVm>> Handle(
+            MultiClientOrdersQuery request,
+            CancellationToken ct)
+        {
+            var connStr = _cfg.GetConnectionString("SqlServer");
+            using var conn = new SqlConnection(connStr);
+
+            // ---------------------------------------------------------
+            // Execute Stored Procedure
+            // ---------------------------------------------------------
+            var rows = await conn.QueryAsync<dynamic>(
+                "sp_GetParkingScanData",
+                new { RfidCard = request.Slv },
+                commandType: CommandType.StoredProcedure);
+
+            if (!rows.Any())
+                return Result<MultiClientOrdersVm>.Fail("NO_DATA");
+
+            var first = rows.First();
+
+            // ---------------------------------------------------------
+            // BUILD ROOT VIEWMODEL
+            // ---------------------------------------------------------
+            var vm = new MultiClientOrdersVm
+            {
+                Slv = request.Slv,
+                TypeCamion = first.TruckTypeName ?? "",   
+
+                Driver = new DriverVm
+                {
+                    DriverId = first.DriverId,
+                    Nom = first.DriverNom,
+                    Prenom = first.DriverPrenom,
+                    Plate = first.TruckPlate
+                }
+            };
+
+            // ---------------------------------------------------------
+            // BUILD CLIENT → CHANTIER → ORDER → ITEMS
+            // ---------------------------------------------------------
+            var clientMap = new Dictionary<int, ClientNode>();
+
+            foreach (var r in rows)
+            {
+                // ------------------------------
+                // 1) Client
+                // ------------------------------
+                if (r.ClientId == null)
+                    continue;
+
+                if (!clientMap.TryGetValue((int)r.ClientId, out var client))
+                {
+                    client = new ClientNode
+                    {
+                        ClientId = r.ClientId,
+                        ClientCode = r.ClientCode,
+                        ClientName = r.ClientName
+                    };
+                    clientMap[r.ClientId] = client;
+                }
+
+                // ------------------------------
+                // 2) Chantier
+                // ------------------------------
+                if (r.ChantierId != null)
+                {
+                    var chantier =
+                        client.Chantiers.FirstOrDefault(x => x.ChantierId == r.ChantierId);
+
+                    if (chantier == null)
+                    {
+                        chantier = new ChantierNode
+                        {
+                            ChantierId = r.ChantierId,
+                            ChantierCode = r.ChantierCode,
+                            ChantierName = r.ChantierName
+                        };
+                        client.Chantiers.Add(chantier);
+                    }
+
+                    // ------------------------------
+                    // 3) Order
+                    // ------------------------------
+                    if (r.OrderId != null)
+                    {
+                        if (chantier.Order == null)
+                        {
+                            chantier.Order = new OrderNode
+                            {
+                                OrderId = r.OrderId,
+                                Number = r.OrderNumber,
+                                Destination = r.Destination,
+                                DeliveryMode = r.DeliveryMode,
+                                TruckPlate = r.OrderTruckPlate,
+                                Status = r.OrderStatus,
+                                Items = new List<OrderItemNode>()
+                            };
+                        }
+
+                        // ------------------------------
+                        // 4) Item
+                        // ------------------------------
+                        if (r.ProductId != null)
+                        {
+                            chantier.Order.Items.Add(new OrderItemNode
+                            {
+                                ProductId = r.ProductId,
+                                ProductName = r.ProductName,
+                                Quantity = r.Quantity,
+                                Unite = r.Unite,
+                                ImageUrl = r.ImageUrl
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Final result
+            vm.Clients = clientMap.Values.ToList();
+
+            return Result<MultiClientOrdersVm>.Ok(vm);
+        }
+    }
+}

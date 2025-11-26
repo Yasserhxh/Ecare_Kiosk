@@ -7,7 +7,7 @@ namespace Ecare.Infrastructure.Repositories;
 public interface IWeighRepository
 {
     Task<Guid> InsertAsync(WeighRecord w, IUnitOfWork uow);
-    Task<(int? Gross, int? Tare)> GetPaBWeightsAsync(Guid orderId, IUnitOfWork uow);
+    Task<(int? Gross, int? Tare)> GetPaBWeightsAsync(int orderId, IUnitOfWork uow);
 }
 
 public sealed class WeighRepository : IWeighRepository
@@ -20,7 +20,7 @@ public sealed class WeighRepository : IWeighRepository
         return w.Id;
     }
 
-    public async Task<(int? Gross, int? Tare)> GetPaBWeightsAsync(Guid orderId, IUnitOfWork uow)
+    public async Task<(int? Gross, int? Tare)> GetPaBWeightsAsync(int orderId, IUnitOfWork uow)
     {
         var rows = await uow.Connection.QueryAsync<WeighRecord>($"SELECT * FROM {DbTableNames.Weighings} WHERE OrderId=@orderId",
             new { orderId }, uow.Transaction);

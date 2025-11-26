@@ -23,11 +23,11 @@ public sealed class DriverConfiguration : IEntityTypeConfiguration<Driver>
         builder.HasIndex(d => d.Slv)
             .IsUnique();
 
-        builder.Property(d => d.FirstName)
+        builder.Property(d => d.Prenom)
             .HasMaxLength(60)
             .IsRequired();
 
-        builder.Property(d => d.LastName)
+        builder.Property(d => d.Nom)
             .HasMaxLength(60)
             .IsRequired();
 
