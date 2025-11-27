@@ -132,6 +132,8 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             payloadOut,
             _log,
             ct);
+        //CONNECT TO LOCALHOST 5005 WITH DEVICE ID deviceId AND SEND IN A POST REQUEST /api/start-loading IN IT TO send premiere Poids premierePoid and convert vm.Quantite2 
+        //public sealed record StartLoadingRequest(Guid DeviceId, int PremierePoid, double Quantite2, int QualityCode); 
 
         _log.LogInformation("LOADING SNAPSHOT SENT: SLV={slv} device={dev}", slv, deviceId);
     }
