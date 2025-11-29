@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Ecare.Application.Commands.CancelLegend;
 using Ecare.Application.Commands.CreateLegacyOrderLegend;
 using Ecare.Application.Commands.GeneratePlombs;
 using Ecare.Application.Commands.Legend;
@@ -166,6 +167,20 @@ namespace Ecare.Api.Endpoints
                     ? Results.Ok(new { updated = result.Value })
                     : Results.BadRequest(result.Error);
             });
+
+
+            group.MapPost("/legend/{id}/cancel", async (
+                int id,
+                IMediator mediator,
+                CancellationToken ct) =>
+            {
+                bool ok = await mediator.Send(new CancelLegendCommand(id), ct);
+
+                return ok
+                    ? Results.Ok(new { message = "Legend canceled successfully." })
+                    : Results.NotFound(new { message = "Legend not found." });
+            });
+
 
 
             return app;
