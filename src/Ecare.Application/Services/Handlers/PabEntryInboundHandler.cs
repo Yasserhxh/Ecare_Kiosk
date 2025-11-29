@@ -60,10 +60,62 @@ namespace Ecare.Application.Services
             // --------------------------
             // Build ALWAYS-FULL payload
             // --------------------------
+             
 
             if (vm.Produit1 == "" || vm.ClientName == "") {
                 return;
             }
+
+            // -----------------------------
+            // Compute required load in KG
+            // -----------------------------
+            // ----------------------------------------------
+            // Compute expected load (tare + quantities)
+            // ----------------------------------------------
+            double expectedLoad = (double)(vm.Tare + (vm.Quantite1 + vm.Quantite2) * 1000);
+
+            // PTAC tolerance: accept up to +2%
+            double ptacMax = (double)(vm.PTAC * 1.02);
+
+            // ----------------------------------------------
+            // VALIDATION: reject only if expected > PTAC+2%
+            // ----------------------------------------------
+            if (expectedLoad > ptacMax)
+            {
+                var overloadPayload = new
+                {
+                    @event = "PabEntryMessage",
+                    message = "LOAD EXCEEDS PTAC LIMIT (+2% tolerance exceeded)",
+                    kiosk = deviceId,
+                    slv = slv,
+                    ts = DateTime.UtcNow,
+                    details = new
+                    {
+                        ptac = vm.PTAC,
+                        ptacMax,
+                        expected = expectedLoad,
+                        difference = expectedLoad - ptacMax
+                    }
+                };
+
+                await SignalRHelper.BroadcastToDeviceAsync(
+                    _signalR,
+                    hubName: _outOpt.Hub,
+                    methodName: _outOpt.Method,
+                    deviceId: deviceId,
+                    payload: overloadPayload,
+                    logger: _log,
+                    ct: ct
+                );
+
+                _log.LogWarning("OVERLOAD: expected={exp} > ptacMax={max}", expectedLoad, ptacMax);
+                return;
+            }
+
+
+            // --------------------------
+            // Build NORMAL payload
+            // --------------------------
             var outboundPayload = new
             {
                 @event = "PabEntryDataEvent",
@@ -102,7 +154,7 @@ namespace Ecare.Application.Services
             };
 
             // --------------------------
-            // SEND Payload
+            // SEND normal payload
             // --------------------------
             await SignalRHelper.BroadcastToDeviceAsync(
                 _signalR,
@@ -114,7 +166,7 @@ namespace Ecare.Application.Services
                 ct: ct
             );
 
-            _log.LogInformation("PabEntry: SENT payload for SLV={slv} to device={deviceId}", slv, deviceId);
+            _log.LogInformation("PabEntry: SENT normal payload SLV={slv} to device={deviceId}", slv, deviceId);
         }
 
         // ---------------------------------------------------------

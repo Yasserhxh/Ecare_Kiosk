@@ -9,6 +9,8 @@ namespace Ecare.Application.Queries.PabEntryScan
     public sealed class PabEntryScanVm
     {
         public string? BonDeCommande { get; set; }
+        public int? PTAC {  get; set; }
+        public int? Tare {  get; set; }
         public string ClientName { get; set; } = string.Empty;
         public string Chantier { get; set; } = string.Empty;
 
@@ -21,9 +23,9 @@ namespace Ecare.Application.Queries.PabEntryScan
         public int PremierePoid { get; set; }
 
         public string? Produit1 { get; set; }
-        public int? Quantite1 { get; set; }
+        public double Quantite1 { get; set; }
         public string? Produit2 { get; set; }
-        public int? Quantite2 { get; set; }
+        public double? Quantite2 { get; set; }
 
         public string? Image1 { get; set; }
         public string? Image2 { get; set; }
