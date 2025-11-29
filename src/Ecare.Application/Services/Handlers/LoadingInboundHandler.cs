@@ -102,7 +102,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
 
             firstWeight = vm.PremierePoid,
             pabEntryAt = vm.PabEntryAt,
-
+            sacnumber = vm.SacNumber,
             order = new
             {
                 number = vm.BonDeCommande,

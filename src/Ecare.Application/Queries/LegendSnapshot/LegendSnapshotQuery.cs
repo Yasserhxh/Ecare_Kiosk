@@ -51,4 +51,5 @@ public sealed class LegendSnapshotVm
 
     // Ligne image
     public string? LigneImage { get; set; }
+    public int? SacNumber { get; set;}
 }
