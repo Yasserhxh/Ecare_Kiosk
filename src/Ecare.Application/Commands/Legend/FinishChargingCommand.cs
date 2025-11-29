@@ -5,5 +5,7 @@ namespace Ecare.Application.Commands.Legend;
 
 public sealed record FinishChargingCommand(
     int RfidCard,
-    string Matricule
+    string Matricule,
+    int NumberSacs_Charged,
+    int Weight_Charged
 ) : IRequest<Result<bool>>;

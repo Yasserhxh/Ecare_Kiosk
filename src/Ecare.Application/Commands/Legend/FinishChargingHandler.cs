@@ -31,7 +31,9 @@ public sealed class FinishChargingHandler
             new
             {
                 RfidCard = request.RfidCard,
-                Matricule = request.Matricule
+                Matricule = request.Matricule,
+                NumberSacs_Charged = request.NumberSacs_Charged,
+                Weight_Charged = request.Weight_Charged
             },
             commandType: CommandType.StoredProcedure);
 
