@@ -24,17 +24,21 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
     private readonly IServiceProvider _sp;
     private readonly ServiceManager _signalR;
     private readonly LoadingOutboundOptions _opt;
+    private readonly IHttpClientFactory _http;
+
 
     public LoadingInboundHandler(
         ILogger<LoadingInboundHandler> log,
         IServiceProvider sp,
         ServiceManager signalR,
-        IOptions<LoadingOutboundOptions> outOpt)
+        IOptions<LoadingOutboundOptions> outOpt,
+        IHttpClientFactory http)
     {
         _log = log;
         _sp = sp;
         _signalR = signalR;
         _opt = outOpt.Value;
+        _http = http;
     }
 
     public async Task HandleAsync(object payload, CancellationToken ct)
@@ -132,8 +136,54 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             payloadOut,
             _log,
             ct);
-        //CONNECT TO LOCALHOST 5005 WITH DEVICE ID deviceId AND SEND IN A POST REQUEST /api/start-loading IN IT TO send premiere Poids premierePoid and convert vm.Quantite2 
+        //TODO: CONNECT TO LOCALHOST 5005 WITH DEVICE ID deviceId AND SEND IN A POST REQUEST /api/start-loading IN IT TO send premiere Poids premierePoid and convert vm.Quantite2 
         //public sealed record StartLoadingRequest(Guid DeviceId, int PremierePoid, double Quantite2, int QualityCode); 
+
+        try
+        {
+            var client = _http.CreateClient("kiosk");
+
+            var kioskUrl = "http://localhost:5005/api/start-loading";
+
+            double quantite2Kg = (vm.Quantite2 ?? 0) * 1000;
+            int QualityCode = ResolveQualityCode(vm.Produit1);
+
+            // Build request payload
+            var kioskRequest = new
+            {
+                deviceId = deviceId,
+                premierePoid = vm.PremierePoid,
+                quantite1 = quantite2Kg,
+                qualityCode = QualityCode
+            };
+
+            _log.LogInformation(
+                "Sending StartLoadingRequest to kiosk {url}: {@req}",
+                kioskUrl, kioskRequest);
+
+            var json = JsonSerializer.Serialize(kioskRequest);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var resp = await client.PostAsync(kioskUrl, content, ct);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _log.LogWarning(
+                    "Kiosk StartLoadingRequest failed: {status} {reason}",
+                    resp.StatusCode,
+                    resp.ReasonPhrase);
+            }
+            else
+            {
+                _log.LogInformation("Kiosk StartLoadingRequest OK for device {dev}", deviceId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "Error while sending StartLoadingRequest to kiosk for device {dev}",
+                deviceId);
+        }
 
         _log.LogInformation("LOADING SNAPSHOT SENT: SLV={slv} device={dev}", slv, deviceId);
     }
@@ -161,4 +211,19 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
         return payload.GetType().GetProperty("deviceId")
             ?.GetValue(payload)?.ToString();
     }
+
+    private static int ResolveQualityCode(string? produit1)
+    {
+        if (string.IsNullOrWhiteSpace(produit1))
+            return 0;
+
+        string p = produit1.ToLowerInvariant();
+
+        if (p.Contains("55")) return 55;
+        if (p.Contains("65")) return 65;
+        if (p.Contains("45")) return 45;
+
+        return 0; // default
+    }
+
 }

@@ -31,6 +31,8 @@ namespace Ecare.Api.Extensions
 
             // HTTP client
             services.AddHttpClient(nameof(SignalRHubListener));
+            services.AddHttpClient("kiosk");
+
 
             // Outbound configs
             services.Configure<PabEntryOutboundOptions>(cfg.GetSection("PabEntryOutbound"));
