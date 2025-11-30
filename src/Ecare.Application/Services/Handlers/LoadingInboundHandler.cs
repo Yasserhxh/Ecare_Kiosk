@@ -112,6 +112,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
                 ligne = vm.Ligne,
                 ligneImage = vm.LigneImage,
                 typeCamion = vm.TypeCamion,
+                typeProduit = vm.TypeProduit,
 
                 produits = new[]
                 {

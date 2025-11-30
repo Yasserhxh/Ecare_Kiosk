@@ -16,6 +16,7 @@ public sealed class LegendSnapshotVm
     public string Matricule { get; set; } = string.Empty;
     public int RFIDCard { get; set; }
     public string TypeCamion { get; set; } = string.Empty;
+    public string? TypeProduit {  get; set; }
     public string BonDeCommande { get; set; } = string.Empty;
     public string Ligne { get; set; } = string.Empty;
     public int? PremierePoid { get; set; }
