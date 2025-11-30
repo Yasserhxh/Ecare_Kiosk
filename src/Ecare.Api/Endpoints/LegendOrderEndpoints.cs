@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Ecare.Application.Commands.CancelLegend;
 using Ecare.Application.Commands.CreateLegacyOrderLegend;
 using Ecare.Application.Commands.GeneratePlombs;
 using Ecare.Application.Commands.Legend;
@@ -6,6 +7,7 @@ using Ecare.Application.Commands.LegendExtraSac;
 using Ecare.Application.Commands.MergeParkingWithSap;
 using Ecare.Application.Commands.ProcessParking;
 using Ecare.Application.Commands.UpdateOrderLegend;
+using Ecare.Application.Queries.GetLegendsDocument;
 using Ecare.Application.Queries.GetOrderBySapCode;
 using MediatR;
 using System.Data;
@@ -166,6 +168,42 @@ namespace Ecare.Api.Endpoints
                     ? Results.Ok(new { updated = result.Value })
                     : Results.BadRequest(result.Error);
             });
+
+
+            group.MapPost("/legend/{id}/cancel", async (
+                int id,
+                IMediator mediator,
+                CancellationToken ct) =>
+            {
+                bool ok = await mediator.Send(new CancelLegendCommand(id), ct);
+
+                return ok
+                    ? Results.Ok(new { message = "Legend canceled successfully." })
+                    : Results.NotFound(new { message = "Legend not found." });
+            });
+
+            group.MapGet("/legends-documents", async (
+                string? clientName,
+                string? matricule,
+                string? produit1,
+                int page,
+                int pageSize,
+                IMediator mediator,
+                CancellationToken ct
+            ) =>
+            {
+                var result = await mediator.Send(new GetLegendsQuery(
+                    clientName,
+                    matricule,
+                    produit1,
+                    page <= 0 ? 1 : page,
+                    pageSize <= 0 ? 20 : pageSize
+                ), ct);
+
+                return Results.Ok(result);
+            });
+
+
 
 
             return app;

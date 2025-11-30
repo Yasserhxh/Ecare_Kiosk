@@ -4,6 +4,7 @@ using MediatR;
 namespace Ecare.Application.Commands.CreateLegacyOrderLegend
 {
     public sealed record CreateLegacyOrderLegendCommand(
+    string Event,
     string BonDeCommande,
     string ClientName,
     string Chantier,
