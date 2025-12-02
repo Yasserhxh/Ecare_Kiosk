@@ -13,7 +13,7 @@ public sealed class GetCimentsHandler(IEcareCimentRepository repo, IUnitOfWork u
         try
         {
             var items = await repo.GetAllAsync(uow, ct);
-            var dtos = items.Select(x => new CimentDto(x.Id, x.Name, x.ImageUrl, x.Details, x.Type, x.Description));
+            var dtos = items.Select(x => new CimentDto(x.Id, x.Name, x.ImageUrl, x.Details, x.Type, x.Description,x.CodeSAP));
             await uow.CommitAsync(ct);
             return Result<IEnumerable<CimentDto>>.Ok(dtos);
         }
