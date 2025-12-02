@@ -29,78 +29,86 @@ public sealed class ParkingScanHandler
     {
         using var conn = new SqlConnection(_cfg.GetConnectionString("SqlServer"));
         var http = _httpFactory.CreateClient();
-
-        // STEP 1 — GET CLIENTS
-        var equips = (await conn.QueryAsync<dynamic>(
-            "SELECT * FROM Ecare_ClientEquipements WHERE CarteSLV = @slv",
-            new { slv = request.Slv }
-        )).ToList();
-
-        var vm = new ScanResultVm { Slv = request.Slv };
-
-        if (!equips.Any())
-            return Result<ScanResultVm>.Ok(vm); // Case 1
-
-        // PROCESS EACH CLIENT
-        foreach (var e in equips)
+        try
         {
-            var clientNode = new ClientResult
-            {
-                ClientName = e.ClientName,
-                Matricule = e.Matricule,
-                ChauffeurName = e.ChauffeurName,
-                CodeSapClient = e.CodeClientSAP
-            };
+            // STEP 1 — GET CLIENTS
+            var equips = (await conn.QueryAsync<dynamic>(
+                "SELECT * FROM Ecare_ClientEquipements WHERE CarteSLV = @slv",
+                new { slv = request.Slv }
+            )).ToList();
 
-            // STEP 2 — CHECK LAST ORDER
-            var order = await conn.QueryFirstOrDefaultAsync<OrderLegendVm>(
-                "Parking_Scan_OrderLegend",
-                new
+            var vm = new ScanResultVm { Slv = request.Slv };
+
+            if (!equips.Any())
+                return Result<ScanResultVm>.Ok(vm); // Case 1
+
+            // PROCESS EACH CLIENT
+            foreach (var e in equips)
+            {
+                var clientNode = new ClientResult
                 {
-                    RFIDCard = request.Slv,
-                   
-                },
-                commandType: System.Data.CommandType.StoredProcedure
-            );
+                    ClientName = e.ClientName,
+                    Matricule = e.Matricule,
+                    ChauffeurName = e.ChauffeurName,
+                    CodeSapClient = e.CodeClientSAP
+                };
 
-            if (order != null)
-            {
-                clientNode.Order = order; // Case 2
-            }
-            else
-            {
-                // STEP 3 — NO ORDER → FETCH CHANTIERS FROM SAP
-                if (!string.IsNullOrWhiteSpace(e.CodeClientSAP))
+                // STEP 2 — CHECK LAST ORDER
+                var order = await conn.QueryFirstOrDefaultAsync<OrderLegendVm>(
+                    "Parking_Scan_OrderLegend",
+                    new
+                    {
+                        RFIDCard = request.Slv,
+
+                    },
+                    commandType: System.Data.CommandType.StoredProcedure
+                );
+
+                if (order != null)
                 {
-                    var sapReq = new SapRequest
+                    clientNode.Order = order; // Case 2
+                }
+                else
+                {
+                    // STEP 3 — NO ORDER → FETCH CHANTIERS FROM SAP
+                    if (!string.IsNullOrWhiteSpace(e.CodeClientSAP))
                     {
-                        CodeClient = e.CodeClientSAP
-                    };
-
-                    var res = await http.PostAsJsonAsync(
-                        "https://app-emea-we-dssdev-mycimar-api-001.azurewebsites.net/api/SapOrders/partners/chantiers",
-                        sapReq
-                    );
-
-                    if (res.IsSuccessStatusCode)
-                    {
-                        var sap = await res.Content.ReadFromJsonAsync<SapResponse>();
-
-                        foreach (var ch in sap?.chantiers ?? new())
+                        var sapReq = new SapRequest
                         {
-                            clientNode.Chantiers.Add(new ChantierVm
+                            CodeClient = e.CodeClientSAP
+                        };
+
+                        var res = await http.PostAsJsonAsync(
+                            "https://app-emea-we-dssdev-mycimar-api-001.azurewebsites.net/api/SapOrders/partners/chantiers",
+                            sapReq
+                        );
+
+                        if (res.IsSuccessStatusCode)
+                        {
+                            var sap = await res.Content.ReadFromJsonAsync<SapResponse>();
+
+                            foreach (var ch in sap?.chantiers ?? new())
                             {
-                                CodeSapChantier = ch.kunN2,
-                                NomChantier = ch.namE1
-                            });
+                                clientNode.Chantiers.Add(new ChantierVm
+                                {
+                                    CodeSapChantier = ch.kunN2,
+                                    NomChantier = ch.namE1
+                                });
+                            }
                         }
                     }
                 }
+
+                vm.Clients.Add(clientNode);
             }
 
-            vm.Clients.Add(clientNode);
+            return Result<ScanResultVm>.Ok(vm);
+        }
+        catch(Exception ex)
+        {
+            return Result<ScanResultVm>.Fail(ex.ToString());
+
         }
 
-        return Result<ScanResultVm>.Ok(vm);
     }
 }
