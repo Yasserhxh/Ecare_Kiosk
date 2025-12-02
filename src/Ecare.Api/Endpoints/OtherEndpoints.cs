@@ -1,4 +1,5 @@
 ﻿using Ecare.Application.Commands;
+using Ecare.Application.Commands.CreateClientEquipement;
 using Ecare.Application.Queries;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
@@ -46,6 +47,27 @@ public static class OtherEndpoints
                 deviceId = deviceId
             });
         });
+
+
+        app.MapPost("/api/client-equipements",
+        async (CreateClientEquipementDto dto, IMediator mediator) =>
+        {
+            // Basic validation
+            if (string.IsNullOrWhiteSpace(dto.Matricule))
+                return Results.BadRequest(new { error = "Matricule is required" });
+
+            if (string.IsNullOrWhiteSpace(dto.CarteSLV))
+                return Results.BadRequest(new { error = "CarteSLV is required" });
+
+            var id = await mediator.Send(new CreateClientEquipementCommand(dto));
+
+            return Results.Ok(new
+            {
+                Id = id,
+                Message = "Client equipement created successfully."
+            });
+        });
+
 
         return app;
     }
