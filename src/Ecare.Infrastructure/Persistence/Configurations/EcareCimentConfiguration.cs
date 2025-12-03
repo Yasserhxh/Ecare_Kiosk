@@ -30,5 +30,8 @@ public sealed class EcareCimentConfiguration : IEntityTypeConfiguration<EcareCim
 
         builder.Property(c => c.Description)
             .HasColumnName("Description");
+
+        builder.Property(c => c.CodeSAP)
+            .HasColumnName("CodeSAP");
     }
 }

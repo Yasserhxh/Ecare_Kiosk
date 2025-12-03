@@ -70,13 +70,13 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                         // ==========================
                         var payload = new
                         {
-                            codeClient = "0001254277",
+                            codeClient = request.CodeClientSap,
                             date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
                             purchNoC = request.BonDeCommande,
                             salesOrg = "MA18",
 
-                            material = "000010",
-                            material2 = "000010",
+                            material = request.CodeSapProduit1,
+                            material2 = request.CodeSapProduit2,
 
                             plant = "M108",
 
@@ -86,8 +86,8 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                             itemNumber = "000010",
                             itemNumber2 = "000020",
 
-                            soldTo = "0001254277",
-                            shipTo = "0021714661",
+                            soldTo = request.CodeClientSap,
+                            shipTo = request.CodeChantierSap,
 
                             reqDate = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                             reqQty = request.Quantite1,
@@ -113,20 +113,20 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                         // ==========================
                         var payload = new
                         {
-                            codeClient = "0001254277",
+                            codeClient = request.CodeClientSap,
                             date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                            purchNoC = $"AUTO ORDER {request.Matricule} one item",
+                            purchNoC = request.BonDeCommande,
                             salesOrg = "MA18",
 
-                            material = "000010",
+                            material = request.CodeSapProduit1,
                             plant = "M108",
 
                             quantity = request.Quantite1,
 
                             itemNumber = "000010",
 
-                            soldTo = "0001254277",
-                            shipTo = "0021714661",
+                            soldTo = request.CodeClientSap,
+                            shipTo = request.CodeChantierSap,
 
                             reqDate = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                             reqQty = request.Quantite1,

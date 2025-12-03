@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Linq;
 using System.Text.Json;
 using static Ecare.Application.Queries.ParkingScanOrderLegend.ParkingScanModels;
 
@@ -59,7 +60,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
         using var scope = _sp.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        // Call query that returns one of the 4 CASES
+        // Call query that returns one of the CASES
         var response = await mediator.Send(new ParkingScanQuery(slv), ct);
 
         if (!response.Success || response.Value == null)
@@ -70,7 +71,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
 
         var scan = response.Value;
 
-        // Build simplified frontend-friendly payload
+        // Build frontend-friendly payload
         var outboundPayload = BuildParkingPayload(slv, deviceId, scan);
 
         // BROADCAST
@@ -88,30 +89,14 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
     }
 
     // ======================================================================
-    // 4-CASE PAYLOAD BUILDER
+    // 5-CASE PAYLOAD BUILDER (includes MANY_DRIVERS)
     // ======================================================================
     private object BuildParkingPayload(string slv, string deviceId, ScanResultVm scan)
     {
         // -----------------------------------------
-        // CASE 2 — ORDER FOUND
-        // -----------------------------------------
-        var withOrder = scan.Clients.FirstOrDefault(c => c.Order != null);
-        if (withOrder != null)
-        {
-            return new
-            {
-                @event = "ORDER_FOUND",
-                slv,
-                order = withOrder.Order,
-                chauffeur = withOrder.ChauffeurName,
-                
-            };
-        }
-
-        // -----------------------------------------
         // CASE 1 — NO CLIENTS + NO ORDER
         // -----------------------------------------
-        if (scan.Clients.Count == 0)
+        if (scan.Clients == null || scan.Clients.Count == 0)
         {
             return new
             {
@@ -120,42 +105,93 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             };
         }
 
-        // There are equipment rows
-        var first = scan.Clients.First();
+        // -----------------------------------------
+        // NEW CASE — SLV USED BY MULTIPLE CLIENTS / DRIVERS
+        // MANY_DRIVERS
+        // -----------------------------------------
+        if (scan.Clients.Count > 1)
+        {
+            // For each driver we send:
+            // - Matricule
+            // - ChauffeurName
+            // - ClientName + CodeSapClient
+            // - Chantiers (if no order or still loaded)
+            // - Order if found (same logic as existing)
+            return new
+            {
+                @event = "MANY_DRIVERS",
+                slv,
+                drivers = scan.Clients.Select(c => new
+                {
+                    clientName = c.ClientName,
+                    codeClientSAP = c.CodeSapClient,
+                    matricule = c.Matricule,
+                    chauffeur = c.ChauffeurName,
+                    hasOrder = c.Order != null,
+                    order = c.Order,  // can be null
+                    chantiers = c.Chantiers.Select(ch => new
+                    {
+                        codeSapChantier = ch.CodeSapChantier,
+                        nomChantier = ch.NomChantier
+                    })
+                })
+            };
+        }
+
+        // From here we know there is EXACTLY ONE client row
+        var single = scan.Clients[0];
+
+        // -----------------------------------------
+        // CASE 2 — ORDER FOUND (single client)
+        // -----------------------------------------
+        if (single.Order != null)
+        {
+            return new
+            {
+                @event = "ORDER_FOUND",
+                slv,
+                order = single.Order,
+                chauffeur = single.ChauffeurName,
+                matricule = single.Matricule
+            };
+        }
 
         // -----------------------------------------
         // CASE 4 — Equipment exists BUT ClientName is NULL or EMPTY
         // -----------------------------------------
-        if (string.IsNullOrWhiteSpace(first.ClientName))
+        if (string.IsNullOrWhiteSpace(single.ClientName))
         {
             return new
             {
                 @event = "NO_CLIENT_BUT_EQUIPMENT_FOUND",
                 slv,
-                matricule = first.Matricule,
-                chauffeur = first.ChauffeurName
+                matricule = single.Matricule,
+                chauffeur = single.ChauffeurName
             };
         }
 
         // -----------------------------------------
-        // CASE 3 — CLIENTS + CHANTIERS (NO ORDER)
+        // CASE 3 — ONE CLIENT + CHANTIERS (NO ORDER)
         // -----------------------------------------
         return new
         {
             @event = "CLIENTS_WITH_CHANTIERS",
             slv,
-            clients = scan.Clients.Select(c => new
+            clients = new[]
             {
-                clientName = c.ClientName,
-                codeClientSAP = c.CodeSapClient,
-                matricule = c.Matricule,
-                chauffeur = c.ChauffeurName,
-                chantiers = c.Chantiers.Select(ch => new
+                new
                 {
-                    codeSapChantier = ch.CodeSapChantier,
-                    nomChantier = ch.NomChantier
-                })
-            })
+                    clientName = single.ClientName,
+                    codeClientSAP = single.CodeSapClient,
+                    matricule = single.Matricule,
+                    chauffeur = single.ChauffeurName,
+                    chantiers = single.Chantiers.Select(ch => new
+                    {
+                        codeSapChantier = ch.CodeSapChantier,
+                        nomChantier = ch.NomChantier
+                    })
+                }
+            }
         };
     }
 

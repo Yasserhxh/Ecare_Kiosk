@@ -13,12 +13,16 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
     string TypeCamion,
     int NombrePlombs,
     string Produit1,
+    string CodeSapProduit1,
     int Quantite1,
     string? Produit2,
+    string CodeSapProduit2,
     int? Quantite2,
     string TypeProduit,
     string? ChequeImg,        
-    DateTime? AddedToQueueAt
+    DateTime? AddedToQueueAt,
+    string CodeClientSap,
+    string CodeChantierSap
 ) : IRequest<Result<int>>;
 
 }

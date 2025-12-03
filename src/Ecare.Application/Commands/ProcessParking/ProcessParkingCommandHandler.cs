@@ -1,4 +1,5 @@
-﻿using Dapper;
+﻿using Azure.Core;
+using Dapper;
 using Ecare.Application.Commands;
 using Ecare.Application.Commands.ProcessParking;
 using Ecare.Shared;
@@ -220,26 +221,26 @@ public sealed class ProcessParkingCommandHandler
                     // ------- TWO PRODUCTS -------
                     sapBody = new
                     {
-                        codeClient = "1254277",
-                        date = DateTime.Now.ToString("yyyy-MM-dd"),
+                        codeClient = r.CodeSapClient,
+                        date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
                         purchNoC = r.BonDeCommande,
                         salesOrg = "MA18",
 
-                        material = "100104",
-                        material2 = "100103",
+                        material = r.CodeSapProduit1,
+                        material2 = r.CodeSapProduit2,
 
                         plant = "M108",
 
-                        quantity = qty1,
-                        quantity2 =qty2,
+                        quantity = r.Quantite1,
+                        quantity2 = r.Quantite2,
 
                         itemNumber = "000010",
                         itemNumber2 = "000020",
 
-                        soldTo = "0001254277",
-                        shipTo = "0021714661",
+                        soldTo = r.CodeSapClient,
+                        shipTo = r.CodeSapChantier,
 
-                        reqDate = DateTime.UtcNow,
+                        reqDate = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                         reqQty = r.Quantite1,
                         reqQty2 = r.Quantite2,
 
@@ -258,12 +259,12 @@ public sealed class ProcessParkingCommandHandler
                     // ------- ONE PRODUCT -------
                     sapBody = new
                     {
-                        codeClient = "1254277",
+                        codeClient = r.CodeSapClient,
                         date = DateTime.Now.ToString("yyyy-MM-dd"),
                         purchNoC = r.BonDeCommande,
                         salesOrg = "MA18",
 
-                        material = "100104",
+                        material = r.CodeSapProduit1,
 
                         plant = "M108",
 
@@ -271,8 +272,8 @@ public sealed class ProcessParkingCommandHandler
 
                         itemNumber = "000010",
 
-                        soldTo = "0001254277",
-                        shipTo = "0021714661",
+                        soldTo = r.CodeSapClient,
+                        shipTo = r.CodeSapChantier,
 
                         reqDate = DateTime.UtcNow,
                         reqQty = r.Quantite1,

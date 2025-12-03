@@ -21,7 +21,7 @@ public sealed class EcareCimentRepository : IEcareCimentRepository
     public Task<IEnumerable<EcareCiment>> GetAllAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var cmd = new CommandDefinition(
-            $"SELECT Id,Name,ImageUrl,Details,Type,Description FROM {DbTableNames.EcareCiments} ORDER BY Name",
+            $"SELECT Id,Name,ImageUrl,Details,Type,Description,CodeSAP FROM {DbTableNames.EcareCiments} ORDER BY Name",
             transaction: uow.Transaction,
             cancellationToken: ct);
         return uow.Connection.QueryAsync<EcareCiment>(cmd);
