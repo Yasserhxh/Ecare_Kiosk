@@ -4,7 +4,8 @@ using MediatR;
 namespace Ecare.Application.Commands.Legend;
 
 public sealed record FinishChargingCommand(
-    int RfidCard,
+    string DeviceName,
+    string RfidCard,
     string Matricule,
     int NumberSacs_Charged,
     int Weight_Charged
