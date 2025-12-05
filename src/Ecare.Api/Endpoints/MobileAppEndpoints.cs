@@ -1,4 +1,5 @@
-﻿using Ecare.Application.Commands.MobileCommands;
+﻿using Ecare.Application.Commands.AddPlomb;
+using Ecare.Application.Commands.MobileCommands;
 using Ecare.Application.Queries.MobileQueries.GetActiveChargings;
 using Ecare.Application.Queries.MobileQueries.GetChargementLines;
 using Ecare.Application.Queries.MobileQueries.GetFluxChargingDetails;
@@ -126,6 +127,13 @@ namespace Ecare.Api.Endpoints
             .WithSummary("Get flux charging stages summary")
             .WithDescription("Returns the 4 stages (PARC, USINE, CHARGEMENT, SORTIE) with durations, filtered optionally by Type and date range (ParkedAt).");
 
+            app.MapPost("/api/add-plomb", async (AddPlombCommand cmd, IMediator mediator) =>
+            {
+                var ok = await mediator.Send(cmd);
+                return ok
+                    ? Results.Ok(new { message = "Plomb updated successfully" })
+                    : Results.NotFound(new { message = "No matching order found or Step >= 5" });
+            });
 
 
             return app;
