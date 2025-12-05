@@ -72,7 +72,7 @@ namespace Ecare.Application.Services
             // ----------------------------------------------
             // Compute expected load (tare + quantities)
             // ----------------------------------------------
-            double expectedLoad = (double)(vm.Tare + (vm.Quantite1 + vm.Quantite2) * 1000);
+            var expectedLoad = (vm.Tare + (vm.Quantite1 + vm.Quantite2) * 1000);
 
             // PTAC tolerance: accept up to +2%
             double ptacMax = (double)(vm.PTAC * 1.02);

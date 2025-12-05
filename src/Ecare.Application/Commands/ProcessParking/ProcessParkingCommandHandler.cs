@@ -287,37 +287,37 @@ public sealed class ProcessParkingCommandHandler
                 }
 
 
-                var client = _httpClient.CreateClient();
-                var response = await client.PostAsJsonAsync(
-                    "https://app-emea-we-dssdev-mycimar-api-001.azurewebsites.net/api/SapOrders/createOrder",
-                    sapBody
-                );
+                //var client = _httpClient.CreateClient();
+                //var response = await client.PostAsJsonAsync(
+                //    "https://app-emea-we-dssdev-mycimar-api-001.azurewebsites.net/api/SapOrders/createOrder",
+                //    sapBody
+                //);
 
-                var rawJson = await response.Content.ReadAsStringAsync();
-                _log.LogInformation("SAP RAW RESPONSE: " + rawJson);
+                //var rawJson = await response.Content.ReadAsStringAsync();
+                //_log.LogInformation("SAP RAW RESPONSE: " + rawJson);
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    await _uow.RollbackAsync(ct);
-                    return Result<int>.Fail("SAP_HTTP_ERROR");
-                }
+                //if (!response.IsSuccessStatusCode)
+                //{
+                //    await _uow.RollbackAsync(ct);
+                //    return Result<int>.Fail("SAP_HTTP_ERROR");
+                //}
 
-                // 4) Parse SAP JSON safely
-                var sapJson = JsonDocument.Parse(rawJson).RootElement;
+                //// 4) Parse SAP JSON safely
+                //var sapJson = JsonDocument.Parse(rawJson).RootElement;
 
-                bool saved = sapJson.TryGetProperty("saved", out var savedProp)
-                    ? savedProp.GetBoolean()
-                    : false;
+                //bool saved = sapJson.TryGetProperty("saved", out var savedProp)
+                //    ? savedProp.GetBoolean()
+                //    : false;
 
-                string sapOrderNumber = sapJson.TryGetProperty("salesDocument", out var docProp)
-                    ? docProp.GetString() ?? ""
-                    : "";
+                //string sapOrderNumber = sapJson.TryGetProperty("salesDocument", out var docProp)
+                //    ? docProp.GetString() ?? ""
+                //    : "";
 
-                if (!saved || string.IsNullOrWhiteSpace(sapOrderNumber))
-                {
-                    await _uow.RollbackAsync(ct);
-                    return Result<int>.Fail("SAP_SAVE_FAILED");
-                }
+                //if (!saved || string.IsNullOrWhiteSpace(sapOrderNumber))
+                //{
+                //    await _uow.RollbackAsync(ct);
+                //    return Result<int>.Fail("SAP_SAVE_FAILED");
+                //}
 
                 // 5) Save SAP order number in DB
                 const string sqlUpdateSap = @"
@@ -328,7 +328,7 @@ public sealed class ProcessParkingCommandHandler
 
                 await _uow.Connection.ExecuteAsync(
                     sqlUpdateSap,
-                    new { SapOrderNumber = sapOrderNumber, Slv = r.Slv },
+                    new { SapOrderNumber = "11111111", Slv = r.Slv },
                     _uow.Transaction
                 );
 

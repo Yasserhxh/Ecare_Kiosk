@@ -1,4 +1,5 @@
-﻿using Ecare.Application.Commands.MobileCommands;
+﻿using Ecare.Application.Commands.CreatePlomb;
+using Ecare.Application.Commands.MobileCommands;
 using Ecare.Application.Queries.MobileQueries.GetActiveChargings;
 using Ecare.Application.Queries.MobileQueries.GetChargementLines;
 using Ecare.Application.Queries.MobileQueries.GetFluxChargingDetails;
@@ -125,6 +126,18 @@ namespace Ecare.Api.Endpoints
             .ProducesProblem(StatusCodes.Status500InternalServerError)
             .WithSummary("Get flux charging stages summary")
             .WithDescription("Returns the 4 stages (PARC, USINE, CHARGEMENT, SORTIE) with durations, filtered optionally by Type and date range (ParkedAt).");
+
+
+            group.MapPost("/api/legend/add-plomb",
+            async (CreatePlombCommand cmd, IMediator mediator) =>
+            {
+                var ok = await mediator.Send(cmd);
+
+                return ok
+                    ? Results.Ok(new { message = "Plombs updated successfully." })
+                    : Results.NotFound(new { error = "No matching legend row found or Step >= 5." });
+            });
+
 
 
 
