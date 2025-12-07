@@ -93,9 +93,9 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
     // ======================================================================
     private object BuildParkingPayload(string slv, string deviceId, ScanResultVm scan)
     {
-        // -----------------------------------------
+        // ===============================================================
         // CASE 1 — NO CLIENTS + NO ORDER
-        // -----------------------------------------
+        // ===============================================================
         if (scan.Clients == null || scan.Clients.Count == 0)
         {
             return new
@@ -105,61 +105,31 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             };
         }
 
-        // -----------------------------------------
-        // NEW CASE — SLV USED BY MULTIPLE CLIENTS / DRIVERS
-        // MANY_DRIVERS
-        // -----------------------------------------
-        if (scan.Clients.Count > 1)
-        {
-            // For each driver we send:
-            // - Matricule
-            // - ChauffeurName
-            // - ClientName + CodeSapClient
-            // - Chantiers (if no order or still loaded)
-            // - Order if found (same logic as existing)
-            return new
-            {
-                @event = "MANY_DRIVERS",
-                slv,
-                drivers = scan.Clients.Select(c => new
-                {
-                    clientName = c.ClientName,
-                    codeClientSAP = c.CodeSapClient,
-                    matricule = c.Matricule,
-                    chauffeur = c.ChauffeurName,
-                    hasOrder = c.Order != null,
-                    order = c.Order,  // can be null
-                    chantiers = c.Chantiers.Select(ch => new
-                    {
-                        codeSapChantier = ch.CodeSapChantier,
-                        nomChantier = ch.NomChantier
-                    })
-                })
-            };
-        }
+        // From here → clients exist
+        var clients = scan.Clients;
+        var single = clients.Count == 1 ? clients[0] : null;
 
-        // From here we know there is EXACTLY ONE client row
-        var single = scan.Clients[0];
+        // ===============================================================
+        // CASE 2 — ORDER FOUND (ANY CLIENT HAVING ORDER)
+        // ===============================================================
+        var driverWithOrder = clients.FirstOrDefault(c => c.Order != null);
 
-        // -----------------------------------------
-        // CASE 2 — ORDER FOUND (single client)
-        // -----------------------------------------
-        if (single.Order != null)
+        if (driverWithOrder != null)
         {
             return new
             {
                 @event = "ORDER_FOUND",
                 slv,
-                order = single.Order,
-                chauffeur = single.ChauffeurName,
-                matricule = single.Matricule
+                order = driverWithOrder.Order,
+                chauffeur = driverWithOrder.ChauffeurName
             };
         }
 
-        // -----------------------------------------
-        // CASE 4 — Equipment exists BUT ClientName is NULL or EMPTY
-        // -----------------------------------------
-        if (string.IsNullOrWhiteSpace(single.ClientName))
+        // ===============================================================
+        // CASE 4 — EQUIPMENT EXISTS BUT ClientName IS NULL or EMPTY
+        // Applies ONLY when exactly 1 equipment row exists
+        // ===============================================================
+        if (single != null && string.IsNullOrWhiteSpace(single.ClientName))
         {
             return new
             {
@@ -170,15 +140,17 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             };
         }
 
-        // -----------------------------------------
+        // ===============================================================
         // CASE 3 — ONE CLIENT + CHANTIERS (NO ORDER)
-        // -----------------------------------------
-        return new
+        // ===============================================================
+        if (single != null && single.Chantiers != null && single.Chantiers.Count > 0)
         {
-            @event = "CLIENTS_WITH_CHANTIERS",
-            slv,
-            clients = new[]
+            return new
             {
+                @event = "CLIENTS_WITH_CHANTIERS",
+                slv,
+                clients = new[]
+                {
                 new
                 {
                     clientName = single.ClientName,
@@ -192,8 +164,33 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                     })
                 }
             }
+            };
+        }
+
+        // ===============================================================
+        // CASE 5 — MANY_DRIVERS (NO ORDERS)
+        // ===============================================================
+        return new
+        {
+            @event = "MANY_DRIVERS",
+            slv,
+            drivers = clients.Select(c => new
+            {
+                clientName = c.ClientName,
+                codeClientSAP = c.CodeSapClient,
+                matricule = c.Matricule,
+                chauffeur = c.ChauffeurName,
+                hasOrder = false,
+                order = (object?)null,
+                chantiers = c.Chantiers.Select(ch => new
+                {
+                    codeSapChantier = ch.CodeSapChantier,
+                    nomChantier = ch.NomChantier
+                })
+            })
         };
     }
+
 
     // ======================================================================
     // HELPERS

@@ -207,7 +207,16 @@ public sealed class ProcessParkingCommandHandler
                 // BUILD SAP REQUEST BODY
                 // ================================
                 object sapBody;
+                var sql = @"
+                    SELECT TOP (1) ChauffeurName
+                    FROM dbo.Ecare_ClientEquipements
+                    WHERE CarteSLV = @RFIDCard
+                    ORDER BY Id DESC;";
 
+                var chauffeurName = _uow.Connection.ExecuteScalarAsync<string>(
+                    sql,
+                    new { RFIDCard = r.Slv }
+                );
                 if (hasSecondProduct)
                 {
 
@@ -222,7 +231,7 @@ public sealed class ProcessParkingCommandHandler
                     sapBody = new
                     {
                         codeClient = r.CodeSapClient,
-                        date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                        date = DateTime.Now.ToString("yyyy-MM-dd"),
                         purchNoC = r.BonDeCommande,
                         salesOrg = "MA18",
 
@@ -240,7 +249,7 @@ public sealed class ProcessParkingCommandHandler
                         soldTo = r.CodeSapClient,
                         shipTo = r.CodeSapChantier,
 
-                        reqDate = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                        reqDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                         reqQty = r.Quantite1,
                         reqQty2 = r.Quantite2,
 
@@ -248,7 +257,9 @@ public sealed class ProcessParkingCommandHandler
                         incoterms1 = "EXW",
                         incoterms2 = "DEPART",
                         intNumberAssignment = "",
-                        testRun = true
+                        testRun = true,
+                        DriverMatricule = r.Matricule,
+                        DriverName = chauffeurName
                     };
                 }
                 else
@@ -271,25 +282,26 @@ public sealed class ProcessParkingCommandHandler
                         quantity = qty1,
 
                         itemNumber = "000010",
-
                         soldTo = r.CodeSapClient,
                         shipTo = r.CodeSapChantier,
 
-                        reqDate = DateTime.UtcNow,
+                        reqDate = DateTime.Now,
                         reqQty = r.Quantite1,
 
                         behaveWhenError = "",
                         incoterms1 = "EXW",
                         incoterms2 = "DEPART",
                         intNumberAssignment = "",
-                        testRun = true
+                        testRun = false,
+                        DriverMatricule = r.Matricule,
+                        DriverName = chauffeurName
                     };
                 }
 
 
                 var client = _httpClient.CreateClient();
                 var response = await client.PostAsJsonAsync(
-                    "https://app-emea-we-dssdev-mycimar-api-001.azurewebsites.net/api/SapOrders/createOrder",
+                    "https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapOrders/createOrder",
                     sapBody
                 );
 
@@ -308,8 +320,8 @@ public sealed class ProcessParkingCommandHandler
                 bool saved = sapJson.TryGetProperty("saved", out var savedProp)
                     ? savedProp.GetBoolean()
                     : false;
-
-                string sapOrderNumber = sapJson.TryGetProperty("salesDocument", out var docProp)
+                
+                string sapOrderNumber =sapJson.TryGetProperty("salesDocument", out var docProp)
                     ? docProp.GetString() ?? ""
                     : "";
 

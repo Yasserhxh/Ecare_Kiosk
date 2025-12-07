@@ -79,7 +79,7 @@ public sealed class ParkingScanHandler
                         };
 
                         var res = await http.PostAsJsonAsync(
-                            "https://app-emea-we-dssdev-mycimar-api-001.azurewebsites.net/api/SapOrders/partners/chantiers",
+                            "https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapOrders/partners/chantiers",
                             sapReq
                         );
 

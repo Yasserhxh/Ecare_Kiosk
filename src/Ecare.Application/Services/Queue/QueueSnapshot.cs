@@ -76,21 +76,21 @@ public static class QueueSnapshot
         // EN VALIDATION VRAC (TruckType = Citerne AND no Produit1)
         var enValidationVrac = rows
             .Where(r => r.Produit1 is null &&
-                        r.TypeCamion.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
+                        r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(r => r.IsPined)
             .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
             .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType,r.ChauffeurName))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName))
             .ToList();
 
         // EN VALIDATION SAC (TruckType ≠ Citerne AND no Produit1)
         var enValidationSac = rows
             .Where(r => r.Produit1 is null &&
-                        !r.TypeCamion.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
+                        !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(r => r.IsPined)
             .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
             .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType,r.ChauffeurName))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName))
             .ToList();
 
         /* ============================================================
@@ -104,7 +104,7 @@ public static class QueueSnapshot
                     var items = g.OrderByDescending(r => r.IsPined)
                                  .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
                                  .ThenBy(r => r.AddedToQueueAt)
-                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType,r.ChauffeurName))
+                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName))
                                  .ToList();
 
                     // Compute capacity per product
@@ -160,16 +160,38 @@ public static class QueueSnapshot
         public static int GetCapacity(string product, IUnitOfWork uow)
         {
             const string sql = @"
-            SELECT COALESCE(SUM(l.Capacity),0)
-            FROM dbo.Ecare_Ligne l
-            JOIN dbo.Ecare_LigneCiments lc ON lc.LigneId = l.Id
-            JOIN dbo.EcareCiments c ON c.Id = lc.CimentId
-            WHERE c.Name = @Product;
+        DECLARE @COUNT     INT;
+        DECLARE @Capacity  INT;
+        DECLARE @REST      INT;
+
+        -- Count active orders
+        SELECT @COUNT = COUNT(*)
+        FROM dbo.Ecare_Order_Legend
+        WHERE Produit1 LIKE '%' + @Product + '%'
+          AND Step > 1 AND Step < 5;   -- 2,3,4 active
+
+        -- Get TOTAL RealtimeCapacity for this product
+        SELECT @Capacity = COALESCE(SUM(EL.RealtimeCapacity), 0)
+        FROM EcareCiments       AS C
+        JOIN Ecare_LigneCiments AS LC ON C.Id = LC.CimentId
+        JOIN Ecare_Ligne        AS EL ON EL.Id = LC.LigneId
+        WHERE C.Name LIKE '%' + @Product + '%';
+
+        -- Remaining capacity
+        SET @REST = @Capacity - @COUNT;
+
+        SELECT CASE WHEN @REST < 0 THEN 0 ELSE @REST END AS RemainingCapacity;
         ";
 
             return uow.Connection.ExecuteScalar<int>(
-                sql, new { Product = product }, uow.Transaction);
+                sql,
+                new { Product = product },
+                uow.Transaction
+            );
         }
     }
+
+
+
 
 }

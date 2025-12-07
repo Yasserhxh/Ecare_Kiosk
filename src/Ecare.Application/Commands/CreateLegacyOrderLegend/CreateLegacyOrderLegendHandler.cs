@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Ecare.Domain.Entities;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Data.SqlClient;
@@ -52,11 +53,20 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                     p,
                     commandType: CommandType.StoredProcedure
                 );
+                var sql = @"
+                    SELECT TOP (1) ChauffeurName
+                    FROM dbo.Ecare_ClientEquipements
+                    WHERE CarteSLV = @RFIDCard
+                    ORDER BY Id DESC;";
 
+                var chauffeurName = await conn.ExecuteScalarAsync<string>(
+                    sql,
+                    new { RFIDCard = request.RFIDCard }
+                );
                 if (request.Event == "CLIENTS_WITH_CHANTIERS")
                 {
                     // Shared values
-                    var url = "https://app-emea-we-dssdev-mycimar-api-001.azurewebsites.net/api/SapOrders/createOrder";
+                    var url = "https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapOrders/createOrder";
 
                     var http = new HttpClient();
                     http.Timeout = TimeSpan.FromSeconds(40);
@@ -97,7 +107,9 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                             incoterms1 = "EXW",
                             incoterms2 = "DEPART",
                             intNumberAssignment = "",
-                            testRun = true
+                            testRun = true,
+                            DriverMatricule = request.Matricule,
+                            DriverName = chauffeurName
                         };
 
                         content = new StringContent(
@@ -135,7 +147,9 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                             incoterms1 = "EXW",
                             incoterms2 = "DEPART",
                             intNumberAssignment = "",
-                            testRun = true
+                            testRun = true,
+                            DriverMatricule = request.Matricule,
+                            DriverName = chauffeurName
                         };
 
                         content = new StringContent(
