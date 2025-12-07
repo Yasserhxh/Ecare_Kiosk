@@ -12,16 +12,16 @@ namespace Ecare.Api.Endpoints
             app.MapPost("/auth/login", async (LoginQuery query, IMediator mediator)
                 => Results.Ok(await mediator.Send(query)));
 
-            app.MapPost("/auth/create", [Authorize(Roles = "Admin")] async (CreateUserCommand cmd, IMediator mediator)
+            app.MapPost("/auth/create", async (CreateUserCommand cmd, IMediator mediator)
                 => Results.Ok(await mediator.Send(cmd)));
 
-            app.MapPost("/auth/assign-role", [Authorize(Roles = "Admin")] async (AssignRoleCommand cmd, IMediator mediator)
+            app.MapPost("/auth/assign-role",  async (AssignRoleCommand cmd, IMediator mediator)
                 => Results.Ok(await mediator.Send(cmd)));
 
             app.MapPost("/auth/deactivate", [Authorize(Roles = "Admin")] async (DeactivateUserCommand cmd, IMediator mediator)
                 => Results.Ok(await mediator.Send(cmd)));
 
-            app.MapPost("/auth/activate", [Authorize(Roles = "Admin")] async (ActivateUserCommand cmd, IMediator mediator) =>
+            app.MapPost("/auth/activate", async (ActivateUserCommand cmd, IMediator mediator) =>
             {
                 var result = await mediator.Send(cmd);
                 return result ? Results.Ok("User activated successfully")
