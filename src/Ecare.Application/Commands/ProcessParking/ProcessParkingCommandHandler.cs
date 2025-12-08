@@ -231,13 +231,13 @@ public sealed class ProcessParkingCommandHandler
                     // ------- TWO PRODUCTS -------
                     sapBody = new
                     {
-                        codeClient = r.CodeSapClient,
+                        codeClient = r.CodeSapClient.PadLeft(10,'0'),
                         date = DateTime.Now.ToString("yyyy-MM-dd"),
                         purchNoC = r.BonDeCommande,
                         salesOrg = "MA18",
 
-                        material = r.CodeSapProduit1,
-                        material2 = r.CodeSapProduit2,
+                        material = r.CodeSapProduit1.PadLeft(10, '0'),
+                        material2 = r.CodeSapProduit2.PadLeft(10, '0'),
 
                         plant = "M108",
 
@@ -247,8 +247,8 @@ public sealed class ProcessParkingCommandHandler
                         itemNumber = "000010",
                         itemNumber2 = "000020",
 
-                        soldTo = r.CodeSapClient,
-                        shipTo = r.CodeSapChantier,
+                        soldTo = r.CodeSapClient.PadLeft(10, '0'),
+                        shipTo = r.CodeSapChantier.PadLeft(10, '0'),
 
                         reqDate = DateTime.Now.ToString("yyyy-MM-dd"),
                         reqQty = r.Quantite1,
@@ -271,20 +271,20 @@ public sealed class ProcessParkingCommandHandler
                     // ------- ONE PRODUCT -------
                     sapBody = new
                     {
-                        codeClient = r.CodeSapClient,
+                        codeClient = r.CodeSapClient.PadLeft(10, '0'),
                         date = DateTime.Now.ToString("yyyy-MM-dd"),
                         purchNoC = r.BonDeCommande,
                         salesOrg = "MA18",
 
-                        material = r.CodeSapProduit1,
+                        material = r.CodeSapProduit1.PadLeft(10, '0'),
 
                         plant = "M108",
 
                         quantity = qty1,
 
                         itemNumber = "000010",
-                        soldTo = r.CodeSapClient,
-                        shipTo = r.CodeSapChantier,
+                        soldTo = r.CodeSapClient.PadLeft(10, '0'),
+                        shipTo = r.CodeSapChantier.PadLeft(10, '0'),
 
                         reqDate = DateTime.Now.ToString("yyyy-MM-dd"),
                         reqQty = r.Quantite1,
