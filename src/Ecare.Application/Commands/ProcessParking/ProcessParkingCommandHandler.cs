@@ -249,7 +249,7 @@ public sealed class ProcessParkingCommandHandler
                         soldTo = r.CodeSapClient,
                         shipTo = r.CodeSapChantier,
 
-                        reqDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                        reqDate = DateTime.Now.ToString("yyyy-MM-dd"),
                         reqQty = r.Quantite1,
                         reqQty2 = r.Quantite2,
 
