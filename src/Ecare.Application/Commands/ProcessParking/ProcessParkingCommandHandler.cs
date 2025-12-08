@@ -213,9 +213,10 @@ public sealed class ProcessParkingCommandHandler
                     WHERE CarteSLV = @RFIDCard
                     ORDER BY Id DESC;";
 
-                var chauffeurName = _uow.Connection.ExecuteScalarAsync<string>(
+                var chauffeurName = await _uow.Connection.ExecuteScalarAsync<string>(
                     sql,
-                    new { RFIDCard = r.Slv }
+                    new { RFIDCard = r.Slv },
+                    _uow.Transaction
                 );
                 if (hasSecondProduct)
                 {
@@ -320,8 +321,8 @@ public sealed class ProcessParkingCommandHandler
                 bool saved = sapJson.TryGetProperty("saved", out var savedProp)
                     ? savedProp.GetBoolean()
                     : false;
-                
-                string sapOrderNumber =sapJson.TryGetProperty("salesDocument", out var docProp)
+
+                string sapOrderNumber = sapJson.TryGetProperty("salesDocument", out var docProp)
                     ? docProp.GetString() ?? ""
                     : "";
 
