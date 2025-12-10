@@ -61,6 +61,13 @@ public static class QueueSnapshot
     {
         await uow.BeginAsync(ct);
 
+        await uow.Connection.ExecuteAsync(
+           new CommandDefinition(
+               "sp_UpdateFirstPlaceTiming",
+               transaction: uow.Transaction,
+               cancellationToken: ct,
+               commandType: System.Data.CommandType.StoredProcedure));
+
         // 1) Load from stored procedure
         var rows = (await uow.Connection.QueryAsync<LegendRow>(
             new CommandDefinition("sp_GetQueueSnapshotLegend",
@@ -160,28 +167,14 @@ public static class QueueSnapshot
         public static int GetCapacity(string product, IUnitOfWork uow)
         {
             const string sql = @"
-        DECLARE @COUNT     INT;
-        DECLARE @Capacity  INT;
-        DECLARE @REST      INT;
-
-        -- Count active orders
-        SELECT @COUNT = COUNT(*)
-        FROM dbo.Ecare_Order_Legend
-        WHERE Produit1 LIKE '%' + @Product + '%'
-          AND Step > 1 AND Step < 5;   -- 2,3,4 active
-
-        -- Get TOTAL RealtimeCapacity for this product
-        SELECT @Capacity = COALESCE(SUM(EL.RealtimeCapacity), 0)
-        FROM EcareCiments       AS C
-        JOIN Ecare_LigneCiments AS LC ON C.Id = LC.CimentId
-        JOIN Ecare_Ligne        AS EL ON EL.Id = LC.LigneId
-        WHERE C.Name LIKE '%' + @Product + '%';
-
-        -- Remaining capacity
-        SET @REST = @Capacity - @COUNT;
-
-        SELECT CASE WHEN @REST < 0 THEN 0 ELSE @REST END AS RemainingCapacity;
-        ";
+                SELECT 
+                COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
+                FROM Ecare_Ligne        AS EL
+                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                JOIN EcareCiments       AS C  ON C.Id      = LC.CimentId
+                WHERE 
+                LC.Actif = 1
+                AND C.Name = @Product;";
 
             return uow.Connection.ExecuteScalar<int>(
                 sql,
@@ -190,8 +183,5 @@ public static class QueueSnapshot
             );
         }
     }
-
-
-
 
 }
