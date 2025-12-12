@@ -55,4 +55,5 @@ public sealed class LegendSnapshotVm
     public int? SacNumber { get; set;}
     public int NumberSacs_Charged { get; set; }
     public int Weight_Charged { get; set; }
+    public int QualityCode { get; set; }
 }
