@@ -135,7 +135,7 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
                 @event = "ORDER_FOUND",
                 slv,
                 order = driverWithOrder.Order,
-                chauffeur = driverWithOrder.ChauffeurName
+                chauffeur = driverWithOrder?.Order?.ChauffeurName
             };
         }
 

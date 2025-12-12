@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Data;
 using System.Net.Http.Json;
 using static Ecare.Application.Queries.ParkingScanOrderLegend.ParkingScanModels;
 
@@ -31,9 +32,41 @@ public sealed class ParkingScanHandler
         var http = _httpFactory.CreateClient();
         try
         {
-            // STEP 1 — GET CLIENTS
+            var orderFound = await conn.QueryFirstOrDefaultAsync<OrderLegendVm>(
+            "Parking_Scan_Tag",
+            new { RFIDCard = request.Slv },
+            commandType: CommandType.StoredProcedure
+            );
+
+            if (orderFound != null)
+            {
+                // Build a ScanResultVm containing ONE client artificially
+                var vmo = new ScanResultVm
+                {
+                    Slv = request.Slv,
+                    Clients =
+                    {
+                        new ClientResult
+                        {
+                            ClientName = orderFound.ClientName,
+                            Matricule = orderFound.Matricule,
+                            ChauffeurName = "",         // optional (empty if not needed)
+                            CodeSapClient = orderFound.CodeSapClient,
+                            Order = orderFound
+                        }
+                    }
+                };
+
+                // RETURN like CASE 2 — ORDER_FOUND
+                return Result<ScanResultVm>.Ok(vmo);
+            }
+
+
+
+
+            // STEP 2 — GET CLIENTS
             var equips = (await conn.QueryAsync<dynamic>(
-                "SELECT * FROM Ecare_ClientEquipements WHERE CarteSLV = @slv",
+                "SELECT * FROM Ecare_ClientEquipements WHERE CarteSLV = @slv AND ( IsTransporteur=1 OR IsClient=1 )",
                 new { slv = request.Slv }
             )).ToList();
 

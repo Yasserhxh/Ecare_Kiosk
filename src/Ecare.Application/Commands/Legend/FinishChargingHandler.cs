@@ -43,6 +43,7 @@ public sealed class FinishChargingHandler
             },
             commandType: CommandType.StoredProcedure);
 
+        //Move it To Exe Automate
 
         //if (request.Weight_Charged > 0 && !string.IsNullOrWhiteSpace(request.DeviceName))
         //{

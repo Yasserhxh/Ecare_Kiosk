@@ -44,6 +44,7 @@ namespace Ecare.Application.Queries.ParkingScanOrderLegend
             public string? Produit1Image { get; set; }
             public string? Produit2Image { get; set; }
             public string ClientName { get; set; } = "";
+            public string? ChauffeurName { get; set; } = "";
         }
 
         public sealed class ChantierVm
