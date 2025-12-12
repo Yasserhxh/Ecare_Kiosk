@@ -17,9 +17,9 @@ namespace Ecare.Application.Commands.MobileCommands
         public async Task<Result<int>> Handle(UpdateFluxBagsCommand request, CancellationToken ct)
         {
             const string sql = @"
-                UPDATE dbo.EcareFlux
-                SET MinusBag = @MinusBag,
-                    PlusBag  = @PlusBag
+                UPDATE dbo.Ecare_Order_Legend
+                SET MinusBags = @MinusBag,
+                    PlusBags  = @PlusBag
                 WHERE Id = @Id;";
 
             try

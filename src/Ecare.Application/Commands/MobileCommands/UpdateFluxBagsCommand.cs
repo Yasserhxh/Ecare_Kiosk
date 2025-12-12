@@ -8,6 +8,6 @@ using System.Threading.Tasks;
 
 namespace Ecare.Application.Commands.MobileCommands
 {
-    public sealed record UpdateFluxBagsCommand(int Id, decimal MinusBag, decimal PlusBag)
+    public sealed record UpdateFluxBagsCommand(int Id, int MinusBag, int PlusBag)
     : IRequest<Result<int>>;
 }

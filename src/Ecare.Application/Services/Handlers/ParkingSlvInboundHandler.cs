@@ -1,5 +1,6 @@
 ﻿using Ecare.Application.Queries.ParkingScanOrderLegend;  // ParkingScanQuery
 using Ecare.Application.Services.Ecare.Application.Services;
+using Ecare.Domain.Entities;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Configuration;
@@ -69,7 +70,20 @@ public sealed class ParkingSlvInboundHandler : ISignalRInboundHandler
             return;
         }
 
+
+
+
+
         var scan = response.Value;
+
+        var driverWithOrder = scan.Clients.FirstOrDefault(c => c.Order != null);
+
+        if(driverWithOrder?.Order?.Step > 1)
+        {
+            return;
+        }
+
+
 
         // Build frontend-friendly payload
         var outboundPayload = BuildParkingPayload(slv, deviceId, scan);

@@ -105,6 +105,8 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             sacnumber = vm.SacNumber,
             numberSacs_Charged = vm.NumberSacs_Charged,
             weight_Charged = vm.Weight_Charged,
+            restantSac = vm.SacNumber - vm.NumberSacs_Charged,
+            aCharger = vm.SacNumber - vm.NumberSacs_Charged,
             order = new
             {
                 number = vm.BonDeCommande,
@@ -119,12 +121,14 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
                     new {
                         name = vm.Produit1,
                         quantity = vm.Quantite1,
-                        imageUrl = vm.Produit1Image
+                        imageUrl = vm.Produit1Image,
+                        qualityCode = vm.QualityCode
                     },
                     new {
                         name = vm.Produit2,
                         quantity = vm.Quantite2,
-                        imageUrl = vm.Produit2Image
+                        imageUrl = vm.Produit2Image,
+                        qualityCode = vm.QaualityCode2
                     }
                 }
             }
