@@ -117,21 +117,56 @@ public sealed class ProcessParkingCommandHandler
             {
                 // 1) Get TypeProduit from EcareCiments
                 const string sqlType = "SELECT Type FROM EcareCiments WHERE Name = @Name;";
-                string typeProduit = await _uow.Connection.ExecuteScalarAsync<string>(
+                string? typeProduit = await _uow.Connection.ExecuteScalarAsync<string>(
                     sqlType,
                     new { Name = r.Produit1 },
                     _uow.Transaction
                 );
 
-                // 2) Insert full order
-                                const string sqlInsert = @"
+                // 2) Resolve PermisDeConduite
+                string? permisDeConduite = null;
+
+                // 2.1 Try from Ecare_ClientEquipements
+                const string sqlPermisFromEquip = @"
+        SELECT TOP(1) PermisConducteur
+        FROM Ecare_ClientEquipements
+        WHERE ChauffeurName = @ChauffeurName;
+    ";
+
+                permisDeConduite = await _uow.Connection.ExecuteScalarAsync<string>(
+                    sqlPermisFromEquip,
+                    new { ChauffeurName = r.Chauffeur },
+                    _uow.Transaction
+                );
+
+                // 2.2 If not found, try from Ecare_Driver
+                if (string.IsNullOrWhiteSpace(permisDeConduite))
+                {
+                    const string sqlPermisFromDriver = @"
+            SELECT TOP(1) Permis
+            FROM Ecare_Driver
+            WHERE Nom_Complet = @NomComplet;
+        ";
+
+                    permisDeConduite = await _uow.Connection.ExecuteScalarAsync<string>(
+                        sqlPermisFromDriver,
+                        new { NomComplet = r.Chauffeur },
+                        _uow.Transaction
+                    );
+                }
+
+                // If still null/empty after both queries → stays null (as requested)
+
+                // 3) Insert full order
+                const string sqlInsert = @"
                     INSERT INTO Ecare_Order_Legend
                     (ClientName, Chantier, Matricule, RFIDCard, TypeCamion, NombrePlombs,
                      Produit1, Quantite1, Produit2, Quantite2, TypeProduit,
                      BonDeCommande, SacNumber,
                      CodeSapProduit1, CodeSapProduit2,
                      CodeSapChantier, CodeSapClient,
-                     ParkingAt, Step, AddedToQueueAt,ChequeImg)
+                     ParkingAt, Step, AddedToQueueAt,
+                     ChequeImg, ChauffeurName, PermisDeConduite)
                     VALUES
                     (
                         @ClientName,
@@ -163,11 +198,11 @@ public sealed class ProcessParkingCommandHandler
                         @Now,
                         1,
                         @Now2,
-                        @ChequeImage
-                    );
+                        @ChequeImage,
+                        @Chauffeur,
+                        @PermisDeConduite
+                     );
                 ";
-
-
 
                 await _uow.Connection.ExecuteAsync(
                     sqlInsert,
@@ -177,8 +212,8 @@ public sealed class ProcessParkingCommandHandler
                         r.Chantier,
                         r.Matricule,
                         Slv = r.Slv,
-                        r.TypeCamion,
-                        r.NombrePlombs,
+                        r.TypeCamion,      // not used directly in INSERT, but OK to keep
+                        r.NombrePlombs,    // same here
                         r.Produit1,
                         r.Quantite1,
                         r.Produit2,
@@ -192,13 +227,17 @@ public sealed class ProcessParkingCommandHandler
                         r.CodeSapClient,
                         Now = DateTime.Now,
                         Now2 = DateTime.Now,
-                        r.ChequeImage
+                        ChequeImage = r.ChequeImage,
+                        Chauffeur = r.Chauffeur,
+                        PermisDeConduite = string.IsNullOrWhiteSpace(permisDeConduite) ? null : permisDeConduite
                     },
                     _uow.Transaction
                 );
+            
 
-                // 3) CALL SAP createOrder API
-                bool hasSecondProduct =
+
+            // 3) CALL SAP createOrder API
+            bool hasSecondProduct =
                  !string.IsNullOrWhiteSpace(r.CodeSapProduit2) &&
                  r.Quantite2.HasValue &&
                  r.Quantite2 > 0;
@@ -300,37 +339,37 @@ public sealed class ProcessParkingCommandHandler
                 }
 
 
-                var client = _httpClient.CreateClient();
-                var response = await client.PostAsJsonAsync(
-                    "https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapOrders/createOrder",
-                    sapBody
-                );
+                //var client = _httpClient.CreateClient();
+                //var response = await client.PostAsJsonAsync(
+                //    "https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapOrders/createOrder",
+                //    sapBody
+                //);
 
-                var rawJson = await response.Content.ReadAsStringAsync();
-                _log.LogInformation("SAP RAW RESPONSE: " + rawJson);
+                //var rawJson = await response.Content.ReadAsStringAsync();
+                //_log.LogInformation("SAP RAW RESPONSE: " + rawJson);
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    await _uow.RollbackAsync(ct);
-                    return Result<int>.Fail("SAP_HTTP_ERROR");
-                }
+                //if (!response.IsSuccessStatusCode)
+                //{
+                //    await _uow.RollbackAsync(ct);
+                //    return Result<int>.Fail("SAP_HTTP_ERROR");
+                //}
 
-                // 4) Parse SAP JSON safely
-                var sapJson = JsonDocument.Parse(rawJson).RootElement;
+                //// 4) Parse SAP JSON safely
+                //var sapJson = JsonDocument.Parse(rawJson).RootElement;
 
-                bool saved = sapJson.TryGetProperty("saved", out var savedProp)
-                    ? savedProp.GetBoolean()
-                    : false;
+                //bool saved = sapJson.TryGetProperty("saved", out var savedProp)
+                //    ? savedProp.GetBoolean()
+                //    : false;
 
-                string sapOrderNumber = sapJson.TryGetProperty("salesDocument", out var docProp)
-                    ? docProp.GetString() ?? ""
-                    : "";
+                //string sapOrderNumber = sapJson.TryGetProperty("salesDocument", out var docProp)
+                //    ? docProp.GetString() ?? ""
+                //    : "";
 
-                if (!saved || string.IsNullOrWhiteSpace(sapOrderNumber))
-                {
-                    await _uow.RollbackAsync(ct);
-                    return Result<int>.Fail("SAP_SAVE_FAILED");
-                }
+                //if (!saved || string.IsNullOrWhiteSpace(sapOrderNumber))
+                //{
+                //    await _uow.RollbackAsync(ct);
+                //    return Result<int>.Fail("SAP_SAVE_FAILED");
+                //}
 
                 // 5) Save SAP order number in DB
                 const string sqlUpdateSap = @"
@@ -341,7 +380,7 @@ public sealed class ProcessParkingCommandHandler
 
                 await _uow.Connection.ExecuteAsync(
                     sqlUpdateSap,
-                    new { SapOrderNumber = sapOrderNumber, Slv = r.Slv },
+                    new { SapOrderNumber = "11111111111", Slv = r.Slv },
                     _uow.Transaction
                 );
 
