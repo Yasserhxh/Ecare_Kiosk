@@ -45,21 +45,21 @@ public sealed class FinishChargingHandler
 
         //Move it To Exe Automate
 
-        //if (request.Weight_Charged > 0 && !string.IsNullOrWhiteSpace(request.DeviceName))
-        //{
-        //    var deviceId = request.DeviceName;
-        //    await SignalRHelper.BroadcastToDeviceAsync(
-        //        _signalR,
-        //        "send_finish_charging_hub",
-        //        "SendFinishCharging",
-        //        deviceId,
-        //        "Finished Success",
-        //        _log,
-        //        ct
-        //    );
-        //}
+        if (request.Weight_Charged > 0 && !string.IsNullOrWhiteSpace(request.DeviceName))
+        {
+            var deviceId = request.DeviceName;
+            await SignalRHelper.BroadcastToDeviceAsync(
+                _signalR,
+                "send_finish_charging_hub",
+                "SendFinishCharging",
+                deviceId,
+                "Finished Success",
+                _log,
+                ct
+            );
+        }
 
-        //_log.LogInformation("ParkingInbound: Sent payload for SLV={slv} -> device={deviceId}", slv, r);
+        _log.LogInformation("ParkingInbound: Sent payload for SLV={slv} -> device={deviceId}", request.RfidCard, request.DeviceName);
 
         if (rows == 0)
             return Result<bool>.Fail("NO_ROW_UPDATED");

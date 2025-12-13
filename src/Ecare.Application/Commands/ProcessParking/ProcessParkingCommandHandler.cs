@@ -128,10 +128,11 @@ public sealed class ProcessParkingCommandHandler
 
                 // 2.1 Try from Ecare_ClientEquipements
                 const string sqlPermisFromEquip = @"
-        SELECT TOP(1) PermisConducteur
-        FROM Ecare_ClientEquipements
-        WHERE ChauffeurName = @ChauffeurName;
-    ";
+                    SELECT TOP(1) PermisConducteur
+                    FROM Ecare_ClientEquipements
+                    WHERE ChauffeurName = @ChauffeurName;
+                    "
+                ;
 
                 permisDeConduite = await _uow.Connection.ExecuteScalarAsync<string>(
                     sqlPermisFromEquip,
@@ -143,10 +144,11 @@ public sealed class ProcessParkingCommandHandler
                 if (string.IsNullOrWhiteSpace(permisDeConduite))
                 {
                     const string sqlPermisFromDriver = @"
-            SELECT TOP(1) Permis
-            FROM Ecare_Driver
-            WHERE Nom_Complet = @NomComplet;
-        ";
+                        SELECT TOP(1) Permis
+                        FROM Ecare_Driver
+                        WHERE Nom_Complet = @NomComplet;
+                        "
+                    ;
 
                     permisDeConduite = await _uow.Connection.ExecuteScalarAsync<string>(
                         sqlPermisFromDriver,
@@ -212,8 +214,8 @@ public sealed class ProcessParkingCommandHandler
                         r.Chantier,
                         r.Matricule,
                         Slv = r.Slv,
-                        r.TypeCamion,      // not used directly in INSERT, but OK to keep
-                        r.NombrePlombs,    // same here
+                        r.TypeCamion,       
+                        r.NombrePlombs,     
                         r.Produit1,
                         r.Quantite1,
                         r.Produit2,
