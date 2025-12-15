@@ -10,7 +10,7 @@ namespace Ecare.Application.Commands.AddPlomb
     public sealed record AddPlombCommand(
     string RfidCard,
     string Matricule,
-    string PlombNumber,
+    int PlombNumber,
     string Plombs
 ) : IRequest<bool>;
 }

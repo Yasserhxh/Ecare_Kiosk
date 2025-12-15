@@ -45,21 +45,7 @@ public sealed class ProcessParkingCommandHandler
             if (r.Event == "ORDER_FOUND")
             {
                 const string sql = @"
-                UPDATE L
-                SET 
-                    L.Step = 1,
-                    L.ParkingAt = @Now,
-
-                    -- Auto-fill TypeCamion from Ecare_ClientEquipements
-                    L.TypeCamion = CE.Type,
-
-                    -- Auto-fill NombrePlombs from Ecare_ClientEquipements
-                    L.NombrePlombs = CE.PlombsNumber
-
-                FROM Ecare_Order_Legend L
-                INNER JOIN Ecare_ClientEquipements CE
-                    ON CE.Matricule = L.Matricule
-                WHERE L.RFIDCard = @Slv;
+                 UPDATE Ecare_Order_Legend SET Step=1, ParkingAt=@Now Where RFIDCard=@Slv
             ";
 
 
