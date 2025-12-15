@@ -66,20 +66,53 @@ public sealed class ProcessParkingCommandHandler
             {
                 const string sql = @"
                 INSERT INTO Ecare_Order_Legend
-                (Matricule, RFIDCard, TypeCamion, NombrePlombs, ParkingAt, Step)
-                VALUES
                 (
+                    Matricule,
+                    RFIDCard,
+                    TypeCamion,
+                    NombrePlombs,
+                    ChauffeurName,
+                    CodeTransporteurSap,
+                    TransporteurName,
+                    PermisDeConduite,
+                    ParkingAt,
+                    Step,
+                    PTAC,
+                    TARE
+                )
+                SELECT
                     @Matricule,
                     @Slv,
-                    (SELECT TOP 1 Type FROM Ecare_ClientEquipements WHERE Matricule = @Matricule),
-                    (SELECT TOP 1 PlombsNumber FROM Ecare_ClientEquipements WHERE Matricule = @Matricule),
+                    ce.TruckType,
+                    ce.PlombsNumber,
+                    ce.ChauffeurName,
+                    ce.CodeTransporteurSap,
+                    ce.TransporteurName,
+                    ce.PermisConducteur,   -- source column
                     @Now,
-                    1
-                );
+                    1,
+                    ce.PTAC,
+                    ce.TARE
+                FROM (SELECT 1 AS x) d
+                OUTER APPLY
+                (
+                    SELECT TOP (1)
+                        TruckType,
+                        PlombsNumber,
+                        ChauffeurName,
+                        CodeTransporteurSap,
+                        TransporteurName,
+                        PermisConducteur,
+                        PTAC,
+                        TARE
+                    FROM dbo.Ecare_ClientEquipements
+                    WHERE Matricule = @Matricule
+                    ORDER BY Id DESC
+                ) ce;
+
             ";
 
-
-                await _uow.Connection.ExecuteAsync(
+            await _uow.Connection.ExecuteAsync(
                     sql,
                     new
                     {
