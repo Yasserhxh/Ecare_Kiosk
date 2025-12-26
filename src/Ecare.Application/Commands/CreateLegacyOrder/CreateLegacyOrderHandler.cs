@@ -1,0 +1,49 @@
+﻿using MediatR;
+using Ecare.Infrastructure.Repositories;
+using Ecare.Shared;
+
+namespace Ecare.Application.Commands;
+public sealed class CreateLegacyOrderHandler(
+    IClientEquipementRepository equipements,
+    ILegacyOrderWriter writer,
+    IUnitOfWork uow)
+    : IRequestHandler<CreateLegacyOrderCommand, Result<int>>
+{
+    public async Task<Result<int>> Handle(CreateLegacyOrderCommand request, CancellationToken ct)
+    {
+        //if (request.Quantity <= 0) return Result<string>.Fail("Quantité invalide");
+
+        await uow.BeginAsync(ct);
+        try
+        {
+            var eq = await equipements.GetByCarteSlvAsync(request.Slv, uow);
+            //if (eq is null) return Result<string>.Fail("Carte SLV inconnue/inactive");
+
+            var created = await writer.CreateOrderWithItemAsync(
+            request.NumeroCommande,
+            request.Slv,
+            eq.Matricule,
+            request.ProductId,
+            request.ProductId2,          
+            request.Quantity,
+            request.Quantity2,           
+            request.Unite,
+            request.Unite2,          
+            uow,
+            ct);
+
+            //if (created is null) return Result<string>.Fail("Création commande échouée");
+
+
+            await uow.CommitAsync(ct);
+            return Result<int>.Ok(created.Value.OrderId);
+        }
+        catch
+        {
+            try { await uow.RollbackAsync(ct); } catch { }
+            throw;
+        }
+    }
+}
+
+

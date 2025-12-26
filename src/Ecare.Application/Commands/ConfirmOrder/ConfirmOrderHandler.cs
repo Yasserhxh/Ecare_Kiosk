@@ -14,7 +14,7 @@ public sealed class ConfirmOrderHandler(IOrderRepository repo, IUnitOfWork uow)
         {
             var order = await repo.GetByNumberAsync(request.OrderNumber, uow);
             if (order is null) return Result.Fail("Commande introuvable");
-            if (order.Status != OrderStatus.Cree) return Result.Fail("Statut non éligible");
+            //if (order.Status != OrderStatus.Cree) return Result.Fail("Statut non éligible");
             await repo.UpdateStatusAsync(order.Id, OrderStatus.Confirmee, uow);
             await uow.CommitAsync(ct);
             return Result.Ok();

@@ -1,9 +1,11 @@
-using Ecare.Domain.Entities;
+﻿using Ecare.Domain.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ecare.Infrastructure.Persistence;
 
-public class EcareDbContext(DbContextOptions<EcareDbContext> options) : DbContext(options)
+public class EcareDbContext(DbContextOptions<EcareDbContext> options)
+    : IdentityDbContext<ApplicationUser, ApplicationRole, string>(options)  
 {
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<Driver> Drivers => Set<Driver>();
@@ -15,7 +17,11 @@ public class EcareDbContext(DbContextOptions<EcareDbContext> options) : DbContex
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Shipping> Shippings => Set<Shipping>();
     public DbSet<Cart> Carts => Set<Cart>();
+    public DbSet<EcareEngine> EcareEngines => Set<EcareEngine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-        => modelBuilder.ApplyConfigurationsFromAssembly(typeof(EcareDbContext).Assembly);
+    {
+        base.OnModelCreating(modelBuilder); // ✅ ensure Identity tables are registered
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(EcareDbContext).Assembly);
+    }
 }
