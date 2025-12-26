@@ -8,7 +8,8 @@
         DateTime CreatedAt,
         bool IsPined,
         DateTime? PinedAt,
-        int? CarteSlv  
+        int? CarteSlv,
+        string? TypeProduit
     );
 
     public sealed record QueueGroupDto(

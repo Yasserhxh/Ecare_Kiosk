@@ -1,0 +1,34 @@
+﻿namespace Ecare.Application.Queries.Legend;
+
+public sealed class LegendBusinessRow
+{
+    // Mapping
+    public int Id { get; set; }
+    public DateTime? DateCreation { get; set; }           // ParkingAt
+    public string? Matricule { get; set; }
+    public string? RFID { get; set; }                    // RFIDCard
+    public string? Circuit { get; set; }                 // TypeProduit
+    public string TypeOperation { get; set; } = "C";     // constant
+    public string? CodeChantier { get; set; }            // CodeSapChantier
+    public string? NomChantier { get; set; }             // Chantier
+    public string? CodeArticle { get; set; }             // CodeSapProduit1
+    public string? Article { get; set; }                 // Produit1
+
+    public decimal? Tare { get; set; }                   // PremierePoid
+    public decimal? Gross { get; set; }                  // DeuxiemePoid
+    public decimal? Net { get; set; }                    // Gross - Tare
+    public decimal? PTAC { get; set; }
+
+    public int Step { get; set; }                         // Statut
+    public string? CommandeSap { get; set; }              // CodeSapCommande
+    public string? LivraisonSap { get; set; }             // BonDeLivraison
+
+    public string ScaleGross { get; set; } = "WO";        // constant
+    public string ScaleTare { get; set; } = "WI";         // constant
+
+    public string TypeLivraison { get; set; } = default!; // CFR / EXW
+    public int? Seals { get; set; }                       // PlombNumber
+    public string? BonCommandeClient { get; set; }        // BonDeCommande
+
+    public string TypeCommande { get; set; } = default!;  // Simple / Mixte
+}
