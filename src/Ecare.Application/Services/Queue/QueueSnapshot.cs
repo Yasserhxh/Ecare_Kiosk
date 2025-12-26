@@ -1,8 +1,11 @@
 ﻿using Dapper;
 using Ecare.Shared;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.SignalR.Management;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using System.Data;
 
 namespace Ecare.Application.Services;
 
@@ -32,8 +35,9 @@ public static class QueueSnapshot
         public string? TruckType { get; set; }
         public DateTime ParkingAt { get; set; }
         public string ChauffeurName { get; set; }
+        public string? TypeProduit {  get; set; }
 
-        public LegendRow() { } // REQUIRED BY DAPPER
+        public LegendRow() { } 
     }
 
 
@@ -44,7 +48,8 @@ public static class QueueSnapshot
         DateTime? PinedAt,
         DateTime AddedToQueueAt,
         string TruckType,
-        string chauffeurNom
+        string chauffeurNom,
+        string? TypeProduit
     );
 
     public sealed record QueueGroup(
@@ -60,13 +65,28 @@ public static class QueueSnapshot
         IUnitOfWork uow, ILogger? log = null, CancellationToken ct = default)
     {
         await uow.BeginAsync(ct);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                
 
-        await uow.Connection.ExecuteAsync(
-           new CommandDefinition(
-               "sp_UpdateFirstPlaceTiming",
-               transaction: uow.Transaction,
-               cancellationToken: ct,
-               commandType: System.Data.CommandType.StoredProcedure));
+                await uow.Connection.ExecuteAsync(
+                    "sp_UpdateAddedToQueueAfterFirstPlace",
+                    commandType: CommandType.StoredProcedure);
+            }
+            catch (Exception ex)
+            {
+                log?.LogError(ex, "Background update AddedToQueueAt failed");
+            }
+        });
+
+
+
+        
+
+       
+
 
         // 1) Load from stored procedure
         var rows = (await uow.Connection.QueryAsync<LegendRow>(
@@ -82,22 +102,33 @@ public static class QueueSnapshot
 
         // EN VALIDATION VRAC (TruckType = Citerne AND no Produit1)
         var enValidationVrac = rows
-            .Where(r => r.Produit1 is null &&
-                        r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(r => r.IsPined)
-            .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
-            .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName))
-            .ToList();
+        .Where(r =>
+        r.Produit1 is null &&
+        r.TruckType != null &&
+        r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(r => r.IsPined)
+        .ThenBy(r => r.PinedAt == default ? DateTime.MaxValue : r.PinedAt)
+        .ThenBy(r => r.AddedToQueueAt == default ? DateTime.MaxValue : r.AddedToQueueAt)
+        .Select(r => new QueueItem(
+        r.Matricule,
+        null,
+        r.IsPined,
+        r.PinedAt,
+        r.AddedToQueueAt,
+        r.TruckType,
+        r.ChauffeurName,
+        r.TypeProduit))
+        .ToList();
+
 
         // EN VALIDATION SAC (TruckType ≠ Citerne AND no Produit1)
         var enValidationSac = rows
             .Where(r => r.Produit1 is null &&
                         !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(r => r.IsPined)
-            .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
+            .OrderBy(r => r.IsPined)
+            .ThenBy(r => r.PinedAt ?? DateTime.MinValue)
             .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName,r.TypeProduit))
             .ToList();
 
         /* ============================================================
@@ -108,10 +139,10 @@ public static class QueueSnapshot
                 .GroupBy(r => r.Produit1!.Trim())
                 .Select(g =>
                 {
-                    var items = g.OrderByDescending(r => r.IsPined)
-                                 .ThenByDescending(r => r.PinedAt ?? DateTime.MinValue)
+                    var items = g.OrderBy(r => r.IsPined)
+                                 .ThenBy(r => r.PinedAt ?? DateTime.MinValue)
                                  .ThenBy(r => r.AddedToQueueAt)
-                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName))
+                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName,r.TypeProduit))
                                  .ToList();
 
                     // Compute capacity per product
