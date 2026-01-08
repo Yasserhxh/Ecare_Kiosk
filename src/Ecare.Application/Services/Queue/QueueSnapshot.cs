@@ -123,7 +123,7 @@ public static class QueueSnapshot
 
         // EN VALIDATION SAC (TruckType ≠ Citerne AND no Produit1)
         var enValidationSac = rows
-            .Where(r => r.Produit1 is null &&
+            .Where(r => r.Produit1 is null && r.TruckType != null &&
                         !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
             .OrderBy(r => r.IsPined)
             .ThenBy(r => r.PinedAt ?? DateTime.MinValue)

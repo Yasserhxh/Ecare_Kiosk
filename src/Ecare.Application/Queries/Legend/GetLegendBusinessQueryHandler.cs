@@ -61,6 +61,7 @@ SELECT
     END                           AS TypeCommande
 FROM dbo.Ecare_Order_Legend
 WHERE 1 = 1
+AND AnnulationCommercial IS NULL
 ");
 
         var p = new DynamicParameters();

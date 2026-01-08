@@ -3,6 +3,7 @@ using Ecare.Application.Commands.CreateClientEquipement;
 using Ecare.Application.Commands.Logs;
 using Ecare.Application.Commands.UpdateCommercialAnnulation;
 using Ecare.Application.Queries;
+using Ecare.Application.Queries.GetLegendById;
 using Ecare.Application.Queries.Legend;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
@@ -174,6 +175,22 @@ public static class OtherEndpoints
             return Results.Ok(result.Value);
         })
         .WithName("UpdateCommercialAnnulation")
+        .WithTags("Legend");
+
+        app.MapGet("/api/legend/{id:int}", async (
+        int id,
+        IMediator mediator,
+        CancellationToken ct) =>
+        {
+            var result = await mediator.Send(new GetLegendByIdQuery(id), ct);
+
+            // If you prefer always returning 200 with Result<T>, replace with: return Results.Ok(result);
+            if (!result.Success)
+                return Results.NotFound(new { message = result.Value });
+
+            return Results.Ok(result.Value);
+        })
+        .WithName("GetLegendById")
         .WithTags("Legend");
 
         return app;
