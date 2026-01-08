@@ -5,4 +5,5 @@ public record AuthResponse(
     string UserName,
     string Email,
     string Role,
+    string UserId,
     DateTime ExpiresAt);

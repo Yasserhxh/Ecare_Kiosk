@@ -35,6 +35,7 @@ public class LoginHandler(
 
         // 5️ Get role(s)
         var roles = await userManager.GetRolesAsync(user);
+        var userId= user.Id;
         var role = roles.FirstOrDefault() ?? "User";
 
         // 6️ Generate JWT
@@ -45,6 +46,7 @@ public class LoginHandler(
             user.UserName!,
             user.Email!,
             role,
+            userId,
             DateTime.UtcNow.AddHours(2)
         );
     }
