@@ -102,14 +102,9 @@ namespace Ecare.Api.Endpoints
             {
                 var result = await mediator.Send(cmd);
 
-                if (!result.Success)
-                    return Results.BadRequest(new { success = false, error = result.Error });
+                 
 
-                return Results.Ok(new
-                {
-                    success = true,
-                    updatedOrderId = result.Value?.UpdatedOrderId
-                });
+                return result.Value.BonDeLivraison;
             });
 
             group.MapPost("/legend/extrasac", async (

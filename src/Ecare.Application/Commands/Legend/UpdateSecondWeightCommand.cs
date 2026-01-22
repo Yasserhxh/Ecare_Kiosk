@@ -1,4 +1,5 @@
-﻿using Ecare.Shared;
+﻿using Ecare.Application.Dtos;
+using Ecare.Shared;
 using MediatR;
 
 namespace Ecare.Application.Commands.Legend;
@@ -11,6 +12,6 @@ public sealed record UpdateSecondWeightCommand(
 
 public sealed class UpdateSecondWeightResult
 {
-    public bool Success { get; set; }
-    public int? UpdatedOrderId { get; set; }
+    public bool Success { get; init; }
+    public BonDeLivraisonDto? BonDeLivraison { get; init; }
 }
