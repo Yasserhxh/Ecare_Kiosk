@@ -104,7 +104,7 @@ namespace Ecare.Api.Endpoints
 
                  
 
-                return result.Value.BonDeLivraison;
+                return result;
             });
 
             group.MapPost("/legend/extrasac", async (

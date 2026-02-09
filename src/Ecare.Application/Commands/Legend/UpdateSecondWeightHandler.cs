@@ -55,8 +55,8 @@ public sealed class TransportJson
 }
 public sealed class PesageJson
 {
-    public int? PoidsVide { get; set; }
-    public int? PoidsBrut { get; set; }
+    public string? PoidsVide { get; set; }
+    public string? PoidsBrut { get; set; }
     public DateTime? PabEntryAt { get; set; }
     public DateTime? PabExitAt { get; set; }
 }
@@ -64,7 +64,7 @@ public sealed class ProductJson
 {
     public string? Code { get; set; }
     public string? Libelle { get; set; }
-    public decimal? Quantite { get; set; }
+    public string? Quantite { get; set; }
     public int? Sacs { get; set; }
 }
 
@@ -124,8 +124,8 @@ public sealed class UpdateSecondWeightHandler
                 },
                 commandType: CommandType.StoredProcedure);
 
-            if (spResult is null || spResult.RowsAffected == 0)
-                return Result<UpdateSecondWeightResult>.Fail("NO_ROW_UPDATED");
+            //if (spResult is null || spResult.RowsAffected == 0)
+            //    return Result<UpdateSecondWeightResult>.Fail("NO_ROW_UPDATED");
 
             // 2️⃣ Get latest BL Id
             var blData = await conn.QuerySingleOrDefaultAsync<BonDeLivraisonDto>(
@@ -153,21 +153,21 @@ public sealed class UpdateSecondWeightHandler
                 sapRequest,
                 ct);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                _log.LogError(
-                    "SAP shipment API failed for Id={Id}, Status={Status}",
-                    blData.Id,
-                    response.StatusCode);
+            //if (!response.IsSuccessStatusCode)
+            //{
+            //    _log.LogError(
+            //        "SAP shipment API failed for Id={Id}, Status={Status}",
+            //        blData.Id,
+            //        response.StatusCode);
 
-                return Result<UpdateSecondWeightResult>.Fail("SAP_API_ERROR");
-            }
+            //    return Result<UpdateSecondWeightResult>.Fail("SAP_API_ERROR");
+            //}
 
             var shipment =
                 await response.Content.ReadFromJsonAsync<BlJson>(ct);
 
-            if (shipment is null)
-                return Result<UpdateSecondWeightResult>.Fail("SAP_EMPTY_RESPONSE");
+            //if (shipment is null)
+            //    return Result<UpdateSecondWeightResult>.Fail("SAP_EMPTY_RESPONSE");
 
 
             var signalRPayload = new BlJson
@@ -186,7 +186,8 @@ public sealed class UpdateSecondWeightHandler
                     Transporteur = shipment.Transport.Transporteur,
                     Matricule = shipment.Transport.Matricule,
                     Chauffeur = shipment.Transport.Chauffeur,
-                    Scelles = shipment.Transport.Scelles
+                    Scelles = shipment.Transport.Scelles,
+                    Cin = shipment.Transport.Cin,
                 },
                 Pesage = new PesageJson
                 {
