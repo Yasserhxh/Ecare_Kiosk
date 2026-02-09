@@ -44,5 +44,6 @@
         public int Step { get; set; }
         public string? BonDeCommande { get; set; }
         public string? BonDeLivraison { get; set; }
+        public string? Cin { get; set; }
     }
 }
