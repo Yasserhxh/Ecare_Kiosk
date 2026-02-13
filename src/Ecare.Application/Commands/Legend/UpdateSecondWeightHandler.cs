@@ -134,7 +134,7 @@ public sealed class UpdateSecondWeightHandler
             FROM dbo.Ecare_Order_Legend
             WHERE RFIDCard = @RFIDCard
               AND Matricule = @Matricule
-              AND Step=4
+              AND Step>2
             """,
             new { RFIDCard = request.RfidCard, Matricule = request.Matricule }
         );
@@ -151,7 +151,7 @@ public sealed class UpdateSecondWeightHandler
             var expected = (order.Quantite1 * 1000m) + (order.Quantite2 * 1000m);
 
             // 1% tolerance
-            var tolerance = expected * 0.01m;
+            var tolerance = expected * 0.02m;
 
             var minAllowed = expected - tolerance;
             var maxAllowed = expected + tolerance;
@@ -172,7 +172,7 @@ public sealed class UpdateSecondWeightHandler
         }
         else
         {
-            var allowedMax = order.PTAC * 1.1m; // +10% tolerance
+            var allowedMax = order.PTAC * 1.11m; // +10% tolerance
             if(request.DeuxiemePoid > allowedMax)
             {
                 await SignalRHelper.BroadcastAsync(
