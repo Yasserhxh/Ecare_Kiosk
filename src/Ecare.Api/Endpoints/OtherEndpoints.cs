@@ -1,6 +1,6 @@
 ﻿using Ecare.Application.Commands;
 using Ecare.Application.Commands.CreateClientEquipement;
-using Ecare.Application.Commands.Logs;
+//using Ecare.Application.Commands.Logs;
 using Ecare.Application.Commands.UpdateCommercialAnnulation;
 using Ecare.Application.Queries;
 using Ecare.Application.Queries.GetLegendById;
@@ -37,7 +37,8 @@ public static class OtherEndpoints
 
             var negotiation = await hubContext.NegotiateAsync(new NegotiationOptions
             {
-                UserId = deviceId
+                UserId = deviceId,
+                TokenLifetime = TimeSpan.FromDays(365)
             }, ct);
 
             //Get the connection ID and add it to the device group
@@ -72,7 +73,7 @@ public static class OtherEndpoints
             });
         });
 
-        app.MapGet("/api/app-logs",
+        /*app.MapGet("/api/app-logs",
         async ([AsParameters] AppLogsQueryParams q, IMediator med, CancellationToken ct) =>
         {
             var res = await med.Send(new GetAppLogsPagedQuery(
@@ -92,7 +93,7 @@ public static class OtherEndpoints
             ), ct);
 
                 return Results.Ok(res);
-        });
+        });*/
 
         app.MapGet("/api/legend-documents", async (
         [AsParameters] LegendQueryParams q,
