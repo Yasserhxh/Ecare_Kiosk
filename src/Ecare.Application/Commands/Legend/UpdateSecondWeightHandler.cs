@@ -37,6 +37,7 @@ public sealed class TestWeightDto
     public int Quantite1 { get; set; }
     public int Quantite2 { get; set; }
     public int PTAC { get; set; }
+    public int Step { get; set; }
 }
 
 public sealed class BlJson
@@ -130,7 +131,8 @@ public sealed class UpdateSecondWeightHandler
                 PremierePoid,
                 Quantite1,
                 Quantite2,
-                PTAC
+                PTAC,
+                Step
             FROM dbo.Ecare_Order_Legend
             WHERE RFIDCard = @RFIDCard
               AND Matricule = @Matricule
@@ -284,7 +286,7 @@ public sealed class UpdateSecondWeightHandler
                 };
 
                 // 4️⃣ (Optional) Send to SignalR / printer
-
+               
                 await SignalRHelper.BroadcastAsync(
                     _signalR,
                     _opt.Hub,
@@ -292,6 +294,8 @@ public sealed class UpdateSecondWeightHandler
                     signalRPayload,
                     _log,
                     ct);
+                
+                
 
             await SignalRHelper.BroadcastAsync(
                 _signalR,
