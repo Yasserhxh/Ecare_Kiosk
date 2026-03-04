@@ -1,5 +1,7 @@
 ﻿using Ecare.Application.Commands;
 using Ecare.Application.Commands.CreateClientEquipement;
+using Ecare.Application.Commands.NewCard.NewClientEquipment;
+
 //using Ecare.Application.Commands.Logs;
 using Ecare.Application.Commands.UpdateCommercialAnnulation;
 using Ecare.Application.Queries;
@@ -193,6 +195,18 @@ public static class OtherEndpoints
         })
         .WithName("GetLegendById")
         .WithTags("Legend");
+
+
+        app.MapPost("/ecare/client-equipements", async (
+            SaveClientEquipementRequest request,
+            IMediator mediator,
+            CancellationToken ct) =>
+        {
+            var result = await mediator.Send(new SaveClientEquipementCommand(request), ct);
+            return Results.Created($"/ecare/client-equipements/{result.ClientEquipementId}", result);
+        })
+        .WithName("SaveEcareClientEquipement")
+        .WithTags("Ecare");
 
         return app;
     }
