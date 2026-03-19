@@ -5,6 +5,7 @@ using Ecare.Application.Commands.GeneratePlombs;
 using Ecare.Application.Commands.Legend;
 using Ecare.Application.Commands.LegendExtraSac;
 using Ecare.Application.Commands.MergeParkingWithSap;
+using Ecare.Application.Commands.ModifyLegend;
 using Ecare.Application.Commands.ProcessParking;
 using Ecare.Application.Commands.UpdateCircuit.DeleteFirstPesage;
 using Ecare.Application.Commands.UpdateCircuit.DeleteSecondPesage;
@@ -217,7 +218,23 @@ namespace Ecare.Api.Endpoints
                 return result;
             });
 
-
+            group.MapPut("/{id:int}/modify-quantities", async (
+                int id,
+                ModifyLegendQuantitiesCommand command,
+                IMediator mediator) =>
+            {
+                if (id != command.OrderLegendId)
+                {
+                    return Results.BadRequest(new
+                    {
+                        message = "L'id de l'URL ne correspond pas à OrderLegendId."
+                    });
+                }
+                var result = await mediator.Send(command);
+                return result.Success
+                    ? Results.Ok(result)
+                    : Results.BadRequest(result);
+            });
 
 
             return app;
