@@ -6,6 +6,8 @@ using Ecare.Application.Commands.Legend;
 using Ecare.Application.Commands.LegendExtraSac;
 using Ecare.Application.Commands.MergeParkingWithSap;
 using Ecare.Application.Commands.ProcessParking;
+using Ecare.Application.Commands.UpdateCircuit.DeleteFirstPesage;
+using Ecare.Application.Commands.UpdateCircuit.DeleteSecondPesage;
 using Ecare.Application.Commands.UpdateOrderLegend;
 using Ecare.Application.Queries.GetLegendsDocument;
 using Ecare.Application.Queries.GetOrderBySapCode;
@@ -196,6 +198,23 @@ namespace Ecare.Api.Endpoints
                 ), ct);
 
                 return Results.Ok(result);
+            });
+
+
+            group.MapPost("/cancel-first-pesage", async (int id,string user, IMediator mediator) =>
+            {
+                var result = await mediator.Send(
+                    new DeleteFirstPesageCommand { Id = id,FirstPesageCanceledBy=user });
+
+                return result;
+            });
+
+            group.MapPost("/cancel-second-pesage", async (int id, string user, IMediator mediator) =>
+            {
+                var result = await mediator.Send(
+                    new DeleteSecondPesageCommand { Id = id, SecondPesageCanceledBy = user });
+
+                return result;
             });
 
 
