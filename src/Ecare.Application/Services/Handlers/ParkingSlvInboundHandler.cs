@@ -1,5 +1,5 @@
 ﻿using Ecare.Application.Queries.ParkingScanOrderLegend;  // ParkingScanQuery
-using Ecare.Application.Services.Ecare.Application.Services;
+using Ecare.Application.Services;
 using Ecare.Domain.Entities;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;

@@ -1,5 +1,4 @@
 ﻿using Ecare.Application.Services;
-using Ecare.Application.Services.Ecare.Application.Services;
 using Ecare.Application.Services.Handlers;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.SignalR.Management;
