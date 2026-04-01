@@ -33,11 +33,11 @@ public sealed class ShipmentNotificationRequest
 public sealed class TestWeightDto
 {
     public string? TypeProduit { get; set; }
-    public int PremierePoid { get; set; }
-    public int Quantite1 { get; set; }
-    public int Quantite2 { get; set; }
-    public int PTAC { get; set; }
-    public int Step { get; set; }
+    public int? PremierePoid { get; set; }
+    public int? Quantite1 { get; set; }
+    public int? Quantite2 { get; set; }
+    public int? PTAC { get; set; }
+    public int? Step { get; set; }
 }
 
 public sealed class BlJson
@@ -124,7 +124,7 @@ public sealed class UpdateSecondWeightHandler
 
         var order = await conn.QuerySingleOrDefaultAsync<TestWeightDto>(
             """
-            SELECT
+            SELECT TOP 1
                 Id,
                 TypeProduit,
                 Matricule,
@@ -136,7 +136,7 @@ public sealed class UpdateSecondWeightHandler
             FROM dbo.Ecare_Order_Legend
             WHERE RFIDCard = @RFIDCard
               AND Matricule = @Matricule
-              AND Step>2
+              AND Step>=2 Order By Id DESC
             """,
             new { RFIDCard = request.RfidCard, Matricule = request.Matricule }
         );

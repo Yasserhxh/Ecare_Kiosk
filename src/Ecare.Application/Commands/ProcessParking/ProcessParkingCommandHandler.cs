@@ -66,12 +66,12 @@ public sealed class ProcessParkingCommandHandler
 UPDATE dbo.Ecare_Order_Legend
 SET Step = 1,
     ParkingAt = @Now
-WHERE RFIDCard = @Slv;
+WHERE RFIDCard = @Slv AND BonDeCommande = @BonDeCommande;
 ";
 
                 await _uow.Connection.ExecuteAsync(
                     sql,
-                    new { Slv = r.Slv, Now = DateTime.Now },
+                    new { Slv = r.Slv, Now = DateTime.Now, BonDeCommande = r.BonDeCommande },
                     _uow.Transaction
                 );
 
