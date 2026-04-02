@@ -42,6 +42,7 @@ namespace Ecare.Api.Extensions
             // Handlers
             services.AddSingleton<PabEntryInboundHandler>();
             services.AddSingleton<PabExitInboundHandler>();
+            services.AddSingleton<PabUnifiedInboundHandler>();
             services.AddSingleton<LoadingInboundHandler>();
             services.AddSingleton<ParkingSlvInboundHandler>();
 
@@ -50,7 +51,7 @@ namespace Ecare.Api.Extensions
             services.AddHostedService<PabExitListener>();
             services.AddHostedService<LoadingListner>();
             services.AddHostedService<ParkingSlvListner>();
-            //services.AddHostedService<FluxRealtimeTicker>();
+            services.AddHostedService<PabUnifiedListener>();
 
 
             return services;
