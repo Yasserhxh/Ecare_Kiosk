@@ -1,5 +1,4 @@
 ﻿// File: PabEntryListener.cs
-using Ecare.Application.Services.Ecare.Application.Services;
 using Ecare.Application.Services.Handlers;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

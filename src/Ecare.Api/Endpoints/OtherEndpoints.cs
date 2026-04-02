@@ -1,8 +1,7 @@
-﻿using Ecare.Application.Commands;
+using Ecare.Application.Commands;
 using Ecare.Application.Commands.CreateClientEquipement;
 using Ecare.Application.Commands.NewCard.NewClientEquipment;
-
-//using Ecare.Application.Commands.Logs;
+using Ecare.Application.Commands.Logs;
 using Ecare.Application.Commands.UpdateCommercialAnnulation;
 using Ecare.Application.Queries;
 using Ecare.Application.Queries.GetLegendById;
@@ -24,58 +23,50 @@ public static class OtherEndpoints
 
         // SignalR negotiate endpoint
         app.MapGet("/signalr/negotiate", async (
-        string hub,
-        string? deviceId,
-        ServiceManager manager,
-        CancellationToken ct) =>
+            string hub,
+            string? deviceId,
+            ServiceManager manager,
+            CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(hub))
                 return Results.BadRequest("hub is required");
-
-            //if (string.IsNullOrWhiteSpace(deviceId))
-            //    return Results.BadRequest("deviceId is required");
 
             await using var hubContext = await manager.CreateHubContextAsync(hub, ct);
 
             var negotiation = await hubContext.NegotiateAsync(new NegotiationOptions
             {
-                UserId = deviceId,
-                TokenLifetime = TimeSpan.FromDays(365)
+                UserId = string.IsNullOrWhiteSpace(deviceId) ? null : deviceId,
+                TokenLifetime = TimeSpan.FromHours(1)
             }, ct);
-
-            //Get the connection ID and add it to the device group
-            // Note: This won't work directly because we don't have the connectionId yet
-            // The client needs to join the group after connecting
 
             return Results.Ok(new
             {
                 url = negotiation.Url,
                 accessToken = negotiation.AccessToken,
-                deviceId = deviceId
+                deviceId
             });
         });
-
 
         app.MapPost("/api/client-equipements",
-        async (CreateClientEquipementDto dto, IMediator mediator) =>
-        {
-            // Basic validation
-            if (string.IsNullOrWhiteSpace(dto.Matricule))
-                return Results.BadRequest(new { error = "Matricule is required" });
-
-            if (string.IsNullOrWhiteSpace(dto.CarteSLV))
-                return Results.BadRequest(new { error = "CarteSLV is required" });
-
-            var id = await mediator.Send(new CreateClientEquipementCommand(dto));
-
-            return Results.Ok(new
+            async (CreateClientEquipementDto dto, IMediator mediator) =>
             {
-                Id = id,
-                Message = "Client equipement created successfully."
-            });
-        });
+                if (string.IsNullOrWhiteSpace(dto.Matricule))
+                    return Results.BadRequest(new { error = "Matricule is required" });
 
-        /*app.MapGet("/api/app-logs",
+                if (string.IsNullOrWhiteSpace(dto.CarteSLV))
+                    return Results.BadRequest(new { error = "CarteSLV is required" });
+
+                var id = await mediator.Send(new CreateClientEquipementCommand(dto));
+
+                return Results.Ok(new
+                {
+                    Id = id,
+                    Message = "Client equipement created successfully."
+                });
+            });
+      
+
+        app.MapGet("/api/app-logs",
         async ([AsParameters] AppLogsQueryParams q, IMediator med, CancellationToken ct) =>
         {
             var res = await med.Send(new GetAppLogsPagedQuery(
@@ -95,16 +86,13 @@ public static class OtherEndpoints
             ), ct);
 
                 return Results.Ok(res);
-        });*/
+        });
 
         app.MapGet("/api/legend-documents", async (
-        [AsParameters] LegendQueryParams q,
-        IMediator mediator,
-        CancellationToken ct) =>
+            [AsParameters] LegendQueryParams q,
+            IMediator mediator,
+            CancellationToken ct) =>
         {
-            // ------------------------------------------------------------
-            // Build dynamic DB filters from known fields
-            // ------------------------------------------------------------
             var filters = new Dictionary<string, object>();
 
             if (!string.IsNullOrWhiteSpace(q.Matricule))
@@ -125,9 +113,6 @@ public static class OtherEndpoints
             if (q.Step.HasValue)
                 filters["Step"] = q.Step.Value;
 
-            // ------------------------------------------------------------
-            // Send CQRS query
-            // ------------------------------------------------------------
             var query = new GetLegendBusinessQuery
             {
                 DateFrom = q.DateFrom,
@@ -157,10 +142,10 @@ public static class OtherEndpoints
         """);
 
         app.MapPut("/api/legend/{id:int}/annulation-commercial", async (
-        int id,
-        UpdateCommercialAnnulationRequest body,
-        IMediator mediator,
-        CancellationToken ct) =>
+            int id,
+            UpdateCommercialAnnulationRequest body,
+            IMediator mediator,
+            CancellationToken ct) =>
         {
             var cmd = new UpdateCommercialAnnulationCommand(
                 Id: id,
@@ -171,7 +156,6 @@ public static class OtherEndpoints
 
             var result = await mediator.Send(cmd, ct);
 
-            // Adjust property names if your Result<T> differs (Success/IsSuccess, Value/Data, Message, Errors, etc.)
             if (!result.Success)
                 return Results.BadRequest(result);
 
@@ -181,13 +165,12 @@ public static class OtherEndpoints
         .WithTags("Legend");
 
         app.MapGet("/api/legend/{id:int}", async (
-        int id,
-        IMediator mediator,
-        CancellationToken ct) =>
+            int id,
+            IMediator mediator,
+            CancellationToken ct) =>
         {
             var result = await mediator.Send(new GetLegendByIdQuery(id), ct);
 
-            // If you prefer always returning 200 with Result<T>, replace with: return Results.Ok(result);
             if (!result.Success)
                 return Results.NotFound(new { message = result.Value });
 
@@ -212,42 +195,34 @@ public static class OtherEndpoints
     }
 
     public sealed record AppLogsQueryParams(
-    int? PageNumber,
-    int? PageSize,
-    string? Event,
-    string? Stage,
-    int? StatusCode,
-    bool? IsSuccess,
-    Guid? TraceId,
-    string? Slv,
-    string? Matricule,
-    DateTime? FromUtc,
-    DateTime? ToUtc,
-    string? Search,
-    bool? IncludeBodies
+        int? PageNumber,
+        int? PageSize,
+        string? Event,
+        string? Stage,
+        int? StatusCode,
+        bool? IsSuccess,
+        Guid? TraceId,
+        string? Slv,
+        string? Matricule,
+        DateTime? FromUtc,
+        DateTime? ToUtc,
+        string? Search,
+        bool? IncludeBodies
     );
 
-    
     public sealed class LegendQueryParams
     {
-    // Dates
-    public DateTime? DateFrom { get; init; }
-    public DateTime? DateTo { get; init; }
-
-    // Hours
-    public int? HourFrom { get; init; }
-    public int? HourTo { get; init; }
-
-    // Default Step < 5
-    public int MaxStep { get; init; } = 5;
-
-    // Common filters (explicit for Swagger)
-    public string? Matricule { get; init; }
-    public string? RFIDCard { get; init; }
-    public string? Chantier { get; init; }
-    public string? Produit1 { get; init; }
-    public string? TypeProduit { get; init; }
-    public int? Step { get; init; }
+        public DateTime? DateFrom { get; init; }
+        public DateTime? DateTo { get; init; }
+        public int? HourFrom { get; init; }
+        public int? HourTo { get; init; }
+        public int MaxStep { get; init; } = 5;
+        public string? Matricule { get; init; }
+        public string? RFIDCard { get; init; }
+        public string? Chantier { get; init; }
+        public string? Produit1 { get; init; }
+        public string? TypeProduit { get; init; }
+        public int? Step { get; init; }
     }
 
     public sealed class UpdateCommercialAnnulationRequest
@@ -256,6 +231,4 @@ public static class OtherEndpoints
         public string? MotifAnnulationCommercial { get; set; }
         public string? UserIdAnnulationCommercial { get; set; }
     }
-
-
 }

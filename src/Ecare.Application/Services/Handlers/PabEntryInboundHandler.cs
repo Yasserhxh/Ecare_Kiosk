@@ -1,6 +1,5 @@
 ﻿using Dapper;
 using Ecare.Application.Queries.PabEntryScan;
-using Ecare.Application.Services.Ecare.Application.Services;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Data.SqlClient;

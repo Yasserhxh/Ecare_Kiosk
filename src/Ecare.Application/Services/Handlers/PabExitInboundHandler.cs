@@ -1,7 +1,6 @@
 ﻿using Dapper;
 using Ecare.Application.Queries;
 using Ecare.Application.Queries.PabExitScan;
-using Ecare.Application.Services.Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
