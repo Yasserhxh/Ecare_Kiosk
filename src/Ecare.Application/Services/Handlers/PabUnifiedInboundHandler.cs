@@ -54,7 +54,7 @@ namespace Ecare.Application.Services
 
             var step = await conn.QueryFirstOrDefaultAsync<int>(
 new CommandDefinition(
-    "SELECT Step FROM Ecare_Order_Legend WHERE RfidCard = @RfidCard AND Step BETWEEN 1 AND 4",
+    "SELECT TOP (1) Step FROM Ecare_Order_Legend WHERE RfidCard = @RfidCard AND Step BETWEEN 1 AND 4 ORDER BY Id DESC;",
     new { RfidCard = slv },
     cancellationToken: ct));
 

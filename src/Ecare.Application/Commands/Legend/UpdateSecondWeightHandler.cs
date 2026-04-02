@@ -233,17 +233,17 @@ public sealed class UpdateSecondWeightHandler
                     sapRequest,
                     ct);
 
-                //if (!response.IsSuccessStatusCode)
-                //{
-                //    _log.LogError(
-                //        "SAP shipment API failed for Id={Id}, Status={Status}",
-                //        blData.Id,
-                //        response.StatusCode);
+            if (!response.IsSuccessStatusCode)
+            {
+                _log.LogError(
+                    "SAP shipment API failed for Id={Id}, Status={Status}",
+                    blData.Id,
+                    response.StatusCode);
 
-                //    return Result<UpdateSecondWeightResult>.Fail("SAP_API_ERROR");
-                //}
+                return Result<UpdateSecondWeightResult>.Fail("SAP_API_ERROR");
+            }
 
-                var shipment =
+            var shipment = 
                     await response.Content.ReadFromJsonAsync<BlJson>(ct);
 
                 //if (shipment is null)

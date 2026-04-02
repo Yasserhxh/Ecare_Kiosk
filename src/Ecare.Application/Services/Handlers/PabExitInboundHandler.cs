@@ -103,7 +103,7 @@ namespace Ecare.Application.Services.Handlers
                 ligne = vm.Ligne,
                 bonDeCommande = vm.BonDeCommande,
                 bonDeLivraison = vm.BonDeLivraison,
-
+                step = vm.Step,
                 times = new
                 {
                     parking = vm.ParkingAt,

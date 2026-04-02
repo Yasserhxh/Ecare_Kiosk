@@ -47,8 +47,6 @@ namespace Ecare.Api.Extensions
             services.AddSingleton<ParkingSlvInboundHandler>();
 
             // Register BOTH listeners as hosted services
-            services.AddHostedService<PabEntryListener>();
-            services.AddHostedService<PabExitListener>();
             services.AddHostedService<LoadingListner>();
             services.AddHostedService<ParkingSlvListner>();
             services.AddHostedService<PabUnifiedListener>();

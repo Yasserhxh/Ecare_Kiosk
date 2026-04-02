@@ -106,7 +106,8 @@ namespace Ecare.Application.Services
 
                 firstWeight = vm.PremierePoid,
                 image1 = vm.Image1,
-                image2 = vm.Image2
+                image2 = vm.Image2,
+                step = 1
             };
 
             // --------------------------
