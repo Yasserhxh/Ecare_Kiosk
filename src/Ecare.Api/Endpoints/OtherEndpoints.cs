@@ -1,5 +1,7 @@
-﻿using Ecare.Application.Commands;
+using Ecare.Application.Commands;
 using Ecare.Application.Commands.CreateClientEquipement;
+using Ecare.Application.Commands.NewCard.NewClientEquipment;
+using Ecare.Application.Commands.Logs;
 using Ecare.Application.Commands.UpdateCommercialAnnulation;
 using Ecare.Application.Queries;
 using Ecare.Application.Queries.GetLegendById;
@@ -62,6 +64,29 @@ public static class OtherEndpoints
                     Message = "Client equipement created successfully."
                 });
             });
+      
+
+        app.MapGet("/api/app-logs",
+        async ([AsParameters] AppLogsQueryParams q, IMediator med, CancellationToken ct) =>
+        {
+            var res = await med.Send(new GetAppLogsPagedQuery(
+                PageNumber: q.PageNumber ?? 1,
+                PageSize: q.PageSize ?? 50,
+                Event: q.Event,
+                Stage: q.Stage,
+                StatusCode: q.StatusCode,
+                IsSuccess: q.IsSuccess,
+                TraceId: q.TraceId,
+                Slv: q.Slv,
+                Matricule: q.Matricule,
+                FromUtc: q.FromUtc,
+                ToUtc: q.ToUtc,
+                Search: q.Search,
+                IncludeBodies: q.IncludeBodies ?? false
+            ), ct);
+
+                return Results.Ok(res);
+        });
 
         app.MapGet("/api/legend-documents", async (
             [AsParameters] LegendQueryParams q,
@@ -153,6 +178,18 @@ public static class OtherEndpoints
         })
         .WithName("GetLegendById")
         .WithTags("Legend");
+
+
+        app.MapPost("/ecare/client-equipements", async (
+            SaveClientEquipementRequest request,
+            IMediator mediator,
+            CancellationToken ct) =>
+        {
+            var result = await mediator.Send(new SaveClientEquipementCommand(request), ct);
+            return Results.Created($"/ecare/client-equipements/{result.ClientEquipementId}", result);
+        })
+        .WithName("SaveEcareClientEquipement")
+        .WithTags("Ecare");
 
         return app;
     }
