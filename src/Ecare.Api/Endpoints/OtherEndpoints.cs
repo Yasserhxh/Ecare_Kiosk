@@ -6,8 +6,12 @@ using Ecare.Application.Commands.UpdateCommercialAnnulation;
 using Ecare.Application.Queries;
 using Ecare.Application.Queries.GetLegendById;
 using Ecare.Application.Queries.Legend;
+using Ecare.Application.Services;
+using Ecare.Application.Services.Handlers;
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.SignalR.Management;
+using System.Text.Json;
 
 namespace Ecare.Api.Endpoints;
 
@@ -190,6 +194,19 @@ public static class OtherEndpoints
         })
         .WithName("SaveEcareClientEquipement")
         .WithTags("Ecare");
+
+
+        app.MapPost("/api/pab/trigger/{type}", async (
+    string type,
+    [FromBody] JsonElement payload,
+    PabUnifiedInboundHandler handler,
+    CancellationToken ct) =>
+        {
+            bool isExit = type.Equals("exit", StringComparison.OrdinalIgnoreCase);
+            await handler.HandleAsync(payload, ct);
+            return Results.Ok();
+        }).WithName("Test Commande")
+        .WithTags("Test Endpoint");
 
         return app;
     }
