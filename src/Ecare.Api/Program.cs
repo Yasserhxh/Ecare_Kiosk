@@ -21,6 +21,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Ecare.Api.HostedServices;
+using Ecare.Application.Services.Sync;
+using Ecare.Domain.Inerface.Sync;
+using Ecare.Infrastructure.Repositories.Sync;
+using Ecare.Infrastructure.Services.Sync;
 
 try
 {
@@ -199,7 +204,16 @@ try
     builder.Services.AddSignalRListeners(cfg);
 
     Console.WriteLine("✓ SignalR configured");
+    builder.Services.AddScoped<IExternalDeliverySyncService, ExternalDeliverySyncService>();
+    builder.Services.AddScoped<IOrderLegendSyncRepository, OrderLegendSyncRepository>();
+    builder.Services.AddScoped<ISyncExecutionLockProvider, SqlSyncExecutionLockProvider>();
+    builder.Services.AddHttpClient<IClientLivraisonApi, ClientLivraisonApi>(client =>
+    {
+        client.BaseAddress = new Uri("https://app-emea-we-dssprod-dss-001.azurewebsites.net/");
+        client.Timeout = TimeSpan.FromSeconds(60);
+    });
 
+    builder.Services.AddHostedService<OrderLegendSyncBackgroundService>();
     // ---------------------------------------------------------
     // Build + middleware
     // ---------------------------------------------------------
