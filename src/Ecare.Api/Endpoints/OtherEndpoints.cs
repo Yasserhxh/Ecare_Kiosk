@@ -1,7 +1,7 @@
 using Ecare.Application.Commands;
 using Ecare.Application.Commands.CreateClientEquipement;
 using Ecare.Application.Commands.NewCard.NewClientEquipment;
-using Ecare.Application.Commands.Logs;
+//using Ecare.Application.Commands.Logs;
 using Ecare.Application.Commands.UpdateCommercialAnnulation;
 using Ecare.Application.Queries;
 using Ecare.Application.Queries.GetLegendById;
@@ -66,7 +66,7 @@ public static class OtherEndpoints
             });
       
 
-        app.MapGet("/api/app-logs",
+        /*app.MapGet("/api/app-logs",
         async ([AsParameters] AppLogsQueryParams q, IMediator med, CancellationToken ct) =>
         {
             var res = await med.Send(new GetAppLogsPagedQuery(
@@ -86,7 +86,7 @@ public static class OtherEndpoints
             ), ct);
 
                 return Results.Ok(res);
-        });
+        });*/
 
         app.MapGet("/api/legend-documents", async (
             [AsParameters] LegendQueryParams q,
