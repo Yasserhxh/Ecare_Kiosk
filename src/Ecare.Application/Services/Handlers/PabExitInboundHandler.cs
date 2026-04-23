@@ -64,6 +64,8 @@ namespace Ecare.Application.Services.Handlers
 
             var vm = result.Value;
 
+            await ClearTemporaryAssignmentAsync(scope, vm.CarteSLV, ct);
+
             var outboundPayload = new
             {
                 @event = "PabExitDataEvent",
@@ -129,6 +131,47 @@ namespace Ecare.Application.Services.Handlers
                 ct);
 
             _log.LogInformation("Exit PAB sent for RFID={rfid} device={device}", rfid, deviceId);
+        }
+
+        private async Task ClearTemporaryAssignmentAsync(IServiceScope scope, string? carteSlv, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(carteSlv))
+                return;
+
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var connStr = config.GetConnectionString("SqlServer");
+            if (string.IsNullOrWhiteSpace(connStr))
+                return;
+
+            await using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync(ct);
+
+            const string sql = @"
+UPDATE dbo.Ecare_ClientEquipements
+SET ClientName = NULL,
+    CodeClientSAP = NULL,
+    Matricule = NULL,
+    ChauffeurName = NULL,
+    PermisConducteur = NULL,
+    CodeTransporteurSap = NULL,
+    TransporteurName = NULL,
+    CodeTruckSap = NULL,
+    CodeTransporteurSapCimar = NULL,
+    Type = NULL,
+    Status = 'AVAILABLE'
+WHERE CarteSLV = @CarteSlv
+  AND ISNULL(IsClient, 0) = 0
+  AND ISNULL(IsTransporteur, 0) = 0
+  AND ISNULL(IsDriver, 0) = 0;";
+
+            var affected = await conn.ExecuteAsync(
+                new CommandDefinition(
+                    sql,
+                    new { CarteSlv = carteSlv },
+                    cancellationToken: ct));
+
+            if (affected > 0)
+                _log.LogInformation("Exit PAB cleared {Count} temporary assignment(s) for SLV={slv}", affected, carteSlv);
         }
 
 

@@ -62,7 +62,10 @@ namespace Ecare.Application.Queries.GetTruck
                 t.TruckTypeId,
                 tt.Type AS TruckType,
                 t.DriverId,
-                (d.Nom + ' ' + d.Prenom) AS DriverName,
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(d.Nom_Complet)), ''),
+                    NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(d.Prenom, ''), ' ', ISNULL(d.Nom, '')))), '')
+                ) AS DriverName,
                 t.NumberOfSeals,
                 t.DateCreation,
                 t.Actif

@@ -21,48 +21,57 @@ namespace Ecare.Application.Commands.NewCard.NewClientEquipment
             try
             {
                 var dto = request.Data;
+                var carteSlv = dto.CarteSLV?.Trim();
+                var rfidHex = dto.RfidHex?.Trim();
 
-                // 1) Upsert tag by RfidHex (only if RfidHex provided)
-                if (!string.IsNullOrWhiteSpace(dto.RfidHex))
+                const string duplicateEquipSql = @"
+                SELECT TOP(1) Id
+                FROM dbo.Ecare_ClientEquipements
+                WHERE (ISNULL(IsClient, 0) = 1 OR ISNULL(IsTransporteur, 0) = 1)
+                  AND (
+                      (NULLIF(@CarteSLV, '') IS NOT NULL AND LTRIM(RTRIM(CarteSLV)) = @CarteSLV)
+                      OR
+                      (NULLIF(@RfidHex, '') IS NOT NULL AND LTRIM(RTRIM(RfidHex)) = @RfidHex)
+                  );";
+
+                var duplicateEquipId = await uow.Connection.QuerySingleOrDefaultAsync<int?>(
+                    new CommandDefinition(
+                        duplicateEquipSql,
+                        new { CarteSLV = carteSlv, RfidHex = rfidHex },
+                        uow.Transaction,
+                        cancellationToken: ct));
+
+                if (duplicateEquipId.HasValue)
+                    throw new InvalidOperationException($"La carte SLV {carteSlv} existe deja comme carte permanente.");
+
+                // 1) Ensure the physical tag exists before creating a permanent card.
+                if (!string.IsNullOrWhiteSpace(carteSlv) && !string.IsNullOrWhiteSpace(rfidHex))
                 {
                     const string findTagSql = @"
-                    SELECT TOP(1) Id, CarteSLV, RfidHex
+                    SELECT TOP(1) Id
                     FROM dbo.Ecare_Tags
-                    WHERE RfidHex = @RfidHex;";
+                    WHERE LTRIM(RTRIM(CarteSLV)) = @CarteSLV
+                       OR LTRIM(RTRIM(RfidHex)) = @RfidHex;";
 
-                    var tag = await uow.Connection.QuerySingleOrDefaultAsync<TagRow>(
-                        new CommandDefinition(findTagSql, new { RfidHex = dto.RfidHex }, uow.Transaction, cancellationToken: ct));
+                    var tagId = await uow.Connection.QuerySingleOrDefaultAsync<int?>(
+                        new CommandDefinition(
+                            findTagSql,
+                            new { CarteSLV = carteSlv, RfidHex = rfidHex },
+                            uow.Transaction,
+                            cancellationToken: ct));
 
-                    if (tag is null)
-                    {
-                        const string insertTagSql = @"
-                        INSERT INTO dbo.Ecare_Tags (CarteSLV, RfidHex)
-                        VALUES (@CarteSLV, @RfidHex);";
+                    if (tagId.HasValue)
+                        throw new InvalidOperationException($"La carte SLV {carteSlv} existe deja comme carte provisoire.");
 
-                        await uow.Connection.ExecuteAsync(
-                            new CommandDefinition(insertTagSql,
-                                new { CarteSLV = dto.CarteSLV, RfidHex = dto.RfidHex },
-                                uow.Transaction,
-                                cancellationToken: ct));
-                    }
-                    else
-                    {
-                        // if CarteSLV is provided and differs -> update
-                        if (!string.IsNullOrWhiteSpace(dto.CarteSLV) &&
-                            !string.Equals(tag.CarteSLV, dto.CarteSLV, StringComparison.OrdinalIgnoreCase))
-                        {
-                            const string updateTagSql = @"
-                            UPDATE dbo.Ecare_Tags
-                            SET CarteSLV = @CarteSLV
-                            WHERE Id = @Id;";
+                    const string insertTagSql = @"
+                    INSERT INTO dbo.Ecare_Tags (CarteSLV, RfidHex)
+                    VALUES (@CarteSLV, @RfidHex);";
 
-                            await uow.Connection.ExecuteAsync(
-                                new CommandDefinition(updateTagSql,
-                                    new { Id = tag.Id, CarteSLV = dto.CarteSLV },
-                                    uow.Transaction,
-                                    cancellationToken: ct));
-                        }
-                    }
+                    await uow.Connection.ExecuteAsync(
+                        new CommandDefinition(insertTagSql,
+                            new { CarteSLV = carteSlv, RfidHex = rfidHex },
+                            uow.Transaction,
+                            cancellationToken: ct));
                 }
 
                 // 2) Insert equipement (all nullable columns OK)
@@ -129,11 +138,5 @@ namespace Ecare.Application.Commands.NewCard.NewClientEquipment
             }
         }
 
-        private sealed class TagRow
-        {
-            public int Id { get; init; }
-            public string? CarteSLV { get; init; }
-            public string? RfidHex { get; init; }
-        }
     }
 }

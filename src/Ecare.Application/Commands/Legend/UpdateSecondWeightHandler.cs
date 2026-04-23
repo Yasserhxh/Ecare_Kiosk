@@ -170,12 +170,12 @@ public sealed class UpdateSecondWeightHandler
                     ct);
                 return Result<UpdateSecondWeightResult>.Fail("NET_WEIGHT_OUT_OF_RANGE");
             }
-                
+
         }
         else
         {
             var allowedMax = order.PTAC * 1.11m; // +10% tolerance
-            if(request.DeuxiemePoid > allowedMax)
+            if (request.DeuxiemePoid > allowedMax)
             {
                 await SignalRHelper.BroadcastAsync(
                     _signalR,
@@ -193,23 +193,23 @@ public sealed class UpdateSecondWeightHandler
 
         try
         {
-                // 1️⃣ Update second weight
-                var spResult = await conn.QueryFirstOrDefaultAsync<RowsDto>(
-                    "sp_UpdateSecondWeight",
-                    new
-                    {
-                        RfidCard = request.RfidCard,
-                        Matricule = request.Matricule,
-                        DeuxiemePoid = request.DeuxiemePoid
-                    },
-                    commandType: CommandType.StoredProcedure);
+            // 1️⃣ Update second weight
+            var spResult = await conn.QueryFirstOrDefaultAsync<RowsDto>(
+                "sp_UpdateSecondWeight",
+                new
+                {
+                    RfidCard = request.RfidCard,
+                    Matricule = request.Matricule,
+                    DeuxiemePoid = request.DeuxiemePoid
+                },
+                commandType: CommandType.StoredProcedure);
 
-                //if (spResult is null || spResult.RowsAffected == 0)
-                //    return Result<UpdateSecondWeightResult>.Fail("NO_ROW_UPDATED");
+            //if (spResult is null || spResult.RowsAffected == 0)
+            //    return Result<UpdateSecondWeightResult>.Fail("NO_ROW_UPDATED");
 
-                // 2️⃣ Get latest BL Id
-                var blData = await conn.QuerySingleOrDefaultAsync<BonDeLivraisonDto>(
-                    """
+            // 2️⃣ Get latest BL Id
+            var blData = await conn.QuerySingleOrDefaultAsync<BonDeLivraisonDto>(
+                """
                 SELECT TOP (1)
                     Id
                 FROM dbo.Ecare_Order_Legend
@@ -217,21 +217,21 @@ public sealed class UpdateSecondWeightHandler
                   AND Matricule = @Matricule
                 ORDER BY PabExitAt DESC
                 """,
-                    new { request.RfidCard, request.Matricule });
+                new { request.RfidCard, request.Matricule });
 
-                if (blData is null)
-                    return Result<UpdateSecondWeightResult>.Fail("BL_DATA_NOT_FOUND");
+            if (blData is null)
+                return Result<UpdateSecondWeightResult>.Fail("BL_DATA_NOT_FOUND");
 
-                // 3️⃣ Call SAP Shipment API
-                var sapRequest = new ShipmentNotificationRequest
-                {
-                    Id = blData.Id
-                };
+            // 3️⃣ Call SAP Shipment API
+            var sapRequest = new ShipmentNotificationRequest
+            {
+                Id = blData.Id
+            };
 
-                var response = await _http.PostAsJsonAsync(
-                    "http://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapShipment/shipmentNotification",
-                    sapRequest,
-                    ct);
+            var response = await _http.PostAsJsonAsync(
+                "http://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapShipment/shipmentNotification",
+                sapRequest,
+                ct);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -243,59 +243,59 @@ public sealed class UpdateSecondWeightHandler
                 return Result<UpdateSecondWeightResult>.Fail("SAP_API_ERROR");
             }
 
-            var shipment = 
+            var shipment =
                     await response.Content.ReadFromJsonAsync<BlJson>(ct);
 
-                //if (shipment is null)
-                //    return Result<UpdateSecondWeightResult>.Fail("SAP_EMPTY_RESPONSE");
+            //if (shipment is null)
+            //    return Result<UpdateSecondWeightResult>.Fail("SAP_EMPTY_RESPONSE");
 
 
-                var signalRPayload = new BlJson
+            var signalRPayload = new BlJson
+            {
+                Site = shipment.Site,
+                BonDeLivraison = shipment.BonDeLivraison,
+                Client = new ClientJson
                 {
-                    Site = shipment.Site,
-                    BonDeLivraison = shipment.BonDeLivraison,
-                    Client = new ClientJson
-                    {
-                        CodeSap = shipment.Client.CodeSap,
-                        Name = shipment.Client.Name,
-                        Chantier = shipment.Client.Chantier,
-                        BonDeCommande = shipment.Client.BonDeCommande
-                    },
-                    Transport = new TransportJson
-                    {
-                        Transporteur = shipment.Transport.Transporteur,
-                        Matricule = shipment.Transport.Matricule,
-                        Chauffeur = shipment.Transport.Chauffeur,
-                        Scelles = shipment.Transport.Scelles,
-                        Cin = shipment.Transport.Cin,
-                    },
-                    Pesage = new PesageJson
-                    {
-                        PoidsVide = shipment.Pesage.PoidsVide,
-                        PoidsBrut = shipment.Pesage.PoidsBrut,
-                        PabEntryAt = shipment.Pesage.PabEntryAt,
-                        PabExitAt = shipment.Pesage.PabExitAt
-                    },
-                    Produits = shipment.Produits?.Select(p => new ProductJson
-                    {
-                        Code = p.Code,
-                        Libelle = p.Libelle,
-                        Quantite = p.Quantite,
-                        Sacs = p.Sacs
-                    }).ToList()
-                };
+                    CodeSap = shipment.Client.CodeSap,
+                    Name = shipment.Client.Name,
+                    Chantier = shipment.Client.Chantier,
+                    BonDeCommande = shipment.Client.BonDeCommande
+                },
+                Transport = new TransportJson
+                {
+                    Transporteur = shipment.Transport.Transporteur,
+                    Matricule = shipment.Transport.Matricule,
+                    Chauffeur = shipment.Transport.Chauffeur,
+                    Scelles = shipment.Transport.Scelles,
+                    Cin = shipment.Transport.Cin,
+                },
+                Pesage = new PesageJson
+                {
+                    PoidsVide = shipment.Pesage.PoidsVide,
+                    PoidsBrut = shipment.Pesage.PoidsBrut,
+                    PabEntryAt = shipment.Pesage.PabEntryAt,
+                    PabExitAt = shipment.Pesage.PabExitAt
+                },
+                Produits = shipment.Produits?.Select(p => new ProductJson
+                {
+                    Code = p.Code,
+                    Libelle = p.Libelle,
+                    Quantite = p.Quantite,
+                    Sacs = p.Sacs
+                }).ToList()
+            };
 
-                // 4️⃣ (Optional) Send to SignalR / printer
-               
-                await SignalRHelper.BroadcastAsync(
-                    _signalR,
-                    _opt.Hub,
-                    _opt.Method,
-                    signalRPayload,
-                    _log,
-                    ct);
-                
-                
+            // 4️⃣ (Optional) Send to SignalR / printer
+
+            await SignalRHelper.BroadcastAsync(
+                _signalR,
+                _opt.Hub,
+                _opt.Method,
+                signalRPayload,
+                _log,
+                ct);
+
+
 
             await SignalRHelper.BroadcastAsync(
                 _signalR,
@@ -308,21 +308,21 @@ public sealed class UpdateSecondWeightHandler
 
             // 5️⃣ Return success
             return Result<UpdateSecondWeightResult>.Ok(new UpdateSecondWeightResult
-                {
-                    Success = true,
-                    BonDeLivraison = blData
-                    // You can add Shipment = shipment if needed
-                });
-            }
-            catch (Exception ex)
             {
-                _log.LogError(
-                    ex,
-                    "Error updating second weight for RFID={Rfid}",
-                    request.RfidCard);
+                Success = true,
+                BonDeLivraison = blData
+                // You can add Shipment = shipment if needed
+            });
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(
+                ex,
+                "Error updating second weight for RFID={Rfid}",
+                request.RfidCard);
 
-                return Result<UpdateSecondWeightResult>.Fail("UNEXPECTED_ERROR");
-            }
+            return Result<UpdateSecondWeightResult>.Fail("UNEXPECTED_ERROR");
+        }
     }
 
     private sealed class RowsDto
@@ -332,7 +332,7 @@ public sealed class UpdateSecondWeightHandler
     }
 
 
-   
+
 
 
 

@@ -42,7 +42,11 @@ namespace Ecare.Application.Queries.GetDrivers
             }
             if (!string.IsNullOrWhiteSpace(request.Nom))
             {
-                where.Append(" AND Nom LIKE @Nom ");
+                where.Append(@" AND (
+                    ISNULL(Nom_Complet, '') LIKE @Nom
+                    OR ISNULL(Nom, '') LIKE @Nom
+                    OR ISNULL(Prenom, '') LIKE @Nom
+                ) ");
                 param.Add("@Nom", $"%{request.Nom}%");
             }
             if (!string.IsNullOrWhiteSpace(request.Numero))
@@ -54,6 +58,24 @@ namespace Ecare.Application.Queries.GetDrivers
             string sqlCount = $"SELECT COUNT(*) FROM Ecare_Driver {where}";
             string sqlData = $@"
             SELECT * FROM Ecare_Driver
+            {where}
+            ORDER BY Id DESC
+            OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
+        ";
+
+            sqlData = $@"
+            SELECT
+                Id,
+                Cin,
+                Nom,
+                Prenom,
+                Numero,
+                Permis,
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(Nom_Complet)), ''),
+                    NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(Prenom, ''), ' ', ISNULL(Nom, '')))), '')
+                ) AS NomComplet
+            FROM Ecare_Driver
             {where}
             ORDER BY Id DESC
             OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;

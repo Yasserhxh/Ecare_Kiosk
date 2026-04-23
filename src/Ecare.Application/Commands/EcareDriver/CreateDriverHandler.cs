@@ -25,9 +25,12 @@ namespace Ecare.Application.Commands.EcareDriver
 
         public async Task<Result<int>> Handle(CreateDriverCommand request, CancellationToken ct)
         {
+            var displayName = DriverWriteSupport.BuildDisplayName(request.NomComplet, request.Nom, request.Prenom);
+
             const string sql = @"
-            INSERT INTO Ecare_Driver (Cin, Nom, Prenom, Numero)
-            VALUES (@Cin, @Nom, @Prenom, @Numero);
+            INSERT INTO Ecare_Driver (Cin, Nom, Prenom, Numero, Permis, Nom_Complet)
+            VALUES (@Cin, @Nom, @Prenom, @Numero, @Permis, @NomComplet);
+
             SELECT CAST(SCOPE_IDENTITY() AS INT);
         ";
 
@@ -37,9 +40,24 @@ namespace Ecare.Application.Commands.EcareDriver
 
                 var id = await _uow.Connection.ExecuteScalarAsync<int>(
                     sql,
-                    request,
+                    new
+                    {
+                        request.Cin,
+                        request.Nom,
+                        request.Prenom,
+                        request.Numero,
+                        request.Permis,
+                        NomComplet = displayName
+                    },
                     _uow.Transaction
                 );
+
+                await DriverWriteSupport.SyncClientEquipementAsync(
+                    _uow,
+                    displayName,
+                    request.Permis,
+                    previousDisplayName: null,
+                    ct);
 
                 await _uow.CommitAsync(ct);
 

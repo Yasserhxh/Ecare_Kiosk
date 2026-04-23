@@ -25,9 +25,12 @@ namespace Ecare.Application.Queries.GetDrivers
             const string sql = @"
             SELECT 
                 Id,
-                (Nom + ' ' + Prenom) AS FullName
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(Nom_Complet)), ''),
+                    NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(Prenom, ''), ' ', ISNULL(Nom, '')))), '')
+                ) AS FullName
             FROM Ecare_Driver
-            ORDER BY Nom, Prenom;
+            ORDER BY FullName;
         ";
 
             using var conn = _factory.Create();

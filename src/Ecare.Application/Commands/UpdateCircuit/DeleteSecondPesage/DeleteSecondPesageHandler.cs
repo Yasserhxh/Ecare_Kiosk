@@ -26,6 +26,8 @@ namespace Ecare.Application.Commands.UpdateCircuit.DeleteSecondPesage
             SET 
                 Step = 4,
                 DeuxiemePoid = NULL,
+                NumberSacs_Charged = 0,
+                Weight_Charged = 0,
                 ElapsedTimeParking = NULL,
                 PabExitAt = NULL,
                 ElapsedTimeInF_Exit = NULL,
