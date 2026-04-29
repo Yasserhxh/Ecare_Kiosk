@@ -214,7 +214,7 @@ public sealed class UpdateSecondWeightHandler
                     Id
                 FROM dbo.Ecare_Order_Legend
                 WHERE RfidCard = @RfidCard
-                  AND Matricule = @Matricule
+                  AND Matricule = @Matricule AND AnnulationCommercial IS NULL
                 ORDER BY PabExitAt DESC
                 """,
                 new { request.RfidCard, request.Matricule });
