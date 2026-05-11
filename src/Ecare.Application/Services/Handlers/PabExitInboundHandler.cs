@@ -86,6 +86,11 @@ namespace Ecare.Application.Services.Handlers
                     name = vm.ClientName
                 },
 
+                order = new
+                {
+                    legendId = vm.LegendId
+                },
+
                 produit1 = new
                 {
                     name = vm.Produit1,

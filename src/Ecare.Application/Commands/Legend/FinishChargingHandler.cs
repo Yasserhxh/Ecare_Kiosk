@@ -5,7 +5,6 @@ using Microsoft.Azure.SignalR.Management;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System.Data;
 using System.Text.Json;
 
 namespace Ecare.Application.Commands.Legend;
@@ -33,15 +32,64 @@ public sealed class FinishChargingHandler
         await using var conn = new SqlConnection(connStr);
 
         var rows = await conn.ExecuteScalarAsync<int>(
-            "sp_FinishCharging",
-            new
-            {
-                RfidCard = request.RfidCard,
-                Matricule = request.Matricule,
-                NumberSacs_Charged = request.NumberSacs_Charged,
-                Weight_Charged = request.Weight_Charged
-            },
-            commandType: CommandType.StoredProcedure);
+            new CommandDefinition(
+                """
+                DECLARE @Now DATETIME =
+                    CONVERT(DATETIME, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time');
+
+                UPDATE L
+                SET
+                    NumberSacs_Charged = ISNULL(L.NumberSacs_Charged, 0) + @NumberSacs_Charged,
+                    Weight_Charged = ISNULL(L.Weight_Charged, 0) + @Weight_Charged,
+                    Step = CASE
+                        WHEN @Weight_Charged > 0 THEN 4
+                        WHEN (ISNULL(L.NumberSacs_Charged, 0) + @NumberSacs_Charged) >= ISNULL(L.SacNumber, 0) THEN 4
+                        WHEN @NumberSacs_Charged > 0 THEN 3
+                        ELSE L.Step
+                    END,
+                    FinishedChargingAt = CASE
+                        WHEN @Weight_Charged > 0 THEN @Now
+                        WHEN (ISNULL(L.NumberSacs_Charged, 0) + @NumberSacs_Charged) >= ISNULL(L.SacNumber, 0) THEN @Now
+                        ELSE L.FinishedChargingAt
+                    END,
+                    ElapsedCharging = CASE
+                        WHEN @Weight_Charged > 0
+                          OR (ISNULL(L.NumberSacs_Charged, 0) + @NumberSacs_Charged) >= ISNULL(L.SacNumber, 0)
+                        THEN DATEDIFF(MINUTE, L.StartChargingAt, @Now)
+                        ELSE L.ElapsedCharging
+                    END,
+                    LoadingStatus = CASE
+                        WHEN @Weight_Charged > 0 THEN 'Completed'
+                        WHEN (ISNULL(L.NumberSacs_Charged, 0) + @NumberSacs_Charged) >= ISNULL(L.SacNumber, 0) THEN 'Completed'
+                        WHEN @NumberSacs_Charged > 0 THEN 'Pending'
+                        ELSE L.LoadingStatus
+                    END
+                FROM dbo.Ecare_Order_Legend L
+                WHERE
+                    (
+                        @LegendId IS NOT NULL
+                        AND L.Id = @LegendId
+                        AND L.Step < 5
+                    )
+                    OR
+                    (
+                        @LegendId IS NULL
+                        AND L.RFIDCard = @RfidCard
+                        AND L.Matricule = @Matricule
+                        AND L.Step < 5
+                    );
+
+                SELECT @@ROWCOUNT;
+                """,
+                new
+                {
+                    request.LegendId,
+                    RfidCard = request.RfidCard,
+                    request.Matricule,
+                    request.NumberSacs_Charged,
+                    request.Weight_Charged
+                },
+                cancellationToken: ct));
 
         //Move it To Exe Automate
 

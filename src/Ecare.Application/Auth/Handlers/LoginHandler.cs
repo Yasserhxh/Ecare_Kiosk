@@ -47,7 +47,7 @@ public class LoginHandler(
             user.Email!,
             role,
             userId,
-            DateTime.UtcNow.AddHours(2)
+            jwtService.GetExpirationUtc()
         );
     }
 }

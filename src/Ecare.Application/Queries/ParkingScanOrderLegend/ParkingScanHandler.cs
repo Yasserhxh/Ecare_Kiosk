@@ -32,11 +32,7 @@ public sealed class ParkingScanHandler
         var http = _httpFactory.CreateClient();
         try
         {
-            var orderFound = await conn.QueryFirstOrDefaultAsync<OrderLegendVm>(
-            "Parking_Scan_Tag",
-            new { RFIDCard = request.Slv },
-            commandType: CommandType.StoredProcedure
-            );
+            var orderFound = await GetSingleActiveOrderByRfidAsync(conn, request.Slv);
 
             if (orderFound != null)
             {
@@ -88,13 +84,13 @@ public sealed class ParkingScanHandler
 
                 // STEP 2 — CHECK LAST ORDER
                 var order = await conn.QueryFirstOrDefaultAsync<OrderLegendVm>(
-                    "Parking_Scan_OrderLegend",
+                    GetScopedActiveOrderSql,
                     new
                     {
                         RFIDCard = request.Slv,
-
-                    },
-                    commandType: System.Data.CommandType.StoredProcedure
+                        Matricule = (string?)e.Matricule,
+                        CodeSapClient = (string?)e.CodeClientSAP,
+                    }
                 );
 
                 if (order != null)
@@ -143,5 +139,61 @@ public sealed class ParkingScanHandler
 
         }
 
+    }
+
+    private const string SelectOrderColumns = @"
+SELECT
+    L.Id AS LegendId,
+    L.CodeSapCommande,
+    L.BonDeCommande,
+    L.Matricule,
+    L.Produit1,
+    L.Produit2,
+    L.Quantite1,
+    L.Quantite2,
+    L.PremierePoid,
+    L.DeuxiemePoid,
+    L.Step,
+    L.CodeSapClient,
+    L.StartChargingAt,
+    L.RFIDCard,
+    C1.ImageUrl AS Produit1Image,
+    C2.ImageUrl AS Produit2Image,
+    L.ClientName,
+    L.ChauffeurName
+FROM dbo.Ecare_Order_Legend L
+LEFT JOIN dbo.EcareCiments C1 ON C1.Name = L.Produit1
+LEFT JOIN dbo.EcareCiments C2 ON C2.Name = L.Produit2
+";
+
+    private const string GetSingleActiveOrderByRfidSql = SelectOrderColumns + @"
+WHERE L.RFIDCard = @RFIDCard
+  AND ISNULL(L.Step, 0) < 5
+ORDER BY L.Id DESC;
+";
+
+    private const string GetScopedActiveOrderSql = SelectOrderColumns + @"
+WHERE L.RFIDCard = @RFIDCard
+  AND ISNULL(L.Step, 0) < 5
+  AND
+  (
+      (NULLIF(@Matricule, '') IS NOT NULL AND L.Matricule = @Matricule)
+      OR
+      (NULLIF(@CodeSapClient, '') IS NOT NULL AND L.CodeSapClient = @CodeSapClient)
+  )
+ORDER BY
+    CASE WHEN NULLIF(@Matricule, '') IS NOT NULL AND L.Matricule = @Matricule THEN 0 ELSE 1 END,
+    L.Id DESC;
+";
+
+    private static async Task<OrderLegendVm?> GetSingleActiveOrderByRfidAsync(SqlConnection conn, string slv)
+    {
+        var rows = (await conn.QueryAsync<OrderLegendVm>(
+            GetSingleActiveOrderByRfidSql,
+            new { RFIDCard = slv }))
+            .Take(2)
+            .ToList();
+
+        return rows.Count == 1 ? rows[0] : null;
     }
 }

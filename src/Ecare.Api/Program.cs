@@ -15,6 +15,7 @@ using Ecare.Shared;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.EntityFrameworkCore;
@@ -222,6 +223,28 @@ try
 
     Console.WriteLine("✓ Application built successfully");
 
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GlobalException");
+            var feature = context.Features.Get<IExceptionHandlerFeature>();
+
+            if (feature?.Error is not null)
+            {
+                logger.LogError(feature.Error, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
+            }
+
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = "Une erreur interne est survenue."
+            });
+        });
+    });
+
     app.UseSwagger();
     app.UseSwaggerUI();
     app.UseCors(ViteDev);
@@ -308,7 +331,5 @@ catch (Exception ex)
         Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
     }
 
-    Console.WriteLine("\nPress any key to exit...");
-    Console.ReadKey();
     throw;
 }

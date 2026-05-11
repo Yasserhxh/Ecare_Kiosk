@@ -98,6 +98,7 @@ namespace Ecare.Application.Services
 
                 order = new
                 {
+                    legendId = vm.LegendId,
                     produit1 = vm.Produit1,
                     quantite1 = vm.Quantite1,
                     produit2 = vm.Produit2,

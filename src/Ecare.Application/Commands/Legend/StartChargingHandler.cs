@@ -4,7 +4,6 @@ using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System.Data;
 
 namespace Ecare.Application.Commands.Legend;
 
@@ -27,13 +26,39 @@ public sealed class StartChargingHandler
         await using var conn = new SqlConnection(connStr);
 
         var rows = await conn.ExecuteScalarAsync<int>(
-            "sp_StartCharging",
-            new
-            {
-                RfidCard = request.RfidCard,
-                Matricule = request.Matricule
-            },
-            commandType: CommandType.StoredProcedure);
+            new CommandDefinition(
+                """
+                DECLARE @Now DATETIME =
+                    CONVERT(DATETIME, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time');
+
+                UPDATE dbo.Ecare_Order_Legend
+                SET
+                    StartChargingAt = @Now,
+                    Step = 3,
+                    ElapsedInPab_Charging = DATEDIFF(MINUTE, PabEntryAt, @Now)
+                WHERE
+                    (
+                        @LegendId IS NOT NULL
+                        AND Id = @LegendId
+                        AND Step = 2
+                    )
+                    OR
+                    (
+                        @LegendId IS NULL
+                        AND RFIDCard = @RfidCard
+                        AND Matricule = @Matricule
+                        AND Step = 2
+                    );
+
+                SELECT @@ROWCOUNT;
+                """,
+                new
+                {
+                    request.LegendId,
+                    RfidCard = request.RfidCard,
+                    request.Matricule
+                },
+                cancellationToken: ct));
 
         if (rows == 0)
             return Result<bool>.Fail("NO_ROW_UPDATED");

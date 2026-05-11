@@ -9,6 +9,8 @@ namespace Ecare.Application.Auth.Services;
 
 public class JwtTokenService(IConfiguration config)
 {
+    private static readonly TimeSpan TokenLifetime = TimeSpan.FromDays(365);
+
     public string GenerateToken(ApplicationUser user, string role)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
@@ -26,9 +28,11 @@ public class JwtTokenService(IConfiguration config)
             issuer: config["Jwt:Issuer"],
             audience: config["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(2),
+            expires: DateTime.UtcNow.Add(TokenLifetime),
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    public DateTime GetExpirationUtc() => DateTime.UtcNow.Add(TokenLifetime);
 }

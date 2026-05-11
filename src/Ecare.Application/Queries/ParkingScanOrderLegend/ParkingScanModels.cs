@@ -28,6 +28,7 @@ namespace Ecare.Application.Queries.ParkingScanOrderLegend
 
         public sealed class OrderLegendVm
         {
+            public int LegendId { get; set; }
             public string CodeSapCommande { get; set; } = "";
             public string BonDeCommande { get; set; } = "";
             public string Matricule { get; set; } = "";

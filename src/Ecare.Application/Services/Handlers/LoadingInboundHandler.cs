@@ -108,6 +108,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             aCharger = vm.SacNumber - vm.NumberSacs_Charged,
             order = new
             {
+                legendId = vm.LegendId,
                 number = vm.BonDeCommande,
                 destination = vm.Chantier,
                 ligne = vm.Ligne,

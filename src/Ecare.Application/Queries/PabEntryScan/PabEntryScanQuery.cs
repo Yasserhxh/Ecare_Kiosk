@@ -8,6 +8,7 @@ namespace Ecare.Application.Queries.PabEntryScan
 
     public sealed class PabEntryScanVm
     {
+        public int? LegendId { get; set; }
         public string? BonDeCommande { get; set; }
         public int? PTAC {  get; set; }
         public int? Tare {  get; set; }

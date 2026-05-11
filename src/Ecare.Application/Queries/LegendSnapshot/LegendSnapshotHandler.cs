@@ -4,7 +4,6 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Ecare.Shared;
-using System.Data;
 
 namespace Ecare.Application.Queries.LegendSnapshot;
 
@@ -33,9 +32,63 @@ public sealed class LegendSnapshotHandler
             await using var conn = new SqlConnection(connStr);
 
             var row = await conn.QueryFirstOrDefaultAsync<LegendSnapshotVm>(
-                "sp_GetFullLegendSnapshot",
-                new { RfidCard = request.RfidCard },
-                commandType: CommandType.StoredProcedure);
+                new CommandDefinition(
+                    """
+                    SELECT TOP 1
+                        lg.Id AS LegendId,
+                        lg.ClientName,
+                        lg.Chantier,
+                        lg.Matricule,
+                        lg.RFIDCard,
+                        lg.TypeCamion,
+                        lg.TypeProduit,
+                        lg.BonDeCommande,
+                        lg.Ligne,
+                        lg.PremierePoid,
+                        lg.DeuxiemePoid,
+                        lg.ParkingAt,
+                        lg.PabEntryAt,
+                        lg.StartChargingAt,
+                        lg.FinishedChargingAt,
+                        lg.PabExitAt,
+                        lg.Step,
+                        lg.SacNumber,
+                        lg.NumberSacs_Charged,
+                        lg.Weight_Charged,
+                        d.Id AS DriverId,
+                        d.Nom AS DriverNom,
+                        d.Prenom AS DriverPrenom,
+                        lg.ChauffeurName AS DriverFullName,
+                        t.Id AS TruckId,
+                        t.Matricule AS TruckPlate,
+                        tt.Type AS TruckTypeName,
+                        lg.Produit1,
+                        CAST(lg.Quantite1 AS FLOAT) AS Quantite1,
+                        cim1.ImageUrl AS Produit1Image,
+                        lg.Produit2,
+                        CAST(lg.Quantite2 AS FLOAT) AS Quantite2,
+                        cim2.ImageUrl AS Produit2Image,
+                        ln.Ligne_ImageUrl AS LigneImage,
+                        cim1.QualityCode,
+                        cim2.QualityCode AS QaualityCode2
+                    FROM dbo.Ecare_Order_Legend lg
+                    LEFT JOIN dbo.Ecare_Truck t
+                        ON t.Matricule = lg.Matricule
+                    LEFT JOIN dbo.Ecare_Driver d
+                        ON d.Id = t.DriverId
+                    LEFT JOIN dbo.Ecare_Truck_Type tt
+                        ON tt.Id = t.TruckTypeId
+                    LEFT JOIN dbo.EcareCiments cim1
+                        ON cim1.Name = lg.Produit1
+                    LEFT JOIN dbo.EcareCiments cim2
+                        ON cim2.Name = lg.Produit2
+                    LEFT JOIN dbo.Ecare_Ligne ln
+                        ON ln.Nom = lg.Ligne
+                    WHERE CAST(lg.RFIDCard AS NVARCHAR(50)) = @RfidCard
+                    ORDER BY lg.Id DESC;
+                    """,
+                    new { RfidCard = request.RfidCard },
+                    cancellationToken: ct));
 
             if (row is null)
             {

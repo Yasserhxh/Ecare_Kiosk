@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using Ecare.Shared;
 using MediatR;
 
@@ -18,219 +18,200 @@ namespace Ecare.Application.Commands.MergeParkingWithSap
         {
             await _uow.BeginAsync(ct);
 
-            // 1) Load Parking Row (Matricule & empty product)
-            const string sqlParking = @"
-            SELECT TOP 1 *
-            FROM dbo.Ecare_Order_Legend
-            WHERE Matricule = @Matricule
-              AND (Produit1 IS NULL OR Produit1 = '')
-            ORDER BY Id DESC;
-";
-            var parking = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
-                sqlParking,
-                new { request.Matricule },
-                _uow.Transaction
-            );
-
-            if (parking == null)
+            try
             {
-                await _uow.RollbackAsync(ct);
-                return Result<int>.Fail("PARKING_ROW_NOT_FOUND");
-            }
+                static object? GetRawValue(dynamic row, string key)
+                {
+                    if (row is IDictionary<string, object> dict && dict.TryGetValue(key, out var value))
+                        return value;
 
-            // 2) Load SAP Row (CodeSapCommande & product exists)
-            const string sqlSap = @"
-            SELECT TOP 1 *
-            FROM dbo.Ecare_Order_Legend
-            WHERE CodeSapCommande = @CodeSapCommande
-              AND Produit1 IS NOT NULL
-            ORDER BY Id DESC;
-";
-            var sap = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
-                sqlSap,
-                new { request.CodeSapCommande },
-                _uow.Transaction
-            );
+                    return null;
+                }
 
-            if (sap == null)
-            {
-                await _uow.RollbackAsync(ct);
-                return Result<int>.Fail("SAP_ROW_NOT_FOUND");
-            }
+                static T? GetTypedValue<T>(dynamic row, string key)
+                {
+                    var value = GetRawValue(row, key);
+                    if (value is null || value is DBNull)
+                        return default;
 
-            // 3) Load latest PTAC/TARE from ClientEquipements (by Matricule)
-            const string sqlEquip = @"
-            SELECT TOP (1) PTAC, TARE
-            FROM dbo.Ecare_ClientEquipements
-            WHERE Matricule = @Matricule
-            ORDER BY Id DESC;
-            ";
-            var equip = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
-                sqlEquip,
-                new { Matricule = (string)parking.Matricule },
-                _uow.Transaction
-            );
+                    return (T)Convert.ChangeType(value, typeof(T));
+                }
 
-            // Prefer values already present in parking row; fallback to equip; else null
-            int? ptac = parking.PTAC ?? equip?.PTAC;
-            int? tare = parking.TARE ?? equip?.TARE;
-
-            // 4) UPSERT merged row (key = Matricule + CodeSapCommande)
-            const string sqlUpsert = @"
-            DECLARE @MergedId INT;
-
-            UPDATE dbo.Ecare_Order_Legend
-            SET
-                ClientName          = @ClientName,
-                Chantier            = @Chantier,
-                RFIDCard            = @RFIDCard,
-                TypeCamion          = @TypeCamion,
-                NombrePlombs        = @NombrePlombs,
-
-                Produit1            = @Produit1,
-                Quantite1           = @Quantite1,
-                Produit2            = @Produit2,
-                Quantite2           = @Quantite2,
-                TypeProduit         = @TypeProduit,
-
-                BonDeCommande       = @BonDeCommande,
-                SacNumber           = @SacNumber,
-
-                CodeSapProduit1     = @CodeSapProduit1,
-                CodeSapProduit2     = @CodeSapProduit2,
-                CodeSapChantier     = @CodeSapChantier,
-                CodeSapClient       = @CodeSapClient,
-                CodeSapCommande     = @CodeSapCommande,
-
-                -- NEW FIELDS
-                ChauffeurName       = COALESCE(@ChauffeurName, ChauffeurName),
-                CodeTransporteurSap = COALESCE(@CodeTransporteurSap, CodeTransporteurSap),
-                TransporteurName    = COALESCE(@TransporteurName, TransporteurName),
-                PermisDeConduite    = COALESCE(@PermisDeConduite, PermisDeConduite),
-
-                -- PTAC / TARE
-                PTAC                = COALESCE(@PTAC, PTAC),
-                TARE                = COALESCE(@TARE, TARE),
-
-                ParkingAt           = COALESCE(@ParkingAt, ParkingAt),
-                AddedToQueueAt      = COALESCE(@AddedToQueueAt, AddedToQueueAt),
-                Step                = 1
-            WHERE Matricule = @Matricule
-              AND CodeSapCommande = @CodeSapCommande;
-
-            IF (@@ROWCOUNT = 0)
-            BEGIN
-                INSERT INTO dbo.Ecare_Order_Legend
-                (
-                    ClientName, Chantier, Matricule, RFIDCard, TypeCamion, NombrePlombs,
-                    Produit1, Quantite1, Produit2, Quantite2, TypeProduit,
-                    BonDeCommande, SacNumber,
-                    CodeSapProduit1, CodeSapProduit2,
-                    CodeSapChantier, CodeSapClient, CodeSapCommande,
-                    ParkingAt, Step, AddedToQueueAt,
-
-                    -- PTAC / TARE
-                    PTAC, TARE,
-
-                    -- NEW FIELDS
-                    ChauffeurName, CodeTransporteurSap, TransporteurName, PermisDeConduite
-                )
-                VALUES
-                (
-                    @ClientName, @Chantier, @Matricule, @RFIDCard, @TypeCamion, @NombrePlombs,
-                    @Produit1, @Quantite1, @Produit2, @Quantite2, @TypeProduit,
-                    @BonDeCommande, @SacNumber,
-                    @CodeSapProduit1, @CodeSapProduit2,
-                    @CodeSapChantier, @CodeSapClient, @CodeSapCommande,
-                    @ParkingAt, 1, @AddedToQueueAt,
-
-                    -- PTAC / TARE
-                    @PTAC, @TARE,
-
-                    -- NEW FIELDS
-                    @ChauffeurName, @CodeTransporteurSap, @TransporteurName, @PermisDeConduite
-                );
-
-                SET @MergedId = CAST(SCOPE_IDENTITY() AS INT);
-            END
-            ELSE
-            BEGIN
-                SELECT TOP 1 @MergedId = Id
+                const string sqlParking = @"
+                SELECT TOP 1 *
                 FROM dbo.Ecare_Order_Legend
                 WHERE Matricule = @Matricule
-                  AND CodeSapCommande = @CodeSapCommande
-                ORDER BY Id DESC;
-            END
+                  AND (Produit1 IS NULL OR Produit1 = '')
+                  AND AnnulationCommercial IS NULL
+                ORDER BY Id DESC;";
 
-            SELECT @MergedId;
-            ";
+                var parking = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
+                    sqlParking,
+                    new { request.Matricule },
+                    _uow.Transaction);
 
-            var now = DateTime.Now;
+                if (parking is null)
+                    return Result<int>.Fail("PARKING_ROW_NOT_FOUND");
 
-            // Prefer from parking (usually filled there); fallback to sap
-            string? chauffeurName = parking.ChauffeurName ?? sap.ChauffeurName;
-            string? codeTransporteurSap = parking.CodeTransporteurSap ?? sap.CodeTransporteurSap;
-            string? transporteurName = parking.TransporteurName ?? sap.TransporteurName;
+                const string sqlSap = @"
+                SELECT TOP 1 *
+                FROM dbo.Ecare_Order_Legend
+                WHERE CodeSapCommande = @CodeSapCommande
+                  AND Produit1 IS NOT NULL
+                  AND AnnulationCommercial IS NULL
+                ORDER BY Id DESC;";
 
-            // Your legend column is PermisDeConduite, equip column is PermisConducteur
-            string? permis = parking.PermisDeConduite ?? sap.PermisDeConduite;
+                var sap = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
+                    sqlSap,
+                    new { request.CodeSapCommande },
+                    _uow.Transaction);
 
-            var mergedId = await _uow.Connection.ExecuteScalarAsync<int>(
-                sqlUpsert,
-                new
+                if (sap is null)
+                    return Result<int>.Fail("SAP_ROW_NOT_FOUND");
+
+                var parkingId = GetTypedValue<int?>(parking, "Id");
+                var sapId = GetTypedValue<int?>(sap, "Id");
+
+                if (!parkingId.HasValue || !sapId.HasValue)
+                    return Result<int>.Fail("MERGE_ROW_ID_MISSING");
+
+                if (parkingId.Value == sapId.Value)
                 {
-                    // Key
-                    Matricule = (string)parking.Matricule,
-                    CodeSapCommande = (string)sap.CodeSapCommande,
+                    await _uow.CommitAsync(ct);
+                    return Result<int>.Ok(sapId.Value);
+                }
 
-                    // From SAP row
-                    sap.ClientName,
-                    sap.Chantier,
-                    Produit1 = sap.Produit1,
-                    Quantite1 = sap.Quantite1,
-                    Produit2 = sap.Produit2,
-                    Quantite2 = sap.Quantite2,
-                    TypeProduit = sap.TypeProduit,
-                    BonDeCommande = sap.BonDeCommande,
-                    SacNumber = sap.SacNumber,
-                    CodeSapProduit1 = sap.CodeSapProduit1,
-                    CodeSapProduit2 = sap.CodeSapProduit2,
-                    CodeSapChantier = sap.CodeSapChantier,
-                    CodeSapClient = sap.CodeSapClient,
+                const string sqlEquip = @"
+                SELECT TOP (1) PTAC, TARE
+                FROM dbo.Ecare_ClientEquipements
+                WHERE Matricule = @Matricule
+                ORDER BY Id DESC;";
 
-                    // From Parking row
-                    RFIDCard = parking.RFIDCard,
-                    TypeCamion = parking.TypeCamion,
-                    NombrePlombs = parking.NombrePlombs,
-                    ParkingAt = parking.ParkingAt ?? now,
-                    AddedToQueueAt = parking.AddedToQueueAt ?? now,
+                var equip = await _uow.Connection.QueryFirstOrDefaultAsync<dynamic>(
+                    sqlEquip,
+                    new { Matricule = GetTypedValue<string>(parking, "Matricule") },
+                    _uow.Transaction);
 
-                    // NEW FIELDS
-                    ChauffeurName = chauffeurName,
-                    CodeTransporteurSap = codeTransporteurSap,
-                    TransporteurName = transporteurName,
-                    PermisDeConduite = permis,
+                int? ptac = GetTypedValue<int?>(parking, "PTAC") ?? GetTypedValue<int?>(equip, "PTAC");
+                int? tare = GetTypedValue<int?>(parking, "TARE") ?? GetTypedValue<int?>(equip, "TARE");
 
-                    // PTAC / TARE
-                    PTAC = ptac,
-                    TARE = tare
-                },
-                _uow.Transaction
-            );
+                var chauffeurName = GetTypedValue<string>(parking, "ChauffeurName") ?? GetTypedValue<string>(sap, "ChauffeurName");
+                var codeTransporteurSap = GetTypedValue<string>(parking, "CodeTransporteurSap") ?? GetTypedValue<string>(sap, "CodeTransporteurSap");
+                var transporteurName = GetTypedValue<string>(parking, "TransporteurName") ?? GetTypedValue<string>(sap, "TransporteurName");
+                var permis = GetTypedValue<string>(parking, "PermisDeConduite") ?? GetTypedValue<string>(sap, "PermisDeConduite");
 
-            // 5) DELETE BOTH OLD ROWS (parking + sap)
-            const string sqlDelete = @"
-            DELETE FROM dbo.Ecare_Order_Legend
-            WHERE Id = @ParkingId OR Id = @SapId;
-            ";
-            await _uow.Connection.ExecuteAsync(
-                sqlDelete,
-                new { ParkingId = (int)parking.Id, SapId = (int)sap.Id },
-                _uow.Transaction
-            );
+                var sapHasProgress =
+                    (GetTypedValue<int?>(sap, "Step") ?? 0) > 1
+                    || GetRawValue(sap, "PremierePoid") is not null
+                    || GetRawValue(sap, "DeuxiemePoid") is not null
+                    || GetRawValue(sap, "PabEntryAt") is not null
+                    || GetRawValue(sap, "StartChargingAt") is not null
+                    || GetRawValue(sap, "FinishedChargingAt") is not null
+                    || GetRawValue(sap, "PabExitAt") is not null
+                    || !string.IsNullOrWhiteSpace(GetTypedValue<string>(sap, "BonDeLivraison"));
 
-            await _uow.CommitAsync(ct);
-            return Result<int>.Ok(mergedId);
+                var targetId = sapHasProgress ? sapId.Value : parkingId.Value;
+                var deleteId = sapHasProgress ? parkingId.Value : sapId.Value;
+                var now = DateTime.Now;
+
+                const string sqlMergeIntoTarget = @"
+                UPDATE dbo.Ecare_Order_Legend
+                SET
+                    OrderId             = COALESCE(@OrderId, OrderId),
+                    CommercialOrderId   = COALESCE(@CommercialOrderId, CommercialOrderId),
+                    UserId              = COALESCE(@UserId, UserId),
+                    Status              = COALESCE(@Status, Status),
+                    ClientName          = @ClientName,
+                    Chantier            = @Chantier,
+                    Matricule           = COALESCE(@Matricule, Matricule),
+                    RFIDCard            = COALESCE(@RFIDCard, RFIDCard),
+                    TypeCamion          = COALESCE(@TypeCamion, TypeCamion),
+                    NombrePlombs        = COALESCE(@NombrePlombs, NombrePlombs),
+                    Produit1            = @Produit1,
+                    Quantite1           = @Quantite1,
+                    Produit2            = @Produit2,
+                    Quantite2           = @Quantite2,
+                    TypeProduit         = COALESCE(@TypeProduit, TypeProduit),
+                    BonDeCommande       = @BonDeCommande,
+                    SacNumber           = COALESCE(@SacNumber, SacNumber),
+                    CodeSapProduit1     = @CodeSapProduit1,
+                    CodeSapProduit2     = @CodeSapProduit2,
+                    CodeSapChantier     = @CodeSapChantier,
+                    CodeClientSAP       = COALESCE(@CodeSapClient, CodeClientSAP),
+                    CodeSapClient       = @CodeSapClient,
+                    CodeSapCommande     = @CodeSapCommande,
+                    ChauffeurName       = COALESCE(@ChauffeurName, ChauffeurName),
+                    CodeTransporteurSap = COALESCE(@CodeTransporteurSap, CodeTransporteurSap),
+                    TransporteurName    = COALESCE(@TransporteurName, TransporteurName),
+                    PermisDeConduite    = COALESCE(@PermisDeConduite, PermisDeConduite),
+                    PTAC                = COALESCE(@PTAC, PTAC),
+                    TARE                = COALESCE(@TARE, TARE),
+                    ParkingAt           = COALESCE(ParkingAt, @ParkingAt),
+                    AddedToQueueAt      = COALESCE(AddedToQueueAt, @AddedToQueueAt),
+                    Step                = CASE
+                                              WHEN @KeepExistingStep = 1 THEN Step
+                                              WHEN Step < 1 THEN 1
+                                              ELSE Step
+                                          END
+                WHERE Id = @TargetId;
+
+                SELECT @TargetId;";
+
+                var mergedId = await _uow.Connection.ExecuteScalarAsync<int>(
+                    sqlMergeIntoTarget,
+                    new
+                    {
+                        TargetId = targetId,
+                        KeepExistingStep = sapHasProgress ? 1 : 0,
+                        OrderId = GetTypedValue<int?>(sap, "OrderId"),
+                        CommercialOrderId = GetTypedValue<int?>(sap, "CommercialOrderId"),
+                        UserId = GetTypedValue<string>(sap, "UserId"),
+                        Status = GetTypedValue<string>(sap, "Status"),
+                        ClientName = GetTypedValue<string>(sap, "ClientName"),
+                        Chantier = GetTypedValue<string>(sap, "Chantier"),
+                        Matricule = GetTypedValue<string>(parking, "Matricule"),
+                        RFIDCard = GetTypedValue<string>(parking, "RFIDCard"),
+                        TypeCamion = GetTypedValue<string>(parking, "TypeCamion"),
+                        NombrePlombs = GetTypedValue<int?>(parking, "NombrePlombs"),
+                        Produit1 = GetTypedValue<string>(sap, "Produit1"),
+                        Quantite1 = GetTypedValue<decimal?>(sap, "Quantite1"),
+                        Produit2 = GetTypedValue<string>(sap, "Produit2"),
+                        Quantite2 = GetTypedValue<decimal?>(sap, "Quantite2"),
+                        TypeProduit = GetTypedValue<string>(sap, "TypeProduit"),
+                        BonDeCommande = GetTypedValue<string>(sap, "BonDeCommande"),
+                        SacNumber = GetTypedValue<int?>(sap, "SacNumber"),
+                        CodeSapProduit1 = GetTypedValue<string>(sap, "CodeSapProduit1"),
+                        CodeSapProduit2 = GetTypedValue<string>(sap, "CodeSapProduit2"),
+                        CodeSapChantier = GetTypedValue<string>(sap, "CodeSapChantier"),
+                        CodeSapClient = GetTypedValue<string>(sap, "CodeSapClient"),
+                        CodeSapCommande = GetTypedValue<string>(sap, "CodeSapCommande"),
+                        ChauffeurName = chauffeurName,
+                        CodeTransporteurSap = codeTransporteurSap,
+                        TransporteurName = transporteurName,
+                        PermisDeConduite = permis,
+                        PTAC = ptac,
+                        TARE = tare,
+                        ParkingAt = GetTypedValue<DateTime?>(parking, "ParkingAt") ?? now,
+                        AddedToQueueAt = GetTypedValue<DateTime?>(parking, "AddedToQueueAt") ?? now
+                    },
+                    _uow.Transaction);
+
+                await _uow.Connection.ExecuteAsync(
+                    """
+                    DELETE FROM dbo.Ecare_Order_Legend
+                    WHERE Id = @DeleteId;
+                    """,
+                    new { DeleteId = deleteId },
+                    _uow.Transaction);
+
+                await _uow.CommitAsync(ct);
+                return Result<int>.Ok(mergedId);
+            }
+            catch
+            {
+                await _uow.RollbackAsync(ct);
+                throw;
+            }
         }
     }
 }

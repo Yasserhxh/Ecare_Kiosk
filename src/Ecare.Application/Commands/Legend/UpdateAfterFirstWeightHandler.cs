@@ -37,6 +37,15 @@ public sealed class UpdateAfterFirstWeightHandler
         public decimal? Quantite1 { get; set; }
         public decimal? Quantite2 { get; set; }
         public int? Step { get; set; }
+        public DateTime? ParkingAt { get; set; }
+        public string? Ligne { get; set; }
+    }
+
+    private sealed class LigneLookupVm
+    {
+        public int LigneId { get; set; }
+        public string LigneName { get; set; } = string.Empty;
+        public string? LigneImageUrl { get; set; }
     }
 
     public async Task<Result<FirstWeightResultVm>> Handle(
@@ -71,7 +80,8 @@ public sealed class UpdateAfterFirstWeightHandler
                 request.RfidCard,
                 request.Matricule,
                 request.PremierePoid,
-                request.Produit1
+                request.Produit1,
+                request.LegendId
             },
             process: ProcessName,
             legendId: null,
@@ -98,12 +108,28 @@ public sealed class UpdateAfterFirstWeightHandler
                     PTAC,
                     Quantite1,
                     Quantite2,
-                    Step
+                    Step,
+                    ParkingAt,
+                    Ligne
                 FROM dbo.Ecare_Order_Legend
                 WHERE RFIDCard = @RfidCard
                   AND Matricule = @Matricule
                   AND ISNULL(Step, 0) < 5
                 ORDER BY Id DESC;
+            """;
+
+            const string sqlLegendById = """
+                SELECT TOP (1)
+                    Id,
+                    PTAC,
+                    Quantite1,
+                    Quantite2,
+                    Step,
+                    ParkingAt,
+                    Ligne
+                FROM dbo.Ecare_Order_Legend
+                WHERE Id = @LegendId
+                  AND ISNULL(Step, 0) < 5;
             """;
 
             await SafeDbLogAsync(
@@ -113,7 +139,7 @@ public sealed class UpdateAfterFirstWeightHandler
                 stage: "LOAD_LEGEND_BEGIN",
                 statusCode: 0,
                 isSuccess: true,
-                payload: new { request.RfidCard, request.Matricule },
+                payload: new { request.RfidCard, request.Matricule, request.LegendId },
                 process: ProcessName,
                 legendId: null,
                 spName: null,
@@ -125,8 +151,10 @@ public sealed class UpdateAfterFirstWeightHandler
 
             vm = await conn.QueryFirstOrDefaultAsync<LegendLoadVm>(
                 new CommandDefinition(
-                    sqlLegend,
-                    new { request.RfidCard, request.Matricule },
+                    request.LegendId.HasValue ? sqlLegendById : sqlLegend,
+                    request.LegendId.HasValue
+                        ? new { request.LegendId }
+                        : new { request.RfidCard, request.Matricule },
                     cancellationToken: ct));
 
             if (vm is null)
@@ -316,89 +344,181 @@ public sealed class UpdateAfterFirstWeightHandler
             }
 
             // ----------------------------------------------
-            // 3) Call stored procedure (your existing logic)
+            // 3) Apply first weight with inline SQL
             // ----------------------------------------------
-            var spParams = new
-            {
-                RfidCard = request.RfidCard,
-                Matricule = request.Matricule,
-                PremierePoid = request.PremierePoid,
-                Produit1 = request.Produit1
-            };
+            var sw = Stopwatch.StartNew();
+            FirstWeightResultVm? row;
+            const string sqlSelectLigne = """
+                ;WITH LigneUsage AS
+                (
+                    SELECT
+                        L.Id AS LigneId,
+                        L.Nom AS LigneName,
+                        L.Ligne_ImageUrl AS LigneImageUrl,
+                        FreeCapacity = L.Capacity - COUNT(OL.Id)
+                    FROM dbo.EcareCiments C
+                    JOIN dbo.Ecare_LigneCiments LC ON LC.CimentId = C.Id
+                    JOIN dbo.Ecare_Ligne L ON L.Id = LC.LigneId
+                    LEFT JOIN dbo.Ecare_Order_Legend OL
+                         ON OL.Ligne = L.Nom
+                        AND OL.Produit1 = @Produit1
+                        AND OL.Step > 1
+                        AND OL.Step < 5
+                    WHERE C.Name = @Produit1
+                      AND LC.Actif = 1
+                    GROUP BY L.Id, L.Nom, L.Ligne_ImageUrl, L.Capacity
+                )
+                SELECT TOP (1)
+                    LigneId,
+                    LigneName,
+                    LigneImageUrl
+                FROM LigneUsage
+                WHERE FreeCapacity > 0
+                ORDER BY FreeCapacity DESC, LigneId;
+            """;
+
+            const string sqlUpdateLegend = """
+                UPDATE dbo.Ecare_Order_Legend
+                SET
+                    PremierePoid = @PremierePoid,
+                    PabEntryAt = CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'),
+                    ElapsedTimeParking = CASE
+                        WHEN ParkingAt IS NULL THEN NULL
+                        ELSE DATEDIFF(
+                            MINUTE,
+                            ParkingAt,
+                            CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time')
+                        )
+                    END,
+                    Step = 2,
+                    Ligne = @LigneName
+                WHERE
+                    (
+                        @LegendId IS NOT NULL
+                        AND Id = @LegendId
+                        AND Step = 1
+                    )
+                    OR
+                    (
+                        @LegendId IS NULL
+                        AND RFIDCard = @RfidCard
+                        AND Matricule = @Matricule
+                        AND Step = 1
+                    );
+            """;
+
+            const string sqlDecrementCapacity = """
+                UPDATE dbo.Ecare_Ligne
+                SET RealtimeCapacity = RealtimeCapacity - 1
+                WHERE Id = @LigneId
+                  AND RealtimeCapacity > 0;
+            """;
 
             await SafeDbLogAsync(
                 connStr,
                 traceId,
                 evt,
-                stage: "SP_CALL_BEGIN",
+                stage: "INLINE_UPDATE_BEGIN",
                 statusCode: 0,
                 isSuccess: true,
-                payload: spParams,
+                payload: new
+                {
+                    request.LegendId,
+                    request.RfidCard,
+                    request.Matricule,
+                    request.PremierePoid,
+                    request.Produit1
+                },
                 process: ProcessName,
                 legendId: vm.Id,
-                spName: "sp_UpdateAfterFirstWeight",
+                spName: null,
                 hubName: null,
                 methodName: null,
                 deviceId: null,
-                context: null,
+                context: new { mode = request.LegendId.HasValue ? "LegendId" : "LegacyKeys" },
                 ct: ct);
 
-            var sw = Stopwatch.StartNew();
-
-            var row = await conn.QueryFirstOrDefaultAsync<FirstWeightResultVm>(
+            var ligne = await conn.QueryFirstOrDefaultAsync<LigneLookupVm>(
                 new CommandDefinition(
-                    "sp_UpdateAfterFirstWeight",
-                    spParams,
-                    commandType: CommandType.StoredProcedure,
+                    sqlSelectLigne,
+                    new { request.Produit1 },
                     cancellationToken: ct));
+
+            var rowsAffected = await conn.ExecuteAsync(
+                new CommandDefinition(
+                    sqlUpdateLegend,
+                    new
+                    {
+                        LegendId = request.LegendId,
+                        request.RfidCard,
+                        request.Matricule,
+                        request.PremierePoid,
+                        LigneName = ligne?.LigneName
+                    },
+                    cancellationToken: ct));
+
+            if (rowsAffected > 0 && ligne?.LigneId > 0)
+            {
+                await conn.ExecuteAsync(
+                    new CommandDefinition(
+                        sqlDecrementCapacity,
+                        new { ligne.LigneId },
+                        cancellationToken: ct));
+            }
+
+            row = rowsAffected > 0
+                ? new FirstWeightResultVm
+                {
+                    LigneId = ligne?.LigneId ?? 0,
+                    LigneName = ligne?.LigneName ?? string.Empty,
+                    LigneImageUrl = ligne?.LigneImageUrl
+                }
+                : null;
+
+            await SafeDbLogAsync(
+                connStr,
+                traceId,
+                evt,
+                stage: row is null ? "INLINE_UPDATE_NO_MATCH" : "INLINE_UPDATE_OK",
+                statusCode: row is null ? 404 : 200,
+                isSuccess: row is not null,
+                payload: row is null
+                    ? new
+                    {
+                        request.LegendId,
+                        request.RfidCard,
+                        request.Matricule,
+                        request.PremierePoid,
+                        request.Produit1
+                    }
+                    : row,
+                process: ProcessName,
+                legendId: vm.Id,
+                spName: null,
+                hubName: null,
+                methodName: null,
+                deviceId: null,
+                context: new
+                {
+                    rowsAffected,
+                    ligneId = ligne?.LigneId,
+                    mode = request.LegendId.HasValue ? "LegendId" : "LegacyKeys"
+                },
+                ct: ct);
 
             sw.Stop();
 
             if (row is null)
             {
-                await SafeDbLogAsync(
-                    connStr,
-                    traceId,
-                    evt,
-                    stage: "SP_NO_MATCHING_ROW",
-                    statusCode: 404,
-                    isSuccess: false,
-                    payload: spParams,
-                    process: ProcessName,
-                    legendId: vm.Id,
-                    spName: "sp_UpdateAfterFirstWeight",
-                    hubName: null,
-                    methodName: null,
-                    deviceId: null,
-                    context: new { elapsedMs = (int)sw.ElapsedMilliseconds },
-                    ct: ct);
-
                 return Result<FirstWeightResultVm>.Fail("NO_MATCHING_ROW");
             }
-
-            await SafeDbLogAsync(
-                connStr,
-                traceId,
-                evt,
-                stage: "SP_CALL_OK",
-                statusCode: 200,
-                isSuccess: true,
-                payload: row,
-                process: ProcessName,
-                legendId: vm.Id,
-                spName: "sp_UpdateAfterFirstWeight",
-                hubName: null,
-                methodName: null,
-                deviceId: null,
-                context: new { elapsedMs = (int)sw.ElapsedMilliseconds },
-                ct: ct);
 
             return Result<FirstWeightResultVm>.Ok(row);
         }
         catch (Exception ex)
         {
             _log.LogError(ex,
-                "Error running sp_UpdateAfterFirstWeight for RFID={rfid}, Matricule={mat}",
+                "Error updating first weight for RFID={rfid}, Matricule={mat}",
                 request.RfidCard, request.Matricule);
 
             await SafeDbLogAsync(
@@ -418,7 +538,7 @@ public sealed class UpdateAfterFirstWeightHandler
                 },
                 process: ProcessName,
                 legendId: vm?.Id,
-                spName: "sp_UpdateAfterFirstWeight",
+                spName: null,
                 hubName: null,
                 methodName: null,
                 deviceId: null,
@@ -426,7 +546,7 @@ public sealed class UpdateAfterFirstWeightHandler
                 ex: ex,
                 ct: ct);
 
-            return Result<FirstWeightResultVm>.Fail("SP_ERROR");
+            return Result<FirstWeightResultVm>.Fail("FIRST_WEIGHT_UPDATE_ERROR");
         }
     }
 

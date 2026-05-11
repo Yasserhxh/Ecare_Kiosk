@@ -11,6 +11,7 @@ namespace Ecare.Application.Commands.ProcessParking
         public string Event { get; set; } = "";   // ORDER_FOUND | NO_ORDER_NO_CLIENT | CLIENTS_WITH_CHANTIERS
 
         public string Slv { get; set; } = "";
+        public int? LegendId { get; set; }
         public string Matricule { get; set; } = "";
         public string Chauffeur { get; set; } = "";
 

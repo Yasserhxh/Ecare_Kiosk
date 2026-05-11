@@ -8,5 +8,6 @@ public sealed record FinishChargingCommand(
     string RfidCard,
     string Matricule,
     int NumberSacs_Charged,
-    int Weight_Charged
+    int Weight_Charged,
+    int? LegendId = null
 ) : IRequest<Result<bool>>;

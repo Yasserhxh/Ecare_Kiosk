@@ -7,7 +7,6 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Data;
 using System.Net.Http.Json;
 using System.Xml.Linq;
 
@@ -32,12 +31,17 @@ public sealed class ShipmentNotificationRequest
 
 public sealed class TestWeightDto
 {
+    public int Id { get; set; }
+    public int? OrderId { get; set; }
+    public string? Ligne { get; set; }
     public string? TypeProduit { get; set; }
     public int? PremierePoid { get; set; }
-    public int? Quantite1 { get; set; }
-    public int? Quantite2 { get; set; }
+    public decimal? Quantite1 { get; set; }
+    public decimal? Quantite2 { get; set; }
     public int? PTAC { get; set; }
     public int? Step { get; set; }
+    public DateTime? FinishedChargingAt { get; set; }
+    public DateTime? PabExitAt { get; set; }
 }
 
 public sealed class BlJson
@@ -126,23 +130,56 @@ public sealed class UpdateSecondWeightHandler
             """
             SELECT TOP 1
                 Id,
+                OrderId,
+                Ligne,
                 TypeProduit,
                 Matricule,
                 PremierePoid,
                 Quantite1,
                 Quantite2,
                 PTAC,
-                Step
+                Step,
+                FinishedChargingAt,
+                PabExitAt
             FROM dbo.Ecare_Order_Legend
-            WHERE RFIDCard = @RFIDCard
-              AND Matricule = @Matricule
-              AND Step>=2 Order By Id DESC
+            WHERE
+                (
+                    @LegendId IS NOT NULL
+                    AND Id = @LegendId
+                )
+                OR
+                (
+                    @LegendId IS NULL
+                    AND RFIDCard = @RFIDCard
+                    AND Matricule = @Matricule
+                )
+            ORDER BY Id DESC
             """,
-            new { RFIDCard = request.RfidCard, Matricule = request.Matricule }
+            new
+            {
+                request.LegendId,
+                RFIDCard = request.RfidCard,
+                request.Matricule
+            }
         );
 
         if (order is null)
             return Result<UpdateSecondWeightResult>.Fail("ORDER_NOT_FOUND");
+
+        if ((order.Step ?? 0) < 2 || (order.Step ?? 0) >= 5 || order.PabExitAt is not null)
+            return Result<UpdateSecondWeightResult>.Fail("ORDER_NOT_READY_FOR_EXIT");
+
+        if (!order.PremierePoid.HasValue || request.DeuxiemePoid <= order.PremierePoid.Value)
+        {
+            await SignalRHelper.BroadcastAsync(
+                _signalR,
+                "ExitMessageHub",
+                "ExitMessageMethod",
+                "Not Allowed",
+                _log,
+                ct);
+            return Result<UpdateSecondWeightResult>.Fail("SECOND_WEIGHT_MUST_BE_GREATER_THAN_FIRST");
+        }
 
         if (order.TypeProduit is "SAC" or "PAL")
         {
@@ -174,6 +211,15 @@ public sealed class UpdateSecondWeightHandler
         }
         else
         {
+            var net = request.DeuxiemePoid - order.PremierePoid.Value;
+            var expectedNet = ((order.Quantite1 ?? 0m) + (order.Quantite2 ?? 0m)) * 1000m;
+            var netTolerance = expectedNet * 0.08m;
+            var minAllowedNet = expectedNet - netTolerance;
+            var maxAllowedNet = expectedNet + netTolerance;
+            var expectedGross = (order.PremierePoid ?? 0) + ((order.Quantite1 ?? 0m) + (order.Quantite2 ?? 0m)) * 1000m;
+            var grossTolerance = (((order.Quantite1 ?? 0m) + (order.Quantite2 ?? 0m)) * 1000m) * 0.02m;
+            var minAllowedGross = expectedGross - grossTolerance;
+            var maxAllowedGross = expectedGross + grossTolerance;
             var allowedMax = order.PTAC * 1.11m; // +10% tolerance
             if (request.DeuxiemePoid > allowedMax)
             {
@@ -186,6 +232,30 @@ public sealed class UpdateSecondWeightHandler
                     ct);
                 return Result<UpdateSecondWeightResult>.Fail("NET_WEIGHT_OUT_OF_RANGE");
             }
+
+            if ((decimal)net < minAllowedNet || (decimal)net > maxAllowedNet)
+            {
+                await SignalRHelper.BroadcastAsync(
+                    _signalR,
+                    "ExitMessageHub",
+                    "ExitMessageMethod",
+                    "Not Allowed",
+                    _log,
+                    ct);
+                return Result<UpdateSecondWeightResult>.Fail("VRAC_NET_WEIGHT_OUT_OF_RANGE");
+            }
+
+            if ((decimal)request.DeuxiemePoid < minAllowedGross || (decimal)request.DeuxiemePoid > maxAllowedGross)
+            {
+                await SignalRHelper.BroadcastAsync(
+                    _signalR,
+                    "ExitMessageHub",
+                    "ExitMessageMethod",
+                    "Not Allowed",
+                    _log,
+                    ct);
+                return Result<UpdateSecondWeightResult>.Fail("GROSS_WEIGHT_OUT_OF_RANGE");
+            }
         }
 
 
@@ -195,29 +265,69 @@ public sealed class UpdateSecondWeightHandler
         {
             // 1️⃣ Update second weight
             var spResult = await conn.QueryFirstOrDefaultAsync<RowsDto>(
-                "sp_UpdateSecondWeight",
-                new
-                {
-                    RfidCard = request.RfidCard,
-                    Matricule = request.Matricule,
-                    DeuxiemePoid = request.DeuxiemePoid
-                },
-                commandType: CommandType.StoredProcedure);
+                new CommandDefinition(
+                    """
+                    DECLARE @Now DATETIME =
+                        CONVERT(DATETIME, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time');
+                    DECLARE @Updated TABLE (LigneName NVARCHAR(150));
 
-            //if (spResult is null || spResult.RowsAffected == 0)
-            //    return Result<UpdateSecondWeightResult>.Fail("NO_ROW_UPDATED");
+                    UPDATE dbo.Ecare_Order_Legend
+                    SET
+                        DeuxiemePoid = @DeuxiemePoid,
+                        Weight_Charged = @DeuxiemePoid - PremierePoid,
+                        NumberSacs_Charged = ISNULL(SacNumber, 0),
+                        PabExitAt = @Now,
+                        Step = 5,
+                        ElapsedTimeInF_Exit = DATEDIFF(MINUTE, FinishedChargingAt, @Now),
+                        TotalTimeInCercuit =
+                            ISNULL(ElapsedTimeParking, 0) +
+                            ISNULL(ElapsedInPab_Charging, 0) +
+                            ISNULL(ElapsedCharging, 0) +
+                            DATEDIFF(MINUTE, FinishedChargingAt, @Now)
+                    OUTPUT inserted.Ligne INTO @Updated(LigneName)
+                    WHERE Id = @LegendId
+                      AND Step < 5;
+
+                    DECLARE @RowsAffected INT = @@ROWCOUNT;
+
+                    IF @RowsAffected = 1 AND EXISTS (SELECT 1 FROM @Updated WHERE LigneName IS NOT NULL)
+                    BEGIN
+                        UPDATE L
+                        SET L.RealtimeCapacity =
+                            CASE
+                                WHEN ISNULL(L.RealtimeCapacity, 0) < ISNULL(L.Capacity, 0)
+                                    THEN ISNULL(L.RealtimeCapacity, 0) + 1
+                                ELSE ISNULL(L.Capacity, 0)
+                            END
+                        FROM dbo.Ecare_Ligne L
+                        WHERE L.Nom = (SELECT TOP (1) LigneName FROM @Updated WHERE LigneName IS NOT NULL);
+                    END
+
+                    IF @RowsAffected = 1 AND @OrderId IS NOT NULL
+                    BEGIN
+                        UPDATE dbo.Orders
+                        SET Statut = 'Termine'
+                        WHERE Id = @OrderId;
+                    END
+
+                    SELECT @RowsAffected AS RowsAffected, @OrderId AS UpdatedOrderId;
+                    """,
+                    new
+                    {
+                        LegendId = order.Id,
+                        request.DeuxiemePoid,
+                        order.OrderId
+                    },
+                    cancellationToken: ct));
+
+            if (spResult is null || spResult.RowsAffected == 0)
+                return Result<UpdateSecondWeightResult>.Fail("NO_ROW_UPDATED");
 
             // 2️⃣ Get latest BL Id
-            var blData = await conn.QuerySingleOrDefaultAsync<BonDeLivraisonDto>(
-                """
-                SELECT TOP (1)
-                    Id
-                FROM dbo.Ecare_Order_Legend
-                WHERE RfidCard = @RfidCard
-                  AND Matricule = @Matricule AND AnnulationCommercial IS NULL
-                ORDER BY PabExitAt DESC
-                """,
-                new { request.RfidCard, request.Matricule });
+            var blData = new BonDeLivraisonDto
+            {
+                Id = order.Id
+            };
 
             if (blData is null)
                 return Result<UpdateSecondWeightResult>.Fail("BL_DATA_NOT_FOUND");

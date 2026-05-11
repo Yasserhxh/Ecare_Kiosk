@@ -5,8 +5,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Ecare.Shared;
 using Ecare.Application.Queries.PabEntryScan;
-using System.Data;
-
 namespace Ecare.Application.Queries.PabEntryScan
 {
     public sealed class PabEntryScanHandler
@@ -30,10 +28,43 @@ namespace Ecare.Application.Queries.PabEntryScan
                 var connStr = _cfg.GetConnectionString("SqlServer");
                 using var conn = new SqlConnection(connStr);
 
+                const string sql = """
+                    SELECT TOP 1
+                        L.Id AS LegendId,
+                        L.ClientName,
+                        CE.PTAC,
+                        CE.TARE,
+                        L.Chantier,
+                        L.BonDeCommande,
+                        L.Matricule,
+                        L.RFIDCard,
+                        L.ChauffeurName AS FullName,
+                        L.PremierePoid,
+                        L.Produit1,
+                        L.Quantite1,
+                        L.Produit2,
+                        L.Quantite2,
+                        cim1.ImageUrl AS Image1,
+                        cim2.ImageUrl AS Image2
+                    FROM dbo.Ecare_Order_Legend L
+                    LEFT JOIN dbo.Ecare_ClientEquipements CE
+                        ON CE.Matricule = L.Matricule
+                    LEFT JOIN dbo.EcareCiments cim1
+                        ON cim1.Name = L.Produit1
+                    LEFT JOIN dbo.EcareCiments cim2
+                        ON cim2.Name = L.Produit2
+                    WHERE
+                        L.RFIDCard = @RfidCard
+                        AND L.ParkingAt IS NOT NULL
+                        AND L.Step = 1
+                    ORDER BY L.ParkingAt DESC;
+                """;
+
                 var row = await conn.QueryFirstOrDefaultAsync<PabEntryScanVm>(
-                    "sp_GetPabEntryScanData",
-                    new { RfidCard = request.RfidCard },
-                    commandType: CommandType.StoredProcedure);
+                    new CommandDefinition(
+                        sql,
+                        new { RfidCard = request.RfidCard },
+                        cancellationToken: ct));
 
                 if (row is null)
                 {

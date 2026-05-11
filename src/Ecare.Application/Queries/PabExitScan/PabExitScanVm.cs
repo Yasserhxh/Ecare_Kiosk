@@ -2,6 +2,7 @@
 {
     public sealed class PabExitScanVm
     {
+        public int? LegendId { get; set; }
         // Driver / Truck
         public int DriverId { get; set; }
         public string DriverNom { get; set; } = string.Empty;

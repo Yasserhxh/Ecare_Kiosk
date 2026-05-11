@@ -7,7 +7,8 @@ namespace Ecare.Application.Commands.Legend;
 public sealed record UpdateSecondWeightCommand(
     int RfidCard,
     string Matricule,
-    int DeuxiemePoid
+    int DeuxiemePoid,
+    int? LegendId = null
 ) : IRequest<Result<UpdateSecondWeightResult>>;
 
 public sealed class UpdateSecondWeightResult
