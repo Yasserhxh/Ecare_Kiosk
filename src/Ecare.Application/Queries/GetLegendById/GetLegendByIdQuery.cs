@@ -109,5 +109,6 @@ namespace Ecare.Application.Queries.GetLegendById
         public int? AnnulationCommercial { get; set; }
         public string? MotifAnnulationCommercial { get; set; }
         public string? UserIdAnnulationCommercial { get; set; }
+        public bool IsLowCreditDeliveryRisk { get; set; }
     }
 }

@@ -26,19 +26,33 @@ SELECT
     -- Mapping
     id,
     ParkingAt                     AS DateCreation,
+    ParkingAt,
+    PabEntryAt,
+    StartChargingAt,
+    FinishedChargingAt,
+    PabExitAt,
     Matricule,
     RFIDCard                      AS RFID,
+    ClientName,
+    TransporteurName,
+    ChauffeurName,
     TypeProduit                   AS Circuit,
     'C'                            AS TypeOperation,
     CodeSapChantier               AS CodeChantier,
     Chantier                      AS NomChantier,
     CodeSapProduit1               AS CodeArticle,
     Produit1                      AS Article,
+    Produit2                      AS Article2,
+    Quantite1,
+    Quantite2,
+    Ligne,
+    TypeCamion,
 
     PremierePoid                  AS Tare,
     DeuxiemePoid                  AS Gross,
     (DeuxiemePoid - PremierePoid) AS Net,
     PTAC,
+    TARE                          AS TAREVehicule,
 
     Step,
     CodeSapCommande               AS CommandeSap,
@@ -54,6 +68,7 @@ SELECT
 
     PlombNumber                   AS Seals,
     BonDeCommande                 AS BonCommandeClient,
+    IsLowCreditDeliveryRisk,
 
     CASE
         WHEN Produit2 !='' THEN 'Mixte'

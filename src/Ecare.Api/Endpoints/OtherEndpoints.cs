@@ -122,8 +122,8 @@ public static class OtherEndpoints
 
             if (!string.IsNullOrWhiteSpace(carteSlv))
             {
-                where.Append(" AND CarteSLV = @CarteSlv ");
-                param.Add("@CarteSlv", carteSlv.Trim());
+                where.Append($" AND {NormalizeSql("CarteSLV")} = @CarteSlv ");
+                param.Add("@CarteSlv", NormalizeCardNumber(carteSlv));
             }
 
             var sql = $@"
@@ -245,8 +245,8 @@ ORDER BY Id DESC;";
 
             if (!string.IsNullOrWhiteSpace(carteSlv))
             {
-                where.Append(" AND CarteSLV = @CarteSlv ");
-                param.Add("@CarteSlv", carteSlv.Trim());
+                where.Append($" AND {NormalizeSql("t.CarteSLV")} = @CarteSlv ");
+                param.Add("@CarteSlv", NormalizeCardNumber(carteSlv));
             }
 
             if (!string.IsNullOrWhiteSpace(rfidHex))
@@ -257,19 +257,20 @@ ORDER BY Id DESC;";
 
             if (availableOnly == true)
             {
-                where.Append("""
+                where.Append($"""
                     AND NOT EXISTS (
                         SELECT 1
                         FROM dbo.Ecare_ClientEquipements ce
                         WHERE (ISNULL(ce.IsClient, 0) = 1 OR ISNULL(ce.IsTransporteur, 0) = 1)
                           AND (
-                              (NULLIF(LTRIM(RTRIM(t.CarteSLV)), '') IS NOT NULL
-                               AND LTRIM(RTRIM(ce.CarteSLV)) = LTRIM(RTRIM(t.CarteSLV)))
+                              (NULLIF({NormalizeSql("t.CarteSLV")}, '') IS NOT NULL
+                               AND {NormalizeSql("ce.CarteSLV")} = {NormalizeSql("t.CarteSLV")})
                               OR
                               (NULLIF(LTRIM(RTRIM(t.RfidHex)), '') IS NOT NULL
-                               AND LTRIM(RTRIM(ce.RfidHex)) = LTRIM(RTRIM(t.RfidHex)))
+                               AND LTRIM(RTRIM(ISNULL(ce.RfidHex, ''))) = LTRIM(RTRIM(t.RfidHex)))
                           )
                     )
+                    AND RIGHT(LTRIM(RTRIM(ISNULL(t.CarteSLV, ''))), 1) <> '*'
                     """);
             }
 
@@ -293,6 +294,7 @@ ORDER BY Id DESC;";
         {
             var carteSlv = request.CarteSLV?.Trim();
             var rfidHex = request.RfidHex?.Trim();
+            var normalizedCarte = NormalizeCardNumber(carteSlv);
 
             if (string.IsNullOrWhiteSpace(carteSlv))
                 return Results.BadRequest(new { message = "Le numero de carte est obligatoire." });
@@ -307,12 +309,16 @@ ORDER BY Id DESC;";
             const string duplicateSql = """
                 SELECT TOP(1) Id
                 FROM dbo.Ecare_Tags
-                WHERE LTRIM(RTRIM(CarteSLV)) = @CarteSLV
+                WHERE CASE
+                         WHEN RIGHT(LTRIM(RTRIM(CarteSLV)), 1) = '*'
+                            THEN LEFT(LTRIM(RTRIM(CarteSLV)), LEN(LTRIM(RTRIM(CarteSLV))) - 1)
+                         ELSE LTRIM(RTRIM(CarteSLV))
+                      END = @CarteSLV
                    OR LTRIM(RTRIM(RfidHex)) = @RfidHex;
                 """;
 
             var existingId = await conn.QuerySingleOrDefaultAsync<int?>(
-                new CommandDefinition(duplicateSql, new { CarteSLV = carteSlv, RfidHex = rfidHex }, cancellationToken: ct));
+                new CommandDefinition(duplicateSql, new { CarteSLV = normalizedCarte, RfidHex = rfidHex }, cancellationToken: ct));
 
             if (existingId.HasValue)
                 return Results.Conflict(new { message = $"La carte SLV {carteSlv} ou son code HEX existe deja." });
@@ -334,6 +340,413 @@ ORDER BY Id DESC;";
                 RfidHex = rfidHex,
                 Message = "Carte provisoire creee avec succes."
             });
+        });
+
+        app.MapGet("/api/cards/all", async (
+            string? cardNumber,
+            string? rfidHex,
+            string? cardType,
+            bool? includeDisabled,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            var where = new StringBuilder(" WHERE 1=1 ");
+            var param = new DynamicParameters();
+
+            if (!string.IsNullOrWhiteSpace(cardNumber))
+            {
+                where.Append(" AND t.RawCardNumber LIKE @CardNumber ");
+                param.Add("@CardNumber", $"%{NormalizeCardNumber(cardNumber)}%");
+            }
+
+            if (!string.IsNullOrWhiteSpace(rfidHex))
+            {
+                where.Append(" AND ISNULL(t.RfidHex, '') LIKE @RfidHex ");
+                param.Add("@RfidHex", $"%{rfidHex.Trim()}%");
+            }
+
+            if (!string.IsNullOrWhiteSpace(cardType))
+            {
+                where.Append(" AND t.CardType = @CardType ");
+                param.Add("@CardType", cardType.Trim().ToLowerInvariant());
+            }
+
+            if (includeDisabled != true)
+            {
+                where.Append(" AND ISNULL(t.IsDisabled, 0) = 0 ");
+            }
+
+            var sql = $@"
+WITH TagsBase AS
+(
+    SELECT
+        t.Id,
+        t.CarteSLV,
+        t.RfidHex,
+        RawCardNumber = {NormalizeSql("t.CarteSLV")},
+        IsDisabled = CASE WHEN RIGHT(LTRIM(RTRIM(ISNULL(t.CarteSLV, ''))), 1) = '*' THEN 1 ELSE 0 END
+    FROM dbo.Ecare_Tags t
+),
+TagsWithEquipment AS
+(
+    SELECT
+        t.Id AS TagId,
+        t.CarteSLV AS CardNumber,
+        t.RawCardNumber,
+        t.RfidHex,
+        t.IsDisabled,
+        ce.Id AS ClientEquipementId,
+        ce.ClientName,
+        ce.Matricule,
+        ce.ChauffeurName,
+        ce.CodeClientSAP,
+        ce.Status,
+        ce.Type,
+        ce.PlombsNumber,
+        ce.PTAC,
+        ce.TARE,
+        ce.IsClient,
+        ce.IsTransporteur,
+        ce.TransporteurName,
+        ce.CodeTransporteurSap,
+        ce.CodeTruckSap,
+        ce.CodeTransporteurSapCimar,
+        ce.TruckType,
+        ce.PermisConducteur,
+        CardType = CASE
+            WHEN ce.Id IS NOT NULL AND (ISNULL(ce.IsClient, 0) = 1 OR ISNULL(ce.IsTransporteur, 0) = 1)
+                THEN 'permanente'
+            ELSE 'provisoire'
+        END
+    FROM TagsBase t
+    OUTER APPLY
+    (
+        SELECT TOP (1) ce.*
+        FROM dbo.Ecare_ClientEquipements ce
+        WHERE (
+                NULLIF(t.RawCardNumber, '') IS NOT NULL
+                AND {NormalizeSql("ce.CarteSLV")} = t.RawCardNumber
+              )
+           OR (
+                NULLIF(LTRIM(RTRIM(t.RfidHex)), '') IS NOT NULL
+                AND LTRIM(RTRIM(ISNULL(ce.RfidHex, ''))) = LTRIM(RTRIM(t.RfidHex))
+              )
+        ORDER BY ce.Id DESC
+    ) ce
+)
+SELECT
+    TagId,
+    ClientEquipementId,
+    CardNumber,
+    RawCardNumber,
+    RfidHex,
+    CardType,
+    IsDisabled,
+    Status = CASE
+        WHEN IsDisabled = 1 OR UPPER(ISNULL(Status, '')) = 'INACTIVE' THEN 'INACTIVE'
+        ELSE 'ACTIVE'
+    END,
+    ClientName,
+    Matricule,
+    ChauffeurName,
+    CodeClientSAP,
+    TransporteurName,
+    CodeTransporteurSap,
+    CodeTruckSap,
+    CodeTransporteurSapCimar,
+    TruckType,
+    PTAC,
+    TARE,
+    PlombsNumber,
+    PermisConducteur
+FROM TagsWithEquipment t
+{where}
+ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
+
+            var data = await conn.QueryAsync(sql, param);
+            return Results.Ok(data);
+        });
+
+        app.MapPost("/api/cards/{cardId:int}/disable", async (
+            int cardId,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            const string selectSql = """
+                SELECT TOP (1) Id, CarteSLV, RfidHex
+                FROM dbo.Ecare_Tags
+                WHERE Id = @Id;
+                """;
+
+            var tag = await conn.QuerySingleOrDefaultAsync<CardTagRow>(
+                new CommandDefinition(selectSql, new { Id = cardId }, cancellationToken: ct));
+
+            if (tag is null)
+                return Results.NotFound(new { message = "Carte introuvable." });
+
+            var rawCard = NormalizeCardNumber(tag.CarteSLV);
+            if (string.IsNullOrWhiteSpace(rawCard))
+                return Results.BadRequest(new { message = "Le numero de carte est invalide." });
+
+            var disabledCard = AppendDisabledSuffix(rawCard);
+
+            await using var tx = await ((dynamic)conn).BeginTransactionAsync(ct);
+            try
+            {
+                const string disableTagSql = """
+                    UPDATE dbo.Ecare_Tags
+                    SET CarteSLV = @DisabledCard
+                    WHERE Id = @Id;
+                    """;
+
+                await conn.ExecuteAsync(new CommandDefinition(
+                    disableTagSql,
+                    new { Id = tag.Id, DisabledCard = disabledCard },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+                var disableEquipmentSql = $"""
+                    UPDATE dbo.Ecare_ClientEquipements
+                    SET
+                        CarteSLV = @DisabledCard,
+                        Status = 'INACTIVE'
+                    WHERE {NormalizeSql("CarteSLV")} = @RawCard
+                       OR (NULLIF(LTRIM(RTRIM(@RfidHex)), '') IS NOT NULL AND LTRIM(RTRIM(ISNULL(RfidHex, ''))) = LTRIM(RTRIM(@RfidHex)));
+                    """;
+
+                await conn.ExecuteAsync(new CommandDefinition(
+                    disableEquipmentSql,
+                    new { DisabledCard = disabledCard, RawCard = rawCard, tag.RfidHex },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+                await tx.CommitAsync(ct);
+                return Results.Ok(new
+                {
+                    tag.Id,
+                    CardNumber = disabledCard,
+                    Message = "Carte desactivee avec succes."
+                });
+            }
+            catch
+            {
+                await tx.RollbackAsync(ct);
+                throw;
+            }
+        });
+
+        app.MapPost("/api/cards/{cardId:int}/assign", async (
+            int cardId,
+            CardAssignRequest request,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            var currentTag = await conn.QuerySingleOrDefaultAsync<CardTagRow>(
+                new CommandDefinition(
+                    "SELECT TOP (1) Id, CarteSLV, RfidHex FROM dbo.Ecare_Tags WHERE Id = @Id;",
+                    new { Id = cardId },
+                    cancellationToken: ct));
+
+            if (currentTag is null)
+                return Results.NotFound(new { message = "Carte source introuvable." });
+
+            if (request.ClientEquipementId <= 0 || request.NewTagId <= 0)
+                return Results.BadRequest(new { message = "Parametres d'affectation invalides." });
+
+            var equipement = await conn.QuerySingleOrDefaultAsync<CardEquipmentRow>(
+                new CommandDefinition(
+                    "SELECT TOP (1) Id, CarteSLV, RfidHex, Status FROM dbo.Ecare_ClientEquipements WHERE Id = @Id;",
+                    new { Id = request.ClientEquipementId },
+                    cancellationToken: ct));
+
+            if (equipement is null)
+                return Results.NotFound(new { message = "Equipement introuvable." });
+
+            var newTag = await conn.QuerySingleOrDefaultAsync<CardTagRow>(
+                new CommandDefinition(
+                    "SELECT TOP (1) Id, CarteSLV, RfidHex FROM dbo.Ecare_Tags WHERE Id = @Id;",
+                    new { Id = request.NewTagId },
+                    cancellationToken: ct));
+
+            if (newTag is null)
+                return Results.NotFound(new { message = "Nouvelle carte introuvable." });
+
+            var oldRawCard = NormalizeCardNumber(equipement.CarteSLV ?? currentTag.CarteSLV);
+            var newRawCard = NormalizeCardNumber(newTag.CarteSLV);
+
+            if (string.IsNullOrWhiteSpace(newRawCard))
+                return Results.BadRequest(new { message = "La nouvelle carte est invalide." });
+
+            var duplicateSql = $"""
+                SELECT TOP (1) ce.Id
+                FROM dbo.Ecare_ClientEquipements ce
+                WHERE ce.Id <> @ClientEquipementId
+                  AND (
+                        {NormalizeSql("ce.CarteSLV")} = @NewRawCard
+                        OR (NULLIF(LTRIM(RTRIM(@NewRfidHex)), '') IS NOT NULL AND LTRIM(RTRIM(ISNULL(ce.RfidHex, ''))) = LTRIM(RTRIM(@NewRfidHex)))
+                      );
+                """;
+
+            var duplicateEquipmentId = await conn.QuerySingleOrDefaultAsync<int?>(
+                new CommandDefinition(
+                    duplicateSql,
+                    new
+                    {
+                        request.ClientEquipementId,
+                        NewRawCard = newRawCard,
+                        NewRfidHex = newTag.RfidHex
+                    },
+                    cancellationToken: ct));
+
+            if (duplicateEquipmentId.HasValue)
+                return Results.Conflict(new { message = "La nouvelle carte est deja rattachee a un autre equipement." });
+
+            await using var tx = await ((dynamic)conn).BeginTransactionAsync(ct);
+            try
+            {
+                if (request.ReplacePermanentCard && !string.IsNullOrWhiteSpace(oldRawCard))
+                {
+                    var disabledCard = AppendDisabledSuffix(oldRawCard);
+
+                    var disableOldTagSql = $"""
+                        UPDATE dbo.Ecare_Tags
+                        SET CarteSLV = @DisabledCard
+                        WHERE {NormalizeSql("CarteSLV")} = @OldRawCard
+                           OR (NULLIF(LTRIM(RTRIM(@OldRfidHex)), '') IS NOT NULL AND LTRIM(RTRIM(ISNULL(RfidHex, ''))) = LTRIM(RTRIM(@OldRfidHex)));
+                        """;
+
+                    await conn.ExecuteAsync(new CommandDefinition(
+                        disableOldTagSql,
+                        new { DisabledCard = disabledCard, OldRawCard = oldRawCard, OldRfidHex = equipement.RfidHex ?? currentTag.RfidHex },
+                        transaction: tx,
+                        cancellationToken: ct));
+                }
+
+                const string updateEquipmentSql = """
+                    UPDATE dbo.Ecare_ClientEquipements
+                    SET
+                        CarteSLV = @NewCard,
+                        RfidHex = @NewRfidHex,
+                        Status = 'ACTIVE'
+                    WHERE Id = @ClientEquipementId;
+                    """;
+
+                await conn.ExecuteAsync(new CommandDefinition(
+                    updateEquipmentSql,
+                    new
+                    {
+                        request.ClientEquipementId,
+                        NewCard = newRawCard,
+                        NewRfidHex = newTag.RfidHex
+                    },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+                if (request.ReplacePermanentCard && !string.IsNullOrWhiteSpace(oldRawCard))
+                {
+                    const string activeLegendIdsSql = """
+                        SELECT Id, OrderId, CommercialOrderId
+                        FROM dbo.Ecare_Order_Legend
+                        WHERE RFIDCard = @OldRawCard
+                          AND ISNULL(BonDeLivraison, '') = ''
+                          AND ISNULL(Step, 0) < 5;
+                        """;
+
+                    var activeLegends = (await conn.QueryAsync<ActiveLegendReference>(
+                        new CommandDefinition(
+                            activeLegendIdsSql,
+                            new { OldRawCard = oldRawCard },
+                            transaction: tx,
+                            cancellationToken: ct))).ToList();
+
+                    if (activeLegends.Count > 0)
+                    {
+                        const string updateLegendSql = """
+                            UPDATE dbo.Ecare_Order_Legend
+                            SET RFIDCard = @NewCard
+                            WHERE RFIDCard = @OldRawCard
+                              AND ISNULL(BonDeLivraison, '') = ''
+                              AND ISNULL(Step, 0) < 5;
+                            """;
+
+                        await conn.ExecuteAsync(new CommandDefinition(
+                            updateLegendSql,
+                            new { NewCard = newRawCard, OldRawCard = oldRawCard },
+                            transaction: tx,
+                            cancellationToken: ct));
+
+                        var orderIds = activeLegends.Where(x => x.OrderId.HasValue).Select(x => x.OrderId!.Value).Distinct().ToArray();
+                        var commercialOrderIds = activeLegends.Where(x => x.CommercialOrderId.HasValue).Select(x => x.CommercialOrderId!.Value).Distinct().ToArray();
+
+                        if (orderIds.Length > 0)
+                        {
+                            const string updateOrdersSql = """
+                                UPDATE dbo.Orders
+                                SET CarteSLV = @NewCard
+                                WHERE Id IN @OrderIds;
+                                """;
+
+                            await conn.ExecuteAsync(new CommandDefinition(
+                                updateOrdersSql,
+                                new { NewCard = newRawCard, OrderIds = orderIds },
+                                transaction: tx,
+                                cancellationToken: ct));
+                        }
+
+                        if (commercialOrderIds.Length > 0)
+                        {
+                            const string updateCommercialOrdersSql = """
+                                UPDATE dbo.Ecare_CommercialOrders
+                                SET
+                                    CarteSLV = @NewCard,
+                                    RfidHex = @NewRfidHex
+                                WHERE Id IN @CommercialOrderIds;
+                                """;
+
+                            await conn.ExecuteAsync(new CommandDefinition(
+                                updateCommercialOrdersSql,
+                                new
+                                {
+                                    NewCard = newRawCard,
+                                    NewRfidHex = newTag.RfidHex,
+                                    CommercialOrderIds = commercialOrderIds
+                                },
+                                transaction: tx,
+                                cancellationToken: ct));
+                        }
+                    }
+                }
+
+                await tx.CommitAsync(ct);
+                return Results.Ok(new
+                {
+                    ClientEquipementId = request.ClientEquipementId,
+                    OldCardNumber = oldRawCard,
+                    NewCardNumber = newRawCard,
+                    NewTagId = newTag.Id,
+                    request.ReplacePermanentCard,
+                    Message = request.ReplacePermanentCard
+                        ? "Carte permanente remplacee avec succes."
+                        : "Carte affectee avec succes."
+                });
+            }
+            catch
+            {
+                await tx.RollbackAsync(ct);
+                throw;
+            }
         });
       
 
@@ -485,6 +898,29 @@ ORDER BY Id DESC;";
         return app;
     }
 
+    private static string NormalizeCardNumber(string? value)
+    {
+        var trimmed = value?.Trim() ?? string.Empty;
+        if (trimmed.EndsWith('*'))
+            trimmed = trimmed[..^1];
+
+        return trimmed.Trim();
+    }
+
+    private static string AppendDisabledSuffix(string value)
+    {
+        var normalized = NormalizeCardNumber(value);
+        return string.IsNullOrWhiteSpace(normalized) ? normalized : $"{normalized}*";
+    }
+
+    private static string NormalizeSql(string columnExpression) => $"""
+        CASE
+            WHEN RIGHT(LTRIM(RTRIM(ISNULL({columnExpression}, ''))), 1) = '*'
+                THEN LEFT(LTRIM(RTRIM(ISNULL({columnExpression}, ''))), LEN(LTRIM(RTRIM(ISNULL({columnExpression}, '')))) - 1)
+            ELSE LTRIM(RTRIM(ISNULL({columnExpression}, '')))
+        END
+        """;
+
     public sealed record AppLogsQueryParams(
         int? PageNumber,
         int? PageSize,
@@ -529,6 +965,13 @@ ORDER BY Id DESC;";
         public string? RfidHex { get; set; }
     }
 
+    public sealed class CardAssignRequest
+    {
+        public int ClientEquipementId { get; set; }
+        public int NewTagId { get; set; }
+        public bool ReplacePermanentCard { get; set; }
+    }
+
     public sealed class ClientEquipementUpdateRequest
     {
         public string? ClientName { get; set; }
@@ -549,5 +992,27 @@ ORDER BY Id DESC;";
         public string? CodeTransporteurSapCimar { get; set; }
         public string? TruckType { get; set; }
         public string? PermisConducteur { get; set; }
+    }
+
+    private sealed class CardTagRow
+    {
+        public int Id { get; set; }
+        public string? CarteSLV { get; set; }
+        public string? RfidHex { get; set; }
+    }
+
+    private sealed class CardEquipmentRow
+    {
+        public int Id { get; set; }
+        public string? CarteSLV { get; set; }
+        public string? RfidHex { get; set; }
+        public string? Status { get; set; }
+    }
+
+    private sealed class ActiveLegendReference
+    {
+        public int Id { get; set; }
+        public int? OrderId { get; set; }
+        public int? CommercialOrderId { get; set; }
     }
 }

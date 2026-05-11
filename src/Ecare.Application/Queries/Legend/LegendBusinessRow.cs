@@ -7,17 +7,26 @@ public sealed class LegendBusinessRow
     public DateTime? DateCreation { get; set; }           // ParkingAt
     public string? Matricule { get; set; }
     public string? RFID { get; set; }                    // RFIDCard
+    public string? ClientName { get; set; }
+    public string? TransporteurName { get; set; }
+    public string? ChauffeurName { get; set; }
     public string? Circuit { get; set; }                 // TypeProduit
     public string TypeOperation { get; set; } = "C";     // constant
     public string? CodeChantier { get; set; }            // CodeSapChantier
     public string? NomChantier { get; set; }             // Chantier
     public string? CodeArticle { get; set; }             // CodeSapProduit1
     public string? Article { get; set; }                 // Produit1
+    public string? Article2 { get; set; }
+    public decimal? Quantite1 { get; set; }
+    public decimal? Quantite2 { get; set; }
+    public string? Ligne { get; set; }
+    public string? TypeCamion { get; set; }
 
     public decimal? Tare { get; set; }                   // PremierePoid
     public decimal? Gross { get; set; }                  // DeuxiemePoid
     public decimal? Net { get; set; }                    // Gross - Tare
     public decimal? PTAC { get; set; }
+    public decimal? TAREVehicule { get; set; }
 
     public int Step { get; set; }                         // Statut
     public string? CommandeSap { get; set; }              // CodeSapCommande
@@ -31,4 +40,10 @@ public sealed class LegendBusinessRow
     public string? BonCommandeClient { get; set; }        // BonDeCommande
 
     public string TypeCommande { get; set; } = default!;  // Simple / Mixte
+    public DateTime? ParkingAt { get; set; }
+    public DateTime? PabEntryAt { get; set; }
+    public DateTime? StartChargingAt { get; set; }
+    public DateTime? FinishedChargingAt { get; set; }
+    public DateTime? PabExitAt { get; set; }
+    public bool IsLowCreditDeliveryRisk { get; set; }
 }

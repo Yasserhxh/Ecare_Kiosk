@@ -96,6 +96,7 @@ namespace Ecare.Application.Queries.GetLegendById
                 , [AnnulationCommercial]
                 , [MotifAnnulationCommercial]
                 , [UserIdAnnulationCommercial]
+                , [IsLowCreditDeliveryRisk]
             FROM [dbo].[Ecare_Order_Legend]
             WHERE [Id] = @Id;
             ";
