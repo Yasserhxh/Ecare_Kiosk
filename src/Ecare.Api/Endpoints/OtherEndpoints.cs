@@ -167,24 +167,58 @@ ORDER BY Id DESC;";
             if (conn.State != ConnectionState.Open)
                 await ((dynamic)conn).OpenAsync(ct);
 
-            const string existsSql = """
-                SELECT COUNT(1)
+            const string currentSql = """
+                SELECT TOP (1) Id, CarteSLV, RfidHex, Status
                 FROM dbo.Ecare_ClientEquipements
                 WHERE Id = @Id;
                 """;
 
-            var exists = await conn.ExecuteScalarAsync<int>(
-                new CommandDefinition(existsSql, new { Id = id }, cancellationToken: ct));
+            var current = await conn.QuerySingleOrDefaultAsync<CardEquipmentRow>(
+                new CommandDefinition(currentSql, new { Id = id }, cancellationToken: ct));
 
-            if (exists == 0)
+            if (current is null)
                 return Results.NotFound(new { message = $"Client equipement {id} introuvable." });
+
+            var carteSlv = NormalizeCardNumber(request.CarteSLV ?? current.CarteSLV);
+            var rfidHex = request.RfidHex?.Trim() ?? current.RfidHex?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(carteSlv) || !string.IsNullOrWhiteSpace(rfidHex))
+            {
+                var duplicateSql = $"""
+                    SELECT TOP (1) Id
+                    FROM dbo.Ecare_ClientEquipements
+                    WHERE Id <> @Id
+                      AND (ISNULL(IsClient, 0) = 1 OR ISNULL(IsTransporteur, 0) = 1)
+                      AND (
+                            (NULLIF(@CarteSLV, '') IS NOT NULL AND {NormalizeSql("CarteSLV")} = @CarteSLV)
+                            OR
+                            (NULLIF(@RfidHex, '') IS NOT NULL AND LTRIM(RTRIM(ISNULL(RfidHex, ''))) = @RfidHex)
+                          );
+                    """;
+
+                var duplicateId = await conn.QuerySingleOrDefaultAsync<int?>(
+                    new CommandDefinition(
+                        duplicateSql,
+                        new
+                        {
+                            Id = id,
+                            CarteSLV = carteSlv,
+                            RfidHex = rfidHex
+                        },
+                        cancellationToken: ct));
+
+                if (duplicateId.HasValue)
+                    return Results.Conflict(new { message = $"La carte SLV {carteSlv} existe deja comme carte permanente." });
+            }
 
             const string updateSql = """
                 UPDATE dbo.Ecare_ClientEquipements
                 SET
+                    CarteSLV = @CarteSLV,
                     ClientName = @ClientName,
                     Matricule = @Matricule,
                     ChauffeurName = @ChauffeurName,
+                    RfidHex = @RfidHex,
                     CodeClientSAP = @CodeClientSAP,
                     Status = @Status,
                     Type = @Type,
@@ -206,9 +240,11 @@ ORDER BY Id DESC;";
             await conn.ExecuteAsync(new CommandDefinition(updateSql, new
             {
                 Id = id,
+                CarteSLV = carteSlv,
                 request.ClientName,
                 request.Matricule,
                 request.ChauffeurName,
+                RfidHex = rfidHex,
                 request.CodeClientSAP,
                 request.Status,
                 request.Type,
@@ -225,6 +261,42 @@ ORDER BY Id DESC;";
                 request.TruckType,
                 request.PermisConducteur
             }, cancellationToken: ct));
+
+            if (!string.IsNullOrWhiteSpace(carteSlv) || !string.IsNullOrWhiteSpace(rfidHex))
+            {
+                var updateTagSql = $"""
+                    UPDATE dbo.Ecare_Tags
+                    SET
+                        CarteSLV = COALESCE(NULLIF(@CarteSLV, ''), CarteSLV),
+                        RfidHex = COALESCE(NULLIF(@RfidHex, ''), RfidHex)
+                    WHERE ({NormalizeSql("CarteSLV")} = @CurrentCarteSLV)
+                       OR (NULLIF(@CurrentRfidHex, '') IS NOT NULL AND LTRIM(RTRIM(ISNULL(RfidHex, ''))) = @CurrentRfidHex);
+                    """;
+
+                var updatedTags = await conn.ExecuteAsync(new CommandDefinition(
+                    updateTagSql,
+                    new
+                    {
+                        CarteSLV = carteSlv,
+                        RfidHex = rfidHex,
+                        CurrentCarteSLV = NormalizeCardNumber(current.CarteSLV),
+                        CurrentRfidHex = current.RfidHex?.Trim()
+                    },
+                    cancellationToken: ct));
+
+                if (updatedTags == 0 && !string.IsNullOrWhiteSpace(carteSlv) && !string.IsNullOrWhiteSpace(rfidHex))
+                {
+                    const string insertTagSql = """
+                        INSERT INTO dbo.Ecare_Tags (CarteSLV, RfidHex)
+                        VALUES (@CarteSLV, @RfidHex);
+                        """;
+
+                    await conn.ExecuteAsync(new CommandDefinition(
+                        insertTagSql,
+                        new { CarteSLV = carteSlv, RfidHex = rfidHex },
+                        cancellationToken: ct));
+                }
+            }
 
             return Results.Ok(new { id, message = "Client equipement updated successfully." });
         });
@@ -974,9 +1046,11 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
 
     public sealed class ClientEquipementUpdateRequest
     {
+        public string? CarteSLV { get; set; }
         public string? ClientName { get; set; }
         public string? Matricule { get; set; }
         public string? ChauffeurName { get; set; }
+        public string? RfidHex { get; set; }
         public string? CodeClientSAP { get; set; }
         public string? Status { get; set; }
         public string? Type { get; set; }
