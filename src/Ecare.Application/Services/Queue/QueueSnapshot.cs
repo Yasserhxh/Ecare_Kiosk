@@ -147,7 +147,7 @@ public static class QueueSnapshot
            ============================================================ */
         var progressGroups =
             rows.Where(r => !string.IsNullOrWhiteSpace(r.Produit1))
-                .GroupBy(r => IsPalRow(r) ? "PAL" : r.Produit1!.Trim())
+                .GroupBy(r => r.Produit1!.Trim())
                 .Select(g =>
                 {
                     var items = g.OrderBy(r => r.IsPined)
