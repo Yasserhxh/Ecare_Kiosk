@@ -26,8 +26,7 @@ public sealed class OrderLegendSyncRepository : IOrderLegendSyncRepository
                 , [CodeSapCommande]
                 , [CreatedAt]
             FROM [dbo].[Ecare_Order_Legend]
-            WHERE [Step] = 0
-              AND [BonDeLivraison] IS NULL
+            WHERE [BonDeLivraison] IS NULL
               AND [IsSynced] = 0
               AND [CodeSapClient] IS NOT NULL
               AND [CodeSapCommande] IS NOT NULL
@@ -51,16 +50,38 @@ public sealed class OrderLegendSyncRepository : IOrderLegendSyncRepository
         CancellationToken cancellationToken = default)
     {
         const string sql = """
+            DECLARE @Updated TABLE (Ligne NVARCHAR(150));
+
             UPDATE [dbo].[Ecare_Order_Legend]
             SET [BonDeLivraison] = @BonDeLivraison,
                 [Step] = 5,
                 [IsSynced] = 1,
                 [DocumentUpdatedAt] = SYSUTCDATETIME(),
                 [Status] = 'Completed'
+            OUTPUT inserted.[Ligne] INTO @Updated([Ligne])
             WHERE [Id] = @Id
-              AND [Step] < 5
+              AND [Step] <= 5
               AND [BonDeLivraison] IS NULL
-              AND [IsSynced] = 0;
+              AND [IsSynced] = 0
+              AND [PabExitAt] IS NOT NULL
+              AND [DeuxiemePoid] IS NOT NULL;
+
+            IF @@ROWCOUNT > 0
+            BEGIN
+                UPDATE L
+                SET [RealtimeCapacity] =
+                    CASE
+                        WHEN ISNULL(L.[RealtimeCapacity], 0) < ISNULL(L.[Capacity], 0)
+                            THEN ISNULL(L.[RealtimeCapacity], 0) + 1
+                        ELSE ISNULL(L.[Capacity], 0)
+                    END
+                FROM [dbo].[Ecare_Ligne] L
+                WHERE L.[Nom] = (
+                        SELECT TOP (1) U.[Ligne]
+                        FROM @Updated U
+                        WHERE U.[Ligne] IS NOT NULL
+                    );
+            END;
             """;
 
         await using var connection = new SqlConnection(_connectionString);

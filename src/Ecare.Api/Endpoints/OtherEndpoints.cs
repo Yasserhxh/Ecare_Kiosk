@@ -615,6 +615,93 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
             }
         });
 
+        app.MapPost("/api/cards/{cardId:int}/reactivate", async (
+            int cardId,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            const string selectSql = """
+                SELECT TOP (1) Id, CarteSLV, RfidHex
+                FROM dbo.Ecare_Tags
+                WHERE Id = @Id;
+                """;
+
+            var tag = await conn.QuerySingleOrDefaultAsync<CardTagRow>(
+                new CommandDefinition(selectSql, new { Id = cardId }, cancellationToken: ct));
+
+            if (tag is null)
+                return Results.NotFound(new { message = "Carte introuvable." });
+
+            var rawCard = NormalizeCardNumber(tag.CarteSLV);
+            if (string.IsNullOrWhiteSpace(rawCard))
+                return Results.BadRequest(new { message = "Le numero de carte est invalide." });
+
+            var duplicateActiveTagSql = $"""
+                SELECT TOP (1) Id
+                FROM dbo.Ecare_Tags
+                WHERE Id <> @Id
+                  AND {NormalizeSql("CarteSLV")} = @RawCard
+                  AND RIGHT(LTRIM(RTRIM(ISNULL(CarteSLV, ''))), 1) <> '*';
+                """;
+
+            var duplicateActiveTagId = await conn.QuerySingleOrDefaultAsync<int?>(
+                new CommandDefinition(
+                    duplicateActiveTagSql,
+                    new { Id = cardId, RawCard = rawCard },
+                    cancellationToken: ct));
+
+            if (duplicateActiveTagId.HasValue)
+                return Results.Conflict(new { message = $"Une carte active {rawCard} existe deja." });
+
+            await using var tx = await ((dynamic)conn).BeginTransactionAsync(ct);
+            try
+            {
+                const string reactivateTagSql = """
+                    UPDATE dbo.Ecare_Tags
+                    SET CarteSLV = @RawCard
+                    WHERE Id = @Id;
+                    """;
+
+                await conn.ExecuteAsync(new CommandDefinition(
+                    reactivateTagSql,
+                    new { Id = tag.Id, RawCard = rawCard },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+                var reactivateEquipmentSql = $"""
+                    UPDATE dbo.Ecare_ClientEquipements
+                    SET
+                        CarteSLV = @RawCard,
+                        Status = 'ACTIVE'
+                    WHERE {NormalizeSql("CarteSLV")} = @RawCard
+                       OR (NULLIF(LTRIM(RTRIM(@RfidHex)), '') IS NOT NULL AND LTRIM(RTRIM(ISNULL(RfidHex, ''))) = LTRIM(RTRIM(@RfidHex)));
+                    """;
+
+                await conn.ExecuteAsync(new CommandDefinition(
+                    reactivateEquipmentSql,
+                    new { RawCard = rawCard, tag.RfidHex },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+                await tx.CommitAsync(ct);
+                return Results.Ok(new
+                {
+                    tag.Id,
+                    CardNumber = rawCard,
+                    Message = "Carte reactivee avec succes."
+                });
+            }
+            catch
+            {
+                await tx.RollbackAsync(ct);
+                throw;
+            }
+        });
+
         app.MapPost("/api/cards/{cardId:int}/assign", async (
             int cardId,
             CardAssignRequest request,
@@ -876,6 +963,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 HourFrom = q.HourFrom,
                 HourTo = q.HourTo,
                 MaxStep = q.MaxStep,
+                DeliveryStatus = q.DeliveryStatus,
+                HasCreditOverrun = q.HasCreditOverrun,
                 Filters = filters.Count > 0 ? filters : null
             };
 
@@ -1022,6 +1111,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         public string? Produit1 { get; init; }
         public string? TypeProduit { get; init; }
         public int? Step { get; init; }
+        public string? DeliveryStatus { get; init; }
+        public bool? HasCreditOverrun { get; init; }
     }
 
     public sealed class UpdateCommercialAnnulationRequest

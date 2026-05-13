@@ -45,5 +45,19 @@ public sealed class LegendBusinessRow
     public DateTime? StartChargingAt { get; set; }
     public DateTime? FinishedChargingAt { get; set; }
     public DateTime? PabExitAt { get; set; }
+    public int? ElapsedTimeParking { get; set; }
+    public int? ElapsedInPabCharging { get; set; }
+    public int? ElapsedCharging { get; set; }
+    public int? ElapsedTimeInFExit { get; set; }
+    public int? TotalTimeInCercuit { get; set; }
+    public DateTime? AddedToQueueAt { get; set; }
+    public DateTime? FirstPlaceAt { get; set; }
+    public int? TimeElapsedInFirstPlace { get; set; }
+    public DateTime? StartExtraSac { get; set; }
+    public DateTime? EndExtraSac { get; set; }
+    public int? ElapsedExtraSac { get; set; }
+    public int? AnnulationCommercial { get; set; }
+    public string? MotifAnnulationCommercial { get; set; }
+    public string? UserIdAnnulationCommercial { get; set; }
     public bool IsLowCreditDeliveryRisk { get; set; }
 }

@@ -58,6 +58,17 @@ public static class QueueSnapshot
         int Capacity
     );
 
+    private static bool IsPalRow(LegendRow row)
+    {
+        var typeProduit = (row.TypeProduit ?? string.Empty).Trim();
+        if (typeProduit.Equals("PAL", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var produit = (row.Produit1 ?? string.Empty).Trim();
+        return produit.Contains("PAL", StringComparison.OrdinalIgnoreCase)
+            || produit.Contains("PALET", StringComparison.OrdinalIgnoreCase);
+    }
+
     /* ============================================================
        MAIN ENTRY — BUILD SNAPSHOT
        ============================================================ */
@@ -135,8 +146,8 @@ public static class QueueSnapshot
            PROGRESS GROUPS (Produit1 NOT NULL)
            ============================================================ */
         var progressGroups =
-            rows.Where(r => r.Produit1 != null)
-                .GroupBy(r => r.Produit1!.Trim())
+            rows.Where(r => !string.IsNullOrWhiteSpace(r.Produit1))
+                .GroupBy(r => IsPalRow(r) ? "PAL" : r.Produit1!.Trim())
                 .Select(g =>
                 {
                     var items = g.OrderBy(r => r.IsPined)
@@ -145,8 +156,8 @@ public static class QueueSnapshot
                                  .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName,r.TypeProduit))
                                  .ToList();
 
-                    // Compute capacity per product
-                    int cap = CapacityCache.GetCapacity(g.Key, uow);
+                    // Compute capacity per physical loading line/family.
+                    int cap = CapacityCache.GetCapacity(g.Key, g.Any(IsPalRow), uow);
 
                     return new QueueGroup(g.Key, items, cap);
                 })
@@ -195,21 +206,36 @@ public static class QueueSnapshot
 
     public static class CapacityCache
     {
-        public static int GetCapacity(string product, IUnitOfWork uow)
+        public static int GetCapacity(string groupKey, bool isPalGroup, IUnitOfWork uow)
         {
-            const string sql = @"
+            const string sqlProduct = @"
                 SELECT 
-                COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
-                FROM Ecare_Ligne        AS EL
+                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
+                FROM Ecare_Ligne AS EL
                 JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
-                JOIN EcareCiments       AS C  ON C.Id      = LC.CimentId
-                WHERE 
-                LC.Actif = 1
-                AND C.Name = @Product;";
+                JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                WHERE LC.Actif = 1
+                  AND ISNULL(EL.Status, 0) = 1
+                  AND C.Name = @GroupKey;";
+
+            const string sqlPal = @"
+                SELECT
+                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
+                FROM Ecare_Ligne AS EL
+                JOIN Ecare_Zone_Chargement AS EZC ON EZC.Id = EL.ZoneChargementId
+                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                WHERE LC.Actif = 1
+                  AND ISNULL(EL.Status, 0) = 1
+                  AND (
+                        UPPER(ISNULL(EZC.TypeOperation, '')) = 'PAL'
+                        OR UPPER(ISNULL(EZC.TypeActivite, '')) = 'PAL'
+                        OR UPPER(ISNULL(C.[Type], '')) = 'PAL'
+                      );";
 
             return uow.Connection.ExecuteScalar<int>(
-                sql,
-                new { Product = product },
+                isPalGroup ? sqlPal : sqlProduct,
+                new { GroupKey = groupKey },
                 uow.Transaction
             );
         }

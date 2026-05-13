@@ -14,6 +14,9 @@ public sealed class GetLegendBusinessQuery
     // Default Step < 5
     public int MaxStep { get; init; } = 5;
 
+    public string? DeliveryStatus { get; init; }
+    public bool? HasCreditOverrun { get; init; }
+
     // DB column filters (Matricule, Chantier, Produit1, etc.)
     public Dictionary<string, object>? Filters { get; init; }
 }

@@ -69,6 +69,20 @@ SELECT
     PlombNumber                   AS Seals,
     BonDeCommande                 AS BonCommandeClient,
     IsLowCreditDeliveryRisk,
+    ElapsedTimeParking,
+    ElapsedInPab_Charging         AS ElapsedInPabCharging,
+    ElapsedCharging,
+    ElapsedTimeInF_Exit           AS ElapsedTimeInFExit,
+    TotalTimeInCercuit,
+    AddedToQueueAt,
+    FirstPlaceAt,
+    TimeElapsedInFirstPlace,
+    StartExtraSac,
+    EndExtraSac,
+    ElapsedExtraSac,
+    AnnulationCommercial,
+    MotifAnnulationCommercial,
+    CAST(UserIdAnnulationCommercial AS nvarchar(100)) AS UserIdAnnulationCommercial,
 
     CASE
         WHEN Produit2 !='' THEN 'Mixte'
@@ -76,7 +90,6 @@ SELECT
     END                           AS TypeCommande
 FROM dbo.Ecare_Order_Legend
 WHERE 1 = 1
-AND AnnulationCommercial IS NULL
 ");
 
         var p = new DynamicParameters();
@@ -96,6 +109,28 @@ AND AnnulationCommercial IS NULL
         sql.Append(" AND ParkingAt BETWEEN @From AND @To");
         p.Add("@From", from);
         p.Add("@To", to);
+
+        if (!string.IsNullOrWhiteSpace(request.DeliveryStatus))
+        {
+            switch (request.DeliveryStatus.Trim().ToLowerInvariant())
+            {
+                case "delivered":
+                    sql.Append(" AND ISNULL(AnnulationCommercial, 0) <> 1 AND ISNULL(BonDeLivraison, '') <> ''");
+                    break;
+                case "in_progress":
+                    sql.Append(" AND ISNULL(AnnulationCommercial, 0) <> 1 AND ISNULL(BonDeLivraison, '') = ''");
+                    break;
+                case "cancelled":
+                    sql.Append(" AND ISNULL(AnnulationCommercial, 0) = 1");
+                    break;
+            }
+        }
+
+        if (request.HasCreditOverrun.HasValue)
+        {
+            sql.Append(" AND ISNULL(IsLowCreditDeliveryRisk, 0) = @HasCreditOverrun");
+            p.Add("@HasCreditOverrun", request.HasCreditOverrun.Value);
+        }
 
         // ------------------------------------------------------------
         // HOUR FILTER
@@ -129,12 +164,6 @@ AND AnnulationCommercial IS NULL
         }
 
         sql.Append(" ORDER BY ParkingAt DESC");
-
-        var rawData = await _uow.Connection.QueryAsync<dynamic>(
-            sql.ToString(),
-            p,
-            _uow.Transaction
-        );
 
         var data = await _uow.Connection.QueryAsync<LegendBusinessRow>(
             sql.ToString(),

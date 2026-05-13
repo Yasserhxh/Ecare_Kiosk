@@ -269,7 +269,6 @@ public sealed class UpdateSecondWeightHandler
                     """
                     DECLARE @Now DATETIME =
                         CONVERT(DATETIME, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time');
-                    DECLARE @Updated TABLE (LigneName NVARCHAR(150));
 
                     UPDATE dbo.Ecare_Order_Legend
                     SET
@@ -284,24 +283,10 @@ public sealed class UpdateSecondWeightHandler
                             ISNULL(ElapsedInPab_Charging, 0) +
                             ISNULL(ElapsedCharging, 0) +
                             DATEDIFF(MINUTE, FinishedChargingAt, @Now)
-                    OUTPUT inserted.Ligne INTO @Updated(LigneName)
                     WHERE Id = @LegendId
                       AND Step < 5;
 
                     DECLARE @RowsAffected INT = @@ROWCOUNT;
-
-                    IF @RowsAffected = 1 AND EXISTS (SELECT 1 FROM @Updated WHERE LigneName IS NOT NULL)
-                    BEGIN
-                        UPDATE L
-                        SET L.RealtimeCapacity =
-                            CASE
-                                WHEN ISNULL(L.RealtimeCapacity, 0) < ISNULL(L.Capacity, 0)
-                                    THEN ISNULL(L.RealtimeCapacity, 0) + 1
-                                ELSE ISNULL(L.Capacity, 0)
-                            END
-                        FROM dbo.Ecare_Ligne L
-                        WHERE L.Nom = (SELECT TOP (1) LigneName FROM @Updated WHERE LigneName IS NOT NULL);
-                    END
 
                     IF @RowsAffected = 1 AND @OrderId IS NOT NULL
                     BEGIN

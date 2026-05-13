@@ -32,12 +32,60 @@ namespace Ecare.Application.Commands.UpdateCommercialAnnulation
             await _uow.BeginAsync(ct);
 
             const string sql = @"
+            DECLARE @CurrentStep INT;
+            DECLARE @CurrentLigne NVARCHAR(150);
+            DECLARE @HasFirstPesage BIT = 0;
+            DECLARE @ShouldReleaseCapacity BIT = 0;
+
+            SELECT
+                @CurrentStep = ISNULL(Step, 0),
+                @CurrentLigne = Ligne,
+                @HasFirstPesage =
+                    CASE
+                        WHEN PremierePoid IS NOT NULL OR PabEntryAt IS NOT NULL THEN 1
+                        ELSE 0
+                    END
+            FROM dbo.Ecare_Order_Legend
+            WHERE Id = @Id;
+
+            SET @ShouldReleaseCapacity =
+                CASE
+                    WHEN ISNULL(@AnnulationCommercial, 0) = 1
+                         AND @HasFirstPesage = 1
+                         AND @CurrentStep < 5
+                         AND @CurrentLigne IS NOT NULL
+                         AND LTRIM(RTRIM(@CurrentLigne)) <> ''
+                    THEN 1
+                    ELSE 0
+                END;
+
             UPDATE dbo.Ecare_Order_Legend
             SET
                 AnnulationCommercial        = @AnnulationCommercial,
                 MotifAnnulationCommercial   = @MotifAnnulationCommercial,
-                UserIdAnnulationCommercial  = @UserIdAnnulationCommercial
+                UserIdAnnulationCommercial  = @UserIdAnnulationCommercial,
+                Step                        = CASE
+                                                WHEN ISNULL(@AnnulationCommercial, 0) = 1 AND ISNULL(Step, 0) < 5 THEN 5
+                                                ELSE Step
+                                              END,
+                Status                      = CASE
+                                                WHEN ISNULL(@AnnulationCommercial, 0) = 1 THEN 'Canceled'
+                                                ELSE Status
+                                              END
             WHERE Id = @Id;
+
+            IF @@ROWCOUNT > 0 AND @ShouldReleaseCapacity = 1
+            BEGIN
+                UPDATE L
+                SET L.RealtimeCapacity =
+                    CASE
+                        WHEN ISNULL(L.RealtimeCapacity, 0) < ISNULL(L.Capacity, 0)
+                            THEN ISNULL(L.RealtimeCapacity, 0) + 1
+                        ELSE ISNULL(L.Capacity, 0)
+                    END
+                FROM dbo.Ecare_Ligne L
+                WHERE L.Nom = @CurrentLigne;
+            END;
 
             SELECT
                 Id,
