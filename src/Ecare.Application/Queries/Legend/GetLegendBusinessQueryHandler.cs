@@ -25,7 +25,7 @@ public sealed class GetLegendBusinessQueryHandler
 SELECT
     -- Mapping
     id,
-    ParkingAt                     AS DateCreation,
+    COALESCE(ParkingAt, CreatedAt) AS DateCreation,
     ParkingAt,
     PabEntryAt,
     StartChargingAt,
@@ -68,6 +68,9 @@ SELECT
 
     PlombNumber                   AS Seals,
     BonDeCommande                 AS BonCommandeClient,
+    SacNumber,
+    NumberSacs_Charged,
+    Weight_Charged,
     IsLowCreditDeliveryRisk,
     ElapsedTimeParking,
     ElapsedInPab_Charging         AS ElapsedInPabCharging,
@@ -97,7 +100,7 @@ WHERE 1 = 1
         // ------------------------------------------------------------
         // STEP FILTER (default)
         // ------------------------------------------------------------
-        sql.Append("  AND Step BETWEEN 1 AND @MaxStep ");
+        sql.Append("  AND ISNULL(Step, 0) BETWEEN 0 AND @MaxStep ");
         p.Add("@MaxStep", request.MaxStep);
 
         // ------------------------------------------------------------
@@ -106,23 +109,44 @@ WHERE 1 = 1
         var from = request.DateFrom ?? DateTime.Today;
         var to = request.DateTo ?? DateTime.Today.AddDays(1).AddTicks(-1);
 
-        sql.Append(" AND ParkingAt BETWEEN @From AND @To");
+        sql.Append(" AND COALESCE(ParkingAt, CreatedAt) BETWEEN @From AND @To");
         p.Add("@From", from);
         p.Add("@To", to);
 
         if (!string.IsNullOrWhiteSpace(request.DeliveryStatus))
         {
-            switch (request.DeliveryStatus.Trim().ToLowerInvariant())
+            var deliveryStatuses = request.DeliveryStatus
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(status => status.ToLowerInvariant())
+                .Distinct()
+                .ToList();
+
+            if (deliveryStatuses.Count > 0)
             {
-                case "delivered":
-                    sql.Append(" AND ISNULL(AnnulationCommercial, 0) <> 1 AND ISNULL(BonDeLivraison, '') <> ''");
-                    break;
-                case "in_progress":
-                    sql.Append(" AND ISNULL(AnnulationCommercial, 0) <> 1 AND ISNULL(BonDeLivraison, '') = ''");
-                    break;
-                case "cancelled":
-                    sql.Append(" AND ISNULL(AnnulationCommercial, 0) = 1");
-                    break;
+                var deliveryClauses = new List<string>();
+
+                foreach (var status in deliveryStatuses)
+                {
+                    switch (status)
+                    {
+                        case "delivered":
+                            deliveryClauses.Add("(ISNULL(AnnulationCommercial, 0) <> 1 AND ISNULL(BonDeLivraison, '') <> '')");
+                            break;
+                        case "in_progress":
+                            deliveryClauses.Add("(ISNULL(AnnulationCommercial, 0) <> 1 AND ISNULL(BonDeLivraison, '') = '')");
+                            break;
+                        case "cancelled":
+                            deliveryClauses.Add("(ISNULL(AnnulationCommercial, 0) = 1)");
+                            break;
+                    }
+                }
+
+                if (deliveryClauses.Count > 0)
+                {
+                    sql.Append(" AND (");
+                    sql.Append(string.Join(" OR ", deliveryClauses));
+                    sql.Append(')');
+                }
             }
         }
 

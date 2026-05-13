@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Ecare.Application.Services;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Azure.SignalR.Management;
@@ -195,6 +196,42 @@ public sealed class UpdateAfterFirstWeightHandler
                 deviceId: null,
                 context: null,
                 ct: ct);
+
+            var eligibility = await QueueSnapshot.EvaluateFirstWeightEligibilityAsync(
+                conn,
+                vm.Id,
+                ct: ct);
+
+            if (!eligibility.IsAllowed)
+            {
+                await SafeDbLogAsync(
+                    connStr,
+                    traceId,
+                    evt,
+                    stage: "FIRST_WEIGHT_BLOCKED_NOT_CALLED",
+                    statusCode: 409,
+                    isSuccess: false,
+                    payload: new
+                    {
+                        reason = eligibility.Reason,
+                        eligibility.GroupName,
+                        eligibility.Capacity,
+                        eligibility.Position
+                    },
+                    process: ProcessName,
+                    legendId: vm.Id,
+                    spName: null,
+                    hubName: null,
+                    methodName: null,
+                    deviceId: null,
+                    context: new { request.RfidCard, request.Matricule, request.Produit1 },
+                    ct: ct);
+
+                return Result<FirstWeightResultVm>.Fail(
+                    eligibility.Reason == "LINE_HAS_NO_CAPACITY"
+                        ? "La ligne de chargement n'a plus de capacité disponible pour le moment."
+                        : "Ce n'est pas encore votre tour pour le premier pesage. Veuillez attendre l'appel.");
+            }
 
             var ptac = vm.PTAC ?? 0m;
             var q1 = vm.Quantite1 ?? 0m;

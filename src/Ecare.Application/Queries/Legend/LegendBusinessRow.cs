@@ -40,6 +40,9 @@ public sealed class LegendBusinessRow
     public string? BonCommandeClient { get; set; }        // BonDeCommande
 
     public string TypeCommande { get; set; } = default!;  // Simple / Mixte
+    public int? SacNumber { get; set; }
+    public int? NumberSacs_Charged { get; set; }
+    public decimal? Weight_Charged { get; set; }
     public DateTime? ParkingAt { get; set; }
     public DateTime? PabEntryAt { get; set; }
     public DateTime? StartChargingAt { get; set; }

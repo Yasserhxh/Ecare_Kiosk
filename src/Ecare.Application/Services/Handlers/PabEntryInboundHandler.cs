@@ -51,6 +51,36 @@ namespace Ecare.Application.Services
             // --------------------------
             var scan = await mediator.Send(new PabEntryScanQuery(slv), ct);
 
+            if (!scan.Success)
+            {
+                if (string.Equals(scan.Error, "NOT_CALLED_YET", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(scan.Error, "LINE_HAS_NO_CAPACITY", StringComparison.OrdinalIgnoreCase))
+                {
+                    var blockedPayload = new
+                    {
+                        @event = "PabEntryMessage",
+                        message = string.Equals(scan.Error, "LINE_HAS_NO_CAPACITY", StringComparison.OrdinalIgnoreCase)
+                            ? "La ligne de chargement n'a plus de capacité disponible pour le moment."
+                            : "Ce n'est pas encore votre tour pour le premier pesage. Veuillez attendre l'appel.",
+                        kiosk = deviceId,
+                        slv = slv,
+                        ts = DateTime.UtcNow
+                    };
+
+                    await SignalRHelper.BroadcastToDeviceAsync(
+                        _signalR,
+                        hubName: _outOpt.Hub,
+                        methodName: "PabEntryMessage",
+                        deviceId: deviceId,
+                        payload: blockedPayload,
+                        logger: _log,
+                        ct: ct
+                    );
+                }
+
+                return;
+            }
+
             // If SP returned NO DATA → build empty VM
             PabEntryScanVm vm =
                 scan.Success && scan.Value is not null

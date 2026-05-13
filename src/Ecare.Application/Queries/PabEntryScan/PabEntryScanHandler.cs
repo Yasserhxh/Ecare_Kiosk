@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Ecare.Application.Services;
 using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
@@ -70,6 +71,28 @@ namespace Ecare.Application.Queries.PabEntryScan
                 {
                     _log.LogWarning("No PAB entry scan data found for RFID={rfid}", request.RfidCard);
                     return Result<PabEntryScanVm>.Fail("NO_DATA");
+                }
+
+                if (row.LegendId.HasValue)
+                {
+                    var eligibility = await QueueSnapshot.EvaluateFirstWeightEligibilityAsync(
+                        conn,
+                        row.LegendId.Value,
+                        ct: ct);
+
+                    if (!eligibility.IsAllowed)
+                    {
+                        _log.LogWarning(
+                            "PAB entry blocked for RFID={rfid}, LegendId={legendId}, reason={reason}, group={group}, position={position}, capacity={capacity}",
+                            request.RfidCard,
+                            row.LegendId.Value,
+                            eligibility.Reason,
+                            eligibility.GroupName,
+                            eligibility.Position,
+                            eligibility.Capacity);
+
+                        return Result<PabEntryScanVm>.Fail(eligibility.Reason);
+                    }
                 }
 
                 return Result<PabEntryScanVm>.Ok(row);

@@ -47,6 +47,8 @@ public static class QueueSnapshot
         bool IsPined,
         DateTime? PinedAt,
         DateTime AddedToQueueAt,
+        DateTime? FirstPlaceAt,
+        decimal? TimeElapsedInFirstPlace,
         string TruckType,
         string chauffeurNom,
         string? TypeProduit
@@ -58,6 +60,15 @@ public static class QueueSnapshot
         int Capacity
     );
 
+    public sealed record FirstWeightEligibilityResult(
+        bool IsAllowed,
+        string Reason,
+        string GroupName,
+        int Capacity,
+        int Position,
+        bool IsPalGroup
+    );
+
     private static bool IsPalRow(LegendRow row)
     {
         var typeProduit = (row.TypeProduit ?? string.Empty).Trim();
@@ -67,6 +78,17 @@ public static class QueueSnapshot
         var produit = (row.Produit1 ?? string.Empty).Trim();
         return produit.Contains("PAL", StringComparison.OrdinalIgnoreCase)
             || produit.Contains("PALET", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static DateTime ResolveQueueTimestamp(LegendRow row)
+    {
+        if (row.AddedToQueueAt != default)
+            return row.AddedToQueueAt;
+
+        if (row.ParkingAt != default)
+            return row.ParkingAt;
+
+        return DateTime.MaxValue;
     }
 
     /* ============================================================
@@ -126,6 +148,8 @@ public static class QueueSnapshot
         r.IsPined,
         r.PinedAt,
         r.AddedToQueueAt,
+        r.FirstPlaceAt,
+        r.TimeElapsedInFirstPlace,
         r.TruckType,
         r.ChauffeurName,
         r.TypeProduit))
@@ -139,7 +163,7 @@ public static class QueueSnapshot
             .OrderBy(r => r.IsPined)
             .ThenBy(r => r.PinedAt ?? DateTime.MinValue)
             .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName,r.TypeProduit))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName,r.TypeProduit))
             .ToList();
 
         /* ============================================================
@@ -153,7 +177,7 @@ public static class QueueSnapshot
                     var items = g.OrderBy(r => r.IsPined)
                                  .ThenBy(r => r.PinedAt ?? DateTime.MinValue)
                                  .ThenBy(r => r.AddedToQueueAt)
-                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.TruckType, r.ChauffeurName,r.TypeProduit))
+                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName,r.TypeProduit))
                                  .ToList();
 
                     // Compute capacity per physical loading line/family.
@@ -181,6 +205,85 @@ public static class QueueSnapshot
             groups.Count, groups.Sum(x => x.Items.Count));
 
         return groups;
+    }
+
+    public static async Task<FirstWeightEligibilityResult> EvaluateFirstWeightEligibilityAsync(
+        IDbConnection connection,
+        int legendId,
+        IDbTransaction? transaction = null,
+        CancellationToken ct = default)
+    {
+        var rows = (await connection.QueryAsync<LegendRow>(
+            new CommandDefinition(
+                "sp_GetQueueSnapshotLegend",
+                transaction: transaction,
+                cancellationToken: ct,
+                commandType: CommandType.StoredProcedure)))
+            .ToList();
+
+        var target = rows.FirstOrDefault(r => r.Id == legendId);
+        if (target is null)
+        {
+            return new FirstWeightEligibilityResult(
+                false, "NO_ACTIVE_ORDER", string.Empty, 0, -1, false);
+        }
+
+        if (target.Step != 1 || string.IsNullOrWhiteSpace(target.Produit1))
+        {
+            return new FirstWeightEligibilityResult(
+                false,
+                "NOT_READY_FOR_FIRST_WEIGHT",
+                target.Produit1?.Trim() ?? string.Empty,
+                0,
+                -1,
+                IsPalRow(target));
+        }
+
+        var isPalGroup = IsPalRow(target);
+        var groupName = target.Produit1!.Trim();
+
+        var waitingRows = rows
+            .Where(r =>
+                r.Step == 1 &&
+                !string.IsNullOrWhiteSpace(r.Produit1) &&
+                (isPalGroup
+                    ? IsPalRow(r)
+                    : string.Equals(r.Produit1!.Trim(), groupName, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(r => r.IsPined)
+            .ThenBy(r => r.IsPined ? (r.PinedAt ?? DateTime.MaxValue) : DateTime.MaxValue)
+            .ThenBy(ResolveQueueTimestamp)
+            .ThenBy(r => r.Id)
+            .ToList();
+
+        var capacity = await CapacityCache.GetCapacityAsync(
+            connection,
+            groupName,
+            isPalGroup,
+            transaction,
+            ct);
+
+        if (capacity <= 0)
+        {
+            return new FirstWeightEligibilityResult(
+                false,
+                "LINE_HAS_NO_CAPACITY",
+                groupName,
+                capacity,
+                -1,
+                isPalGroup);
+        }
+
+        var position = waitingRows.FindIndex(r => r.Id == legendId) + 1;
+        var allowedIds = waitingRows.Take(capacity).Select(r => r.Id).ToHashSet();
+        var isAllowed = allowedIds.Contains(legendId);
+
+        return new FirstWeightEligibilityResult(
+            isAllowed,
+            isAllowed ? "OK" : "NOT_CALLED_YET",
+            groupName,
+            capacity,
+            position,
+            isPalGroup);
     }
 
     /* ============================================================
@@ -227,6 +330,7 @@ public static class QueueSnapshot
                 JOIN EcareCiments AS C ON C.Id = LC.CimentId
                 WHERE LC.Actif = 1
                   AND ISNULL(EL.Status, 0) = 1
+                  AND C.Name = @GroupKey
                   AND (
                         UPPER(ISNULL(EZC.TypeOperation, '')) = 'PAL'
                         OR UPPER(ISNULL(EZC.TypeActivite, '')) = 'PAL'
@@ -238,6 +342,47 @@ public static class QueueSnapshot
                 new { GroupKey = groupKey },
                 uow.Transaction
             );
+        }
+
+        public static Task<int> GetCapacityAsync(
+            IDbConnection connection,
+            string groupKey,
+            bool isPalGroup,
+            IDbTransaction? transaction = null,
+            CancellationToken ct = default)
+        {
+            const string sqlProduct = @"
+                SELECT 
+                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
+                FROM Ecare_Ligne AS EL
+                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                WHERE LC.Actif = 1
+                  AND ISNULL(EL.Status, 0) = 1
+                  AND C.Name = @GroupKey;";
+
+            const string sqlPal = @"
+                SELECT
+                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
+                FROM Ecare_Ligne AS EL
+                JOIN Ecare_Zone_Chargement AS EZC ON EZC.Id = EL.ZoneChargementId
+                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                WHERE LC.Actif = 1
+                  AND ISNULL(EL.Status, 0) = 1
+                  AND C.Name = @GroupKey
+                  AND (
+                        UPPER(ISNULL(EZC.TypeOperation, '')) = 'PAL'
+                        OR UPPER(ISNULL(EZC.TypeActivite, '')) = 'PAL'
+                        OR UPPER(ISNULL(C.[Type], '')) = 'PAL'
+                      );";
+
+            return connection.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    isPalGroup ? sqlPal : sqlProduct,
+                    new { GroupKey = groupKey },
+                    transaction,
+                    cancellationToken: ct));
         }
     }
 
