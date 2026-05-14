@@ -36,6 +36,7 @@ namespace Ecare.Application.Commands.UpdateCommercialAnnulation
             DECLARE @CurrentLigne NVARCHAR(150);
             DECLARE @HasFirstPesage BIT = 0;
             DECLARE @ShouldReleaseCapacity BIT = 0;
+            DECLARE @LegendUpdated BIT = 0;
 
             SELECT
                 @CurrentStep = ISNULL(Step, 0),
@@ -74,7 +75,9 @@ namespace Ecare.Application.Commands.UpdateCommercialAnnulation
                                               END
             WHERE Id = @Id;
 
-            IF @@ROWCOUNT > 0 AND @ShouldReleaseCapacity = 1
+            SET @LegendUpdated = CASE WHEN @@ROWCOUNT > 0 THEN 1 ELSE 0 END;
+
+            IF @LegendUpdated = 1 AND @ShouldReleaseCapacity = 1
             BEGIN
                 UPDATE L
                 SET L.RealtimeCapacity =
@@ -85,6 +88,15 @@ namespace Ecare.Application.Commands.UpdateCommercialAnnulation
                     END
                 FROM dbo.Ecare_Ligne L
                 WHERE L.Nom = @CurrentLigne;
+            END;
+
+            IF @LegendUpdated = 1 AND ISNULL(@AnnulationCommercial, 0) = 1
+            BEGIN
+                UPDATE O
+                SET O.Statut = 'Annulee'
+                FROM dbo.Orders O
+                INNER JOIN dbo.Ecare_Order_Legend L ON L.OrderId = O.Id
+                WHERE L.Id = @Id;
             END;
 
             SELECT
