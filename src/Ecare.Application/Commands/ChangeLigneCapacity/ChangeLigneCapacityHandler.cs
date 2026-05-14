@@ -51,10 +51,15 @@ namespace Ecare.Application.Commands.ChangeLigneCapacity
                     return Result<int>.Fail("Ligne introuvable.");
                 }
 
-                // Mise à jour de la capacité
+                // Keep realtime capacity aligned only when the line was fully available.
                 const string sqlUpdate = """
                 UPDATE Ecare_Ligne
-                SET Capacity = @Capacity
+                SET
+                    RealtimeCapacity = CASE
+                        WHEN ISNULL(RealtimeCapacity, Capacity) = Capacity THEN @Capacity
+                        ELSE RealtimeCapacity
+                    END,
+                    Capacity = @Capacity
                 WHERE Id = @LigneId;
                 """;
 
