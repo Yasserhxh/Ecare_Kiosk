@@ -23,7 +23,7 @@ public sealed class OrderLegendSyncBackgroundService : BackgroundService
         {
             try
             {
-                _logger.LogInformation("Background worker tick at {UtcNow}", DateTime.UtcNow);
+                _logger.LogInformation("Background worker tick at {Now}", DateTime.Now);
 
                 using var scope = _scopeFactory.CreateScope();
                 var service = scope.ServiceProvider.GetRequiredService<IExternalDeliverySyncService>();

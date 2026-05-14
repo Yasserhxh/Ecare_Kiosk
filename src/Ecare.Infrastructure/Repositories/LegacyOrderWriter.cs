@@ -48,7 +48,7 @@ public sealed class LegacyOrderWriter : ILegacyOrderWriter
         if (shippingId is null)
         {
             var createShipping = new CommandDefinition(
-                "INSERT INTO dbo.Shippings (UserId, DateCreation) VALUES ('kiosk', SYSUTCDATETIME()); SELECT CAST(SCOPE_IDENTITY() as int);",
+                "INSERT INTO dbo.Shippings (UserId, DateCreation) VALUES ('kiosk', CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time')); SELECT CAST(SCOPE_IDENTITY() as int);",
                 transaction: uow.Transaction,
                 cancellationToken: ct);
             shippingId = await uow.Connection.ExecuteScalarAsync<int?>(createShipping);
@@ -57,7 +57,7 @@ public sealed class LegacyOrderWriter : ILegacyOrderWriter
         // Insert into dbo.Orders (minimal required fields per schema: ShippingId, NumeroCommande, DateCommande, CarteSLV, PlaqueCamion, Statut, UserId)
         var insertOrder = new CommandDefinition(
             $@"INSERT INTO [dbo].[Orders] (ShippingId, NumeroCommande, DateCommande, CarteSLV, PlaqueCamion, Statut, UserId)
-               VALUES (@ShippingId, @NumeroCommande, SYSUTCDATETIME(), @CarteSLV, @PlaqueCamion, @Statut, @UserId);
+               VALUES (@ShippingId, @NumeroCommande, CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'), @CarteSLV, @PlaqueCamion, @Statut, @UserId);
                SELECT CAST(SCOPE_IDENTITY() as int);",
             new
             {

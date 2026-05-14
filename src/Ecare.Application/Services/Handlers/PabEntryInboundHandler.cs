@@ -64,7 +64,7 @@ namespace Ecare.Application.Services
                             : "Ce n'est pas encore votre tour pour le premier pesage. Veuillez attendre l'appel.",
                         kiosk = deviceId,
                         slv = slv,
-                        ts = DateTime.UtcNow
+                        ts = DateTime.Now
                     };
 
                     await SignalRHelper.BroadcastToDeviceAsync(
@@ -109,7 +109,7 @@ namespace Ecare.Application.Services
                 kiosk = deviceId,
                 slv = slv,
                 bonCommande = vm.BonDeCommande,
-                ts = DateTime.UtcNow,
+                ts = DateTime.Now,
 
                 driver = new
                 {

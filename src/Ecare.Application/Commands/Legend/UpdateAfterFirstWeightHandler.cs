@@ -274,7 +274,7 @@ public sealed class UpdateAfterFirstWeightHandler
                         message = "LOAD EXCEEDS PTAC LIMIT",
                         kiosk = deviceId,
                         slv = request.RfidCard,
-                        ts = DateTime.UtcNow,
+                        ts = DateTime.Now,
                         details = new
                         {
                             ptac,

@@ -72,7 +72,7 @@ namespace Ecare.Application.Services.Handlers
                 site = "Asment-Temara-01",
                 kiosk = deviceId,
                 slv = vm.CarteSLV,
-                ts = DateTime.UtcNow,
+                ts = DateTime.Now,
 
                 driver = new
                 {

@@ -56,7 +56,7 @@ public sealed class OrderLegendSyncRepository : IOrderLegendSyncRepository
             SET [BonDeLivraison] = @BonDeLivraison,
                 [Step] = 5,
                 [IsSynced] = 1,
-                [DocumentUpdatedAt] = SYSUTCDATETIME(),
+                [DocumentUpdatedAt] = CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'),
                 [Status] = CASE
                     WHEN ISNULL([AnnulationCommercial], 0) = 1 THEN 'Canceled'
                     ELSE 'Completed'

@@ -125,7 +125,7 @@ public sealed class GetOrderDetailsHandler : IRequestHandler<GetOrderDetailsQuer
                 site = "Asment-Temara-01",
                 kiosk = "loading-pc-01",
                 slv = result.CarteSLV,
-                ts = DateTime.UtcNow,
+                ts = DateTime.Now,
                 firstWeight,
                 driver = new
                 {

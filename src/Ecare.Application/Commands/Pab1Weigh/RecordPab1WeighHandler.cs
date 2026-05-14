@@ -14,7 +14,7 @@ public sealed class RecordPab1WeighHandler(IOrderRepository orders, IWeighReposi
         {
             var order = await orders.GetByNumberAsync(request.OrderNumber, uow);
             if (order is null) return Result.Fail("Commande introuvable");
-            var rec = new WeighRecord { OrderId = order.Id, Stage = 1, GrossKg = request.GrossKg, TareKg = 0, NetKg = 0, TakenAt = DateTime.UtcNow };
+            var rec = new WeighRecord { OrderId = order.Id, Stage = 1, GrossKg = request.GrossKg, TareKg = 0, NetKg = 0, TakenAt = DateTime.Now };
             await weighs.InsertAsync(rec, uow);
             await uow.CommitAsync(ct);
             return Result.Ok();

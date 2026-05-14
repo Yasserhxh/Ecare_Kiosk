@@ -107,11 +107,23 @@ public static class LegendOrderEndpoints
             UpdateSecondWeightCommand cmd,
             IMediator mediator) =>
         {
-            var result = await mediator.Send(cmd);
+            try
+            {
+                var result = await mediator.Send(cmd);
 
-            return result.Success
-                ? Results.Ok(new { success = true, value = result.Value })
-                : Results.BadRequest(new { success = false, error = result.Error });
+                return result.Success
+                    ? Results.Ok(new { success = true, value = result.Value })
+                    : Results.BadRequest(new { success = false, error = result.Error });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new
+                {
+                    success = false,
+                    error = "UNEXPECTED_ERROR",
+                    message = ex.Message
+                });
+            }
         });
 
         group.MapPost("/legend/extrasac", async (

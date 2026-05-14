@@ -126,7 +126,7 @@ public sealed class GetPabExitDataHandler : IRequestHandler<GetPabExitDataQuery,
                 site = "Asment-Temara-01",
                 kiosk = "pab-exit-pc-01",
                 slv = result.CarteSLV,
-                ts = DateTime.UtcNow,
+                ts = DateTime.Now,
                 firstWeight = firstWeight,
                 driver = new
                 {

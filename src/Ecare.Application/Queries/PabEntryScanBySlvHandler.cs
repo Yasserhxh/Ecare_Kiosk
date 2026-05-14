@@ -109,7 +109,7 @@ public sealed class PabEntryScanBySlvHandler
                 site = "Asment-Temara-01",
                 kiosk = "pab-entry-pc-01",
                 slv = vm.CarteSLV,
-                ts = DateTime.UtcNow,
+                ts = DateTime.Now,
 
                 driver = new
                 {

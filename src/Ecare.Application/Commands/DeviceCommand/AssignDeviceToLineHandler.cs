@@ -36,7 +36,7 @@ namespace Ecare.Application.Commands.DeviceCommand
             // Close any open assignment for this device
             const string closeCurrent = """
             UPDATE dbo.Ecare_DeviceAssignment
-            SET EffectiveTo = SYSUTCDATETIME()
+            SET EffectiveTo = CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time')
             WHERE DeviceId=@DeviceId AND EffectiveTo IS NULL;
             """;
             await db.ExecuteAsync(new CommandDefinition(closeCurrent, new { req.DeviceId }, tx, cancellationToken: ct));
@@ -53,7 +53,7 @@ namespace Ecare.Application.Commands.DeviceCommand
 
             // Open new assignment
             const string insertAssign = """
-                DECLARE @now DATETIME2(3)=SYSUTCDATETIME();
+                DECLARE @now DATETIME2(3)=CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time');
                 INSERT INTO dbo.Ecare_DeviceAssignment(DeviceId, LineId, EffectiveFrom, Reason)
                 VALUES(@DeviceId, @LineId, @now, @Reason);
                 SELECT @now;

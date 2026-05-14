@@ -85,7 +85,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
             kiosk = deviceId,
             step = vm.Step,
             slv = vm.RFIDCard.ToString(),
-            ts = DateTime.UtcNow,
+            ts = DateTime.Now,
 
             driver = new
             {

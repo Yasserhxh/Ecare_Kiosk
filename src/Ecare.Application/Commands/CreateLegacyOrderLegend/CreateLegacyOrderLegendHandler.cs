@@ -81,7 +81,7 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                         var payload = new
                         {
                             codeClient = request.CodeClientSap,
-                            date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                            date = DateTime.Now.ToString("yyyy-MM-dd"),
                             purchNoC = request.BonDeCommande,
                             salesOrg = "MA18",
 
@@ -99,7 +99,7 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                             soldTo = request.CodeClientSap,
                             shipTo = request.CodeChantierSap,
 
-                            reqDate = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                            reqDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
                             reqQty = request.Quantite1,
                             reqQty2 = request.Quantite2,
 
@@ -126,7 +126,7 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                         var payload = new
                         {
                             codeClient = request.CodeClientSap,
-                            date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                            date = DateTime.Now.ToString("yyyy-MM-dd"),
                             purchNoC = request.BonDeCommande,
                             salesOrg = "MA18",
 
@@ -140,7 +140,7 @@ namespace Ecare.Application.Commands.CreateLegacyOrderLegend
                             soldTo = request.CodeClientSap,
                             shipTo = request.CodeChantierSap,
 
-                            reqDate = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                            reqDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
                             reqQty = request.Quantite1,
 
                             behaveWhenError = "",

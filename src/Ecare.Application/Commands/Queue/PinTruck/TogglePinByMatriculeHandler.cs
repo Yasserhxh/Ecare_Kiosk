@@ -15,7 +15,7 @@ public sealed class TogglePinByMatriculeHandler(
     : IRequestHandler<TogglePinByMatriculeCommand, Result<int>>
 {
     private const string ToggleSql = @"
-        DECLARE @Now DATETIME2 = SYSUTCDATETIME();
+        DECLARE @Now DATETIME2 = CONVERT(DATETIME2, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time');
         DECLARE @ShouldPin BIT = 1;
 
         SELECT TOP (1)

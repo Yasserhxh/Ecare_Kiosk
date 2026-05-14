@@ -14,10 +14,10 @@ public sealed class KioskOrderRepository : IKioskOrderRepository
     public async Task<Guid?> CreateAsync(Guid driverId, Guid clientId, int productId, int productType, string productName, string unit, decimal quantity, IUnitOfWork uow, CancellationToken ct)
     {
         var id = Guid.NewGuid();
-        var number = $"CMD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
+        var number = $"CMD-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
         var cmd = new CommandDefinition(
             $@"INSERT INTO {DbTableNames.KioskOrders}(Id,Number,DriverId,ClientId,ProductId,ProductType,ProductName,Unit,Quantity,Status,CreatedAt)
-                VALUES (@Id,@Number,@DriverId,@ClientId,@ProductId,@ProductType,@ProductName,@Unit,@Quantity,@Status,SYSUTCDATETIME())",
+                VALUES (@Id,@Number,@DriverId,@ClientId,@ProductId,@ProductType,@ProductName,@Unit,@Quantity,@Status,CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'))",
             new { Id = id, Number = number, DriverId = driverId, ClientId = clientId, ProductId = productId, ProductType = productType, ProductName = productName, Unit = unit, Quantity = quantity, Status = 1 },
             transaction: uow.Transaction, cancellationToken: ct);
         var rows = await uow.Connection.ExecuteAsync(cmd);

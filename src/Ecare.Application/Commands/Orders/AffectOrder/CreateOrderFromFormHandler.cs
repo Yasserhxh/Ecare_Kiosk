@@ -28,7 +28,7 @@ namespace Ecare.Application.Commands.Orders
             (
                 @ShippingId,
                 @NumeroCommande,
-                SYSUTCDATETIME(),
+                CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'),
                 @ChauffeurNom,
                 @PlaqueCamion,
                 @CarteSLV,
@@ -62,7 +62,7 @@ namespace Ecare.Application.Commands.Orders
             WHERE 
                 CarteSlv = @CarteSlv
                 AND FirstWeight IS NULL
-                AND ParkedAt >= DATEADD(HOUR, -24, SYSUTCDATETIME());
+                AND ParkedAt >= DATEADD(HOUR, -24, CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'));
         ";
 
 

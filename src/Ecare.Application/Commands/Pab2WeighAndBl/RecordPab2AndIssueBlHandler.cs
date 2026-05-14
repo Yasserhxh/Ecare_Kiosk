@@ -31,12 +31,12 @@ public sealed class RecordPab2AndIssueBlHandler(IOrderRepository orders, IWeighR
 
             await weighs.InsertAsync(new WeighRecord
             {
-                OrderId = order.Id, Stage = 2, GrossKg = request.GrossKg, TareKg = request.TareKg, NetKg = net, TakenAt = DateTime.UtcNow
+                OrderId = order.Id, Stage = 2, GrossKg = request.GrossKg, TareKg = request.TareKg, NetKg = net, TakenAt = DateTime.Now
             }, uow);
 
-            var blNumber = $"BL-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
+            var blNumber = $"BL-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
             await uow.Connection.ExecuteAsync($@"INSERT INTO {DbTableNames.BonLivraison} (Id,OrderId,BlNumber,NetKg,IssuedAt)
-                VALUES (@Id,@OrderId,@BlNumber,@NetKg,SYSUTCDATETIME())",
+                VALUES (@Id,@OrderId,@BlNumber,@NetKg,CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'))",
                 new { Id = Guid.NewGuid(), OrderId = order.Id, BlNumber = blNumber, NetKg = net }, uow.Transaction);
 
             await orders.UpdateStatusAsync(order.Id, OrderStatus.Livre, uow);
