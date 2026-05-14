@@ -82,6 +82,9 @@ public static class QueueSnapshot
 
     private static DateTime ResolveQueueTimestamp(LegendRow row)
     {
+        if (row.FirstPlaceAt.HasValue)
+            return row.FirstPlaceAt.Value;
+
         if (row.AddedToQueueAt != default)
             return row.AddedToQueueAt;
 
@@ -89,6 +92,12 @@ public static class QueueSnapshot
             return row.ParkingAt;
 
         return DateTime.MaxValue;
+    }
+
+    private static bool IsFirstPlaceExpired(LegendRow row, DateTime now)
+    {
+        return row.FirstPlaceAt.HasValue
+            && now - row.FirstPlaceAt.Value >= TimeSpan.FromHours(1);
     }
 
     /* ============================================================
@@ -242,6 +251,7 @@ public static class QueueSnapshot
         var isPalGroup = IsPalRow(target);
         var groupName = target.Produit1!.Trim();
 
+        var now = DateTime.Now;
         var waitingRows = rows
             .Where(r =>
                 r.Step == 1 &&
@@ -249,7 +259,8 @@ public static class QueueSnapshot
                 (isPalGroup
                     ? IsPalRow(r)
                     : string.Equals(r.Produit1!.Trim(), groupName, StringComparison.OrdinalIgnoreCase)))
-            .OrderByDescending(r => r.IsPined)
+            .OrderBy(r => IsFirstPlaceExpired(r, now) ? 1 : 0)
+            .ThenByDescending(r => r.IsPined)
             .ThenBy(r => r.IsPined ? (r.PinedAt ?? DateTime.MaxValue) : DateTime.MaxValue)
             .ThenBy(ResolveQueueTimestamp)
             .ThenBy(r => r.Id)
@@ -274,6 +285,17 @@ public static class QueueSnapshot
         }
 
         var position = waitingRows.FindIndex(r => r.Id == legendId) + 1;
+        if (target.FirstPlaceAt.HasValue && !IsFirstPlaceExpired(target, now))
+        {
+            return new FirstWeightEligibilityResult(
+                true,
+                "OK",
+                groupName,
+                capacity,
+                position,
+                isPalGroup);
+        }
+
         var allowedIds = waitingRows.Take(capacity).Select(r => r.Id).ToHashSet();
         var isAllowed = allowedIds.Contains(legendId);
 

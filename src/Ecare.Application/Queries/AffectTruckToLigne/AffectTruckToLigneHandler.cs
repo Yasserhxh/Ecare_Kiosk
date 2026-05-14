@@ -34,10 +34,10 @@ namespace Ecare.Application.Queries.AffectTruckToLigne
 
             var best = lignes
                 .Where(l => l.Status == (int)LigneStatus.Disponible)
-                .OrderByDescending(l => l.Capacity)
+                .OrderByDescending(l => l.RealtimeCapacity)
                 .FirstOrDefault();
 
-            if (best is null || best.Capacity ==0)
+            if (best is null || best.RealtimeCapacity == 0)
             {
                 
 
@@ -69,7 +69,10 @@ namespace Ecare.Application.Queries.AffectTruckToLigne
 
             const string updateCapacitySql = @"
                 UPDATE Ecare_Ligne
-                SET Capacity = CASE WHEN Capacity > 0 THEN Capacity - 1 ELSE 0 END
+                SET RealtimeCapacity = CASE
+                    WHEN ISNULL(RealtimeCapacity, 0) > 0 THEN ISNULL(RealtimeCapacity, 0) - 1
+                    ELSE 0
+                END
                 WHERE Nom = @LigneNom;";
 
             await _unitOfWork.Connection.ExecuteAsync(

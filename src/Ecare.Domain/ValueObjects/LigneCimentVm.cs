@@ -7,6 +7,7 @@
     public int LigneId { get; set; }
     public string LigneNom { get; set; } = default!;
     public int Capacity { get; set; }
+    public int RealtimeCapacity { get; set; }
     public int Status { get; set; }
     public int CimentId { get; set; }
     public string CimentName { get; set; } = default!;

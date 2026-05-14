@@ -341,8 +341,14 @@ public sealed class UpdateSecondWeightHandler
             var shipment =
                     await response.Content.ReadFromJsonAsync<BlJson>(ct);
 
-            //if (shipment is null)
-            //    return Result<UpdateSecondWeightResult>.Fail("SAP_EMPTY_RESPONSE");
+            if (shipment is null || string.IsNullOrWhiteSpace(shipment.BonDeLivraison))
+                return Result<UpdateSecondWeightResult>.Fail("SAP_EMPTY_RESPONSE");
+
+            await PersistShipmentAndReleaseCapacityAsync(
+                conn,
+                order.Id,
+                shipment.BonDeLivraison,
+                ct);
 
 
             var signalRPayload = new BlJson
@@ -424,6 +430,64 @@ public sealed class UpdateSecondWeightHandler
     {
         public int RowsAffected { get; set; }
         public int? UpdatedOrderId { get; set; }
+    }
+
+    private static async Task PersistShipmentAndReleaseCapacityAsync(
+        SqlConnection conn,
+        int legendId,
+        string bonDeLivraison,
+        CancellationToken ct)
+    {
+        const string sql = """
+            DECLARE @Updated TABLE (Ligne NVARCHAR(150));
+
+            UPDATE dbo.Ecare_Order_Legend
+            SET
+                BonDeLivraison = @BonDeLivraison,
+                IsSynced = 1,
+                Status = CASE
+                    WHEN ISNULL(AnnulationCommercial, 0) = 1 THEN 'Canceled'
+                    ELSE 'Completed'
+                END
+            OUTPUT inserted.Ligne INTO @Updated(Ligne)
+            WHERE Id = @LegendId
+              AND ISNULL(BonDeLivraison, '') = '';
+
+            IF @@ROWCOUNT > 0
+            BEGIN
+                UPDATE L
+                SET RealtimeCapacity =
+                    CASE
+                        WHEN ISNULL(L.RealtimeCapacity, 0) < ISNULL(L.Capacity, 0)
+                            THEN ISNULL(L.RealtimeCapacity, 0) + 1
+                        ELSE ISNULL(L.Capacity, 0)
+                    END
+                FROM dbo.Ecare_Ligne L
+                WHERE L.Nom = (
+                        SELECT TOP (1) U.Ligne
+                        FROM @Updated U
+                        WHERE U.Ligne IS NOT NULL
+                    )
+                  AND EXISTS (
+                        SELECT 1
+                        FROM dbo.Ecare_Order_Legend O
+                        WHERE O.Id = @LegendId
+                          AND ISNULL(O.AnnulationCommercial, 0) <> 1
+                          AND O.PabExitAt IS NOT NULL
+                          AND O.DeuxiemePoid IS NOT NULL
+                    );
+            END;
+            """;
+
+        await conn.ExecuteAsync(
+            new CommandDefinition(
+                sql,
+                new
+                {
+                    LegendId = legendId,
+                    BonDeLivraison = bonDeLivraison
+                },
+                cancellationToken: ct));
     }
 
 

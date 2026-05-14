@@ -86,8 +86,10 @@ public sealed class OrderLegendSyncRepository : IOrderLegendSyncRepository
                         FROM [dbo].[Ecare_Order_Legend] O
                         WHERE O.[Id] = @Id
                           AND ISNULL(O.[AnnulationCommercial], 0) <> 1
-                          AND O.[PabExitAt] IS NOT NULL
-                          AND O.[DeuxiemePoid] IS NOT NULL
+                          AND (
+                                O.[PabEntryAt] IS NOT NULL
+                                OR O.[PremierePoid] IS NOT NULL
+                          )
                     );
             END;
             """;

@@ -22,6 +22,7 @@ namespace Ecare.Infrastructure.Repositories
                 l.Id AS LigneId,
                 l.Nom AS LigneNom,
                 l.Capacity,
+                ISNULL(l.RealtimeCapacity, 0) AS RealtimeCapacity,
                 l.Status,
                 c.Id AS CimentId,
                 c.Name AS CimentName,

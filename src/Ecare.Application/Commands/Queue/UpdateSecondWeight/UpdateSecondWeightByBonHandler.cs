@@ -90,7 +90,8 @@ public sealed class UpdateSecondWeightByBonHandler
                 },
                 _uow.Transaction);
 
-            // 3) Increment Capacity of the corresponding ligne(s)
+            // 3) Release one realtime slot of the corresponding ligne(s).
+            // Capacity is the nominal maximum and must not be mutated by truck flow.
             var ligneNames = fluxResults
                 .Select(r => r.Ligne)
                 .Where(l => !string.IsNullOrWhiteSpace(l))
@@ -101,7 +102,12 @@ public sealed class UpdateSecondWeightByBonHandler
             {
                 const string sqlCap = @"
                     UPDATE dbo.Ecare_Ligne
-                    SET Capacity = Capacity + 1
+                    SET RealtimeCapacity =
+                        CASE
+                            WHEN ISNULL(RealtimeCapacity, 0) < ISNULL(Capacity, 0)
+                                THEN ISNULL(RealtimeCapacity, 0) + 1
+                            ELSE ISNULL(Capacity, 0)
+                        END
                     WHERE Nom IN @LigneNames;";
 
                 await _uow.Connection.ExecuteAsync(
