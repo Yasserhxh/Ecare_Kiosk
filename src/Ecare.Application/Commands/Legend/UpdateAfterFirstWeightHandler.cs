@@ -40,6 +40,7 @@ public sealed class UpdateAfterFirstWeightHandler
         public int? Step { get; set; }
         public DateTime? ParkingAt { get; set; }
         public string? Ligne { get; set; }
+        public bool IsPined { get; set; }
     }
 
     private sealed class LigneLookupVm
@@ -111,7 +112,8 @@ public sealed class UpdateAfterFirstWeightHandler
                     Quantite2,
                     Step,
                     ParkingAt,
-                    Ligne
+                    Ligne,
+                    IsPined
                 FROM dbo.Ecare_Order_Legend
                 WHERE RFIDCard = @RfidCard
                   AND Matricule = @Matricule
@@ -127,7 +129,8 @@ public sealed class UpdateAfterFirstWeightHandler
                     Quantite2,
                     Step,
                     ParkingAt,
-                    Ligne
+                    Ligne,
+                    IsPined
                 FROM dbo.Ecare_Order_Legend
                 WHERE Id = @LegendId
                   AND ISNULL(Step, 0) < 5;
@@ -411,7 +414,11 @@ public sealed class UpdateAfterFirstWeightHandler
                     LigneImageUrl
                 FROM LigneUsage
                 WHERE FreeCapacity > 0
-                ORDER BY FreeCapacity DESC, LigneId;
+                   OR @IsForceCall = 1
+                ORDER BY
+                    CASE WHEN FreeCapacity > 0 THEN 0 ELSE 1 END,
+                    FreeCapacity DESC,
+                    LigneId;
             """;
 
             const string sqlUpdateLegend = """
@@ -428,7 +435,9 @@ public sealed class UpdateAfterFirstWeightHandler
                         )
                     END,
                     Step = 2,
-                    Ligne = @LigneName
+                    Ligne = @LigneName,
+                    IsPined = 0,
+                    PinedAt = NULL
                 WHERE
                     (
                         @LegendId IS NOT NULL
@@ -478,8 +487,13 @@ public sealed class UpdateAfterFirstWeightHandler
             var ligne = await conn.QueryFirstOrDefaultAsync<LigneLookupVm>(
                 new CommandDefinition(
                     sqlSelectLigne,
-                    new { request.Produit1 },
+                    new { request.Produit1, IsForceCall = vm.IsPined },
                     cancellationToken: ct));
+
+            if (ligne is null || ligne.LigneId <= 0)
+            {
+                return Result<FirstWeightResultVm>.Fail("LINE_HAS_NO_CAPACITY");
+            }
 
             var rowsAffected = await conn.ExecuteAsync(
                 new CommandDefinition(

@@ -184,19 +184,31 @@ public sealed class UpdateSecondWeightHandler
         if (order.TypeProduit is "SAC" or "PAL")
         {
             // Net weight
-            var net = request.DeuxiemePoid - order.PremierePoid;
+            var net = request.DeuxiemePoid - order.PremierePoid.Value;
 
-            // Expected weight in grams (or kg*1000 depending on your units)
-            var expected = (order.Quantite1 * 1000m) + (order.Quantite2 * 1000m);
+            // Expected weight in kg. Null Quantite2 means simple order, not unknown total.
+            var expected = ((order.Quantite1 ?? 0m) + (order.Quantite2 ?? 0m)) * 1000m;
 
-            // 1% tolerance
+            if (expected <= 0)
+            {
+                await SignalRHelper.BroadcastAsync(
+                    _signalR,
+                    "ExitMessageHub",
+                    "ExitMessageMethod",
+                    "Not Allowed",
+                    _log,
+                    ct);
+                return Result<UpdateSecondWeightResult>.Fail("ORDER_QUANTITY_MISSING");
+            }
+
+            // 2% tolerance
             var tolerance = expected * 0.02m;
 
             var minAllowed = expected - tolerance;
             var maxAllowed = expected + tolerance;
 
             // Compare using decimal to avoid rounding surprises
-            if (net < minAllowed || net > maxAllowed)
+            if ((decimal)net < minAllowed || (decimal)net > maxAllowed)
             {
                 await SignalRHelper.BroadcastAsync(
                     _signalR,
@@ -357,25 +369,25 @@ public sealed class UpdateSecondWeightHandler
                 BonDeLivraison = shipment.BonDeLivraison,
                 Client = new ClientJson
                 {
-                    CodeSap = shipment.Client.CodeSap,
-                    Name = shipment.Client.Name,
-                    Chantier = shipment.Client.Chantier,
-                    BonDeCommande = shipment.Client.BonDeCommande
+                    CodeSap = shipment.Client?.CodeSap,
+                    Name = shipment.Client?.Name,
+                    Chantier = shipment.Client?.Chantier,
+                    BonDeCommande = shipment.Client?.BonDeCommande
                 },
                 Transport = new TransportJson
                 {
-                    Transporteur = shipment.Transport.Transporteur,
-                    Matricule = shipment.Transport.Matricule,
-                    Chauffeur = shipment.Transport.Chauffeur,
-                    Scelles = shipment.Transport.Scelles,
-                    Cin = shipment.Transport.Cin,
+                    Transporteur = shipment.Transport?.Transporteur,
+                    Matricule = shipment.Transport?.Matricule,
+                    Chauffeur = shipment.Transport?.Chauffeur,
+                    Scelles = shipment.Transport?.Scelles,
+                    Cin = shipment.Transport?.Cin,
                 },
                 Pesage = new PesageJson
                 {
-                    PoidsVide = shipment.Pesage.PoidsVide,
-                    PoidsBrut = shipment.Pesage.PoidsBrut,
-                    PabEntryAt = shipment.Pesage.PabEntryAt,
-                    PabExitAt = shipment.Pesage.PabExitAt
+                    PoidsVide = shipment.Pesage?.PoidsVide,
+                    PoidsBrut = shipment.Pesage?.PoidsBrut,
+                    PabEntryAt = shipment.Pesage?.PabEntryAt,
+                    PabExitAt = shipment.Pesage?.PabExitAt
                 },
                 Produits = shipment.Produits?.Select(p => new ProductJson
                 {

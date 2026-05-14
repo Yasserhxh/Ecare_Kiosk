@@ -14,16 +14,49 @@ public sealed class TogglePinByMatriculeHandler(
     ILogger<TogglePinByMatriculeHandler> log)
     : IRequestHandler<TogglePinByMatriculeCommand, Result<int>>
 {
-    // Toggle pin for all active rows (Status 0 or 1) for the given matricule.
-    // If you want only the most-recent row, add TOP(1) logic with an ordered CTE.
     private const string ToggleSql = @"
+        DECLARE @Now DATETIME2 = SYSUTCDATETIME();
+        DECLARE @ShouldPin BIT = 1;
+
+        SELECT TOP (1)
+            @ShouldPin = CASE WHEN ISNULL(IsPined, 0) = 1 THEN 0 ELSE 1 END
+        FROM dbo.Ecare_Order_Legend
+        WHERE Matricule = @Matricule
+          AND ISNULL(Step, 0) = 1
+          AND ISNULL(BonDeLivraison, '') = ''
+          AND ISNULL(AnnulationCommercial, 0) = 0
+        ORDER BY
+            COALESCE(AddedToQueueAt, ParkingAt, CreatedAt) DESC,
+            Id DESC;
+
+        ;WITH TargetLegend AS
+        (
+            SELECT TOP (1) *
+            FROM dbo.Ecare_Order_Legend
+            WHERE Matricule = @Matricule
+              AND ISNULL(Step, 0) = 1
+              AND ISNULL(BonDeLivraison, '') = ''
+              AND ISNULL(AnnulationCommercial, 0) = 0
+            ORDER BY
+                COALESCE(AddedToQueueAt, ParkingAt, CreatedAt) DESC,
+                Id DESC
+        )
+        UPDATE TargetLegend
+        SET
+            IsPined = @ShouldPin,
+            PinedAt = CASE WHEN @ShouldPin = 1 THEN @Now ELSE NULL END;
+
+        DECLARE @LegendRows INT = @@ROWCOUNT;
+
         UPDATE q
-        SET 
-            IsPined = CASE WHEN IsPined = 1 THEN 0 ELSE 1 END,
-            PinedAt = CASE WHEN IsPined = 1 THEN NULL ELSE SYSUTCDATETIME() END
+        SET
+            IsPined = @ShouldPin,
+            PinedAt = CASE WHEN @ShouldPin = 1 THEN @Now ELSE NULL END
         FROM dbo.Ecare_Queue q
         WHERE q.Matricule = @Matricule
-          AND q.Status BETWEEN 0 AND 1;";
+          AND q.Status BETWEEN 0 AND 1;
+
+        SELECT @LegendRows;";
 
     public async Task<Result<int>> Handle(TogglePinByMatriculeCommand request, CancellationToken ct)
     {
@@ -31,7 +64,7 @@ public sealed class TogglePinByMatriculeHandler(
         try
         {
             // 1) Flip IsPined; set/clear PinedAt
-            var affected = await uow.Connection.ExecuteAsync(
+            var affected = await uow.Connection.ExecuteScalarAsync<int>(
                 new CommandDefinition(
                     ToggleSql,
                     new { request.Matricule },

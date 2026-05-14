@@ -273,6 +273,18 @@ public static class QueueSnapshot
             transaction,
             ct);
 
+        var position = waitingRows.FindIndex(r => r.Id == legendId) + 1;
+        if (target.IsPined)
+        {
+            return new FirstWeightEligibilityResult(
+                true,
+                "FORCE_CALL",
+                groupName,
+                capacity,
+                position,
+                isPalGroup);
+        }
+
         if (capacity <= 0)
         {
             return new FirstWeightEligibilityResult(
@@ -280,11 +292,10 @@ public static class QueueSnapshot
                 "LINE_HAS_NO_CAPACITY",
                 groupName,
                 capacity,
-                -1,
+                position,
                 isPalGroup);
         }
 
-        var position = waitingRows.FindIndex(r => r.Id == legendId) + 1;
         if (target.FirstPlaceAt.HasValue && !IsFirstPlaceExpired(target, now))
         {
             return new FirstWeightEligibilityResult(
