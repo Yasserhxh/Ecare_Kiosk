@@ -431,10 +431,13 @@ public sealed class UpdateSecondWeightHandler
         {
             _log.LogError(
                 ex,
-                "Error updating second weight for RFID={Rfid}",
-                request.RfidCard);
+                "Error updating second weight. LegendId={LegendId}, RFID={Rfid}, Matricule={Matricule}, DeuxiemePoid={DeuxiemePoid}",
+                request.LegendId,
+                request.RfidCard,
+                request.Matricule,
+                request.DeuxiemePoid);
 
-            return Result<UpdateSecondWeightResult>.Fail("UNEXPECTED_ERROR");
+            return Result<UpdateSecondWeightResult>.Fail($"UNEXPECTED_ERROR: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
