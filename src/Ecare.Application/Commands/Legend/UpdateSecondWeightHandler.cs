@@ -150,7 +150,7 @@ public sealed class UpdateSecondWeightHandler
                 OR
                 (
                     @LegendId IS NULL
-                    AND RFIDCard = @RFIDCard
+                    AND LTRIM(RTRIM(CAST(RFIDCard AS NVARCHAR(50)))) = @RFIDCard
                     AND Matricule = @Matricule
                 )
             ORDER BY Id DESC
@@ -158,7 +158,7 @@ public sealed class UpdateSecondWeightHandler
             new
             {
                 request.LegendId,
-                RFIDCard = request.RfidCard,
+                RFIDCard = request.RfidCard?.Trim(),
                 request.Matricule
             }
         );

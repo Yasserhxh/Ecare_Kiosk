@@ -5,7 +5,7 @@ using MediatR;
 namespace Ecare.Application.Commands.Legend;
 
 public sealed record UpdateSecondWeightCommand(
-    int RfidCard,
+    string RfidCard,
     string Matricule,
     int DeuxiemePoid,
     int? LegendId = null
