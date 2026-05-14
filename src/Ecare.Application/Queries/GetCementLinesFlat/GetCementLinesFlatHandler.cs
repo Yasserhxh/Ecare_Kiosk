@@ -28,6 +28,7 @@ namespace Ecare.Application.Queries.GetCementLinesFlat
                 l.Nom AS LineName,
                 l.Status AS LineStatus,
                 l.Capacity AS LineCapacity,
+                ISNULL(l.RealtimeCapacity, 0) AS LineRealtimeCapacity,
 
                 STRING_AGG(c.Name, ', ') WITHIN GROUP (ORDER BY c.Name) AS Products
 
@@ -47,7 +48,8 @@ namespace Ecare.Application.Queries.GetCementLinesFlat
                 l.Id,
                 l.Nom,
                 l.Status,
-                l.Capacity
+                l.Capacity,
+                l.RealtimeCapacity
 
             ORDER BY
                 z.Usine,

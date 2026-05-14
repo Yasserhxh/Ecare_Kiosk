@@ -1,5 +1,6 @@
 ﻿using Ecare.Application.Commands.AffectCimentToLigne;
 using Ecare.Application.Commands.ChangeLigneCapacity;
+using Ecare.Application.Commands.ChangeLigneRealtimeCapacity;
 using Ecare.Application.Commands.ToggleLigneCiment;
 using Ecare.Application.Commands.ToggleLigneStatus;
 using Ecare.Application.Queries.GetCementLineMatrix;
@@ -126,6 +127,33 @@ public static class CementMatrixEndpoints
         })
        .WithName("ChangeLigneCapacity");
 
+        group.MapPost("/{ligneId:int}/realtime-capacity", async (
+           int ligneId,
+           ChangeRealtimeCapacityRequest body,
+           ISender sender,
+           CancellationToken ct) =>
+        {
+            var cmd = new ChangeLigneRealtimeCapacityCommand(ligneId, body.RealtimeCapacity);
+            var result = await sender.Send(cmd, ct);
+
+            if (!result.Success)
+            {
+                return Results.BadRequest(new
+                {
+                    success = false,
+                    message = result.Error
+                });
+            }
+
+            return Results.Ok(new
+            {
+                success = true,
+                ligneId,
+                realtimeCapacity = result.Value
+            });
+        })
+       .WithName("ChangeLigneRealtimeCapacity");
+
         group.MapGet("/cheques", async (
             int page,
             int pageSize,
@@ -177,6 +205,7 @@ public static class CementMatrixEndpoints
     }
 
     public sealed record ChangeCapacityRequest(int Capacity);
+    public sealed record ChangeRealtimeCapacityRequest(int RealtimeCapacity);
 }
 
 

@@ -13,6 +13,7 @@ namespace Ecare.Domain.ValueObjects
        string LineName,         // l.Nom
        int LineStatus,          // l.Status
        int LineCapacity,        // l.Capacity
+       int LineRealtimeCapacity,// l.RealtimeCapacity
        string? Products         // STRING_AGG(c.Name)
    );
 }
