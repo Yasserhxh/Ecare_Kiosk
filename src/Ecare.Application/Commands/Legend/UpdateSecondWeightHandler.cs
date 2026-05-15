@@ -186,7 +186,7 @@ public sealed class UpdateSecondWeightHandler
             return Result<UpdateSecondWeightResult>.Fail("SECOND_WEIGHT_MUST_BE_GREATER_THAN_FIRST");
         }
 
-        var allowedMaxGross = order.PTAC * 1.11m;
+        var allowedMaxGross = order.PTAC * 1.10m;
         if (order.PTAC.HasValue && request.DeuxiemePoid > allowedMaxGross)
         {
             await SignalRHelper.BroadcastAsync(
@@ -219,8 +219,8 @@ public sealed class UpdateSecondWeightHandler
                 return Result<UpdateSecondWeightResult>.Fail("ORDER_QUANTITY_MISSING");
             }
 
-            // 2% tolerance
-            var tolerance = expected * 0.02m;
+            // 1% tolerance for SAC/PAL bagged products.
+            var tolerance = expected * 0.01m;
 
             var minAllowed = expected - tolerance;
             var maxAllowed = expected + tolerance;
