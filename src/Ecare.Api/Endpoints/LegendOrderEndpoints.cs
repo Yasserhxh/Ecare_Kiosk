@@ -113,14 +113,14 @@ public static class LegendOrderEndpoints
 
                 return result.Success
                     ? Results.Ok(new { success = true, value = result.Value })
-                    : Results.BadRequest(new { success = false, error = result.Error });
+                    : Results.Ok(new { success = false, error = result.Error });
             }
             catch (Exception ex)
             {
-                return Results.BadRequest(new
+                return Results.Ok(new
                 {
                     success = false,
-                    error = "UNEXPECTED_ERROR",
+                    error = $"UNEXPECTED_ERROR: {ex.GetType().Name}: {ex.Message}",
                     message = ex.Message
                 });
             }

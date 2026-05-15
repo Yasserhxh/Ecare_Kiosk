@@ -395,18 +395,14 @@ public sealed class UpdateAfterFirstWeightHandler
                         L.Id AS LigneId,
                         L.Nom AS LigneName,
                         L.Ligne_ImageUrl AS LigneImageUrl,
-                        FreeCapacity = L.Capacity - COUNT(OL.Id)
+                        FreeCapacity = ISNULL(L.RealtimeCapacity, 0)
                     FROM dbo.EcareCiments C
                     JOIN dbo.Ecare_LigneCiments LC ON LC.CimentId = C.Id
                     JOIN dbo.Ecare_Ligne L ON L.Id = LC.LigneId
-                    LEFT JOIN dbo.Ecare_Order_Legend OL
-                         ON OL.Ligne = L.Nom
-                        AND OL.Produit1 = @Produit1
-                        AND OL.Step > 1
-                        AND OL.Step < 5
                     WHERE C.Name = @Produit1
                       AND LC.Actif = 1
-                    GROUP BY L.Id, L.Nom, L.Ligne_ImageUrl, L.Capacity
+                      AND ISNULL(L.Status, 0) = 1
+                    GROUP BY L.Id, L.Nom, L.Ligne_ImageUrl, L.RealtimeCapacity
                 )
                 SELECT TOP (1)
                     LigneId,

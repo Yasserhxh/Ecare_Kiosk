@@ -144,16 +144,21 @@ public sealed class UpdateSecondWeightHandler
             FROM dbo.Ecare_Order_Legend
             WHERE
                 (
-                    @LegendId IS NOT NULL
-                    AND Id = @LegendId
+                    (
+                        @LegendId IS NOT NULL
+                        AND Id = @LegendId
+                    )
+                    OR
+                    (
+                        LTRIM(RTRIM(CAST(RFIDCard AS NVARCHAR(50)))) = @RFIDCard
+                        AND Matricule = @Matricule
+                    )
                 )
-                OR
-                (
-                    @LegendId IS NULL
-                    AND LTRIM(RTRIM(CAST(RFIDCard AS NVARCHAR(50)))) = @RFIDCard
-                    AND Matricule = @Matricule
-                )
-            ORDER BY Id DESC
+                AND ISNULL(AnnulationCommercial, 0) <> 1
+                AND ISNULL(Status, '') <> 'Canceled'
+            ORDER BY
+                CASE WHEN @LegendId IS NOT NULL AND Id = @LegendId THEN 0 ELSE 1 END,
+                Id DESC
             """,
             new
             {
@@ -179,6 +184,19 @@ public sealed class UpdateSecondWeightHandler
                 _log,
                 ct);
             return Result<UpdateSecondWeightResult>.Fail("SECOND_WEIGHT_MUST_BE_GREATER_THAN_FIRST");
+        }
+
+        var allowedMaxGross = order.PTAC * 1.11m;
+        if (order.PTAC.HasValue && request.DeuxiemePoid > allowedMaxGross)
+        {
+            await SignalRHelper.BroadcastAsync(
+                _signalR,
+                "ExitMessageHub",
+                "ExitMessageMethod",
+                "Not Allowed",
+                _log,
+                ct);
+            return Result<UpdateSecondWeightResult>.Fail("GROSS_WEIGHT_OUT_OF_RANGE");
         }
 
         if (order.TypeProduit is "SAC" or "PAL")
@@ -228,22 +246,6 @@ public sealed class UpdateSecondWeightHandler
             var netTolerance = expectedNet * 0.08m;
             var minAllowedNet = expectedNet - netTolerance;
             var maxAllowedNet = expectedNet + netTolerance;
-            var expectedGross = (order.PremierePoid ?? 0) + ((order.Quantite1 ?? 0m) + (order.Quantite2 ?? 0m)) * 1000m;
-            var grossTolerance = (((order.Quantite1 ?? 0m) + (order.Quantite2 ?? 0m)) * 1000m) * 0.02m;
-            var minAllowedGross = expectedGross - grossTolerance;
-            var maxAllowedGross = expectedGross + grossTolerance;
-            var allowedMax = order.PTAC * 1.11m; // +10% tolerance
-            if (request.DeuxiemePoid > allowedMax)
-            {
-                await SignalRHelper.BroadcastAsync(
-                    _signalR,
-                    "ExitMessageHub",
-                    "ExitMessageMethod",
-                    "Not Allowed",
-                    _log,
-                    ct);
-                return Result<UpdateSecondWeightResult>.Fail("NET_WEIGHT_OUT_OF_RANGE");
-            }
 
             if ((decimal)net < minAllowedNet || (decimal)net > maxAllowedNet)
             {
@@ -255,18 +257,6 @@ public sealed class UpdateSecondWeightHandler
                     _log,
                     ct);
                 return Result<UpdateSecondWeightResult>.Fail("VRAC_NET_WEIGHT_OUT_OF_RANGE");
-            }
-
-            if ((decimal)request.DeuxiemePoid < minAllowedGross || (decimal)request.DeuxiemePoid > maxAllowedGross)
-            {
-                await SignalRHelper.BroadcastAsync(
-                    _signalR,
-                    "ExitMessageHub",
-                    "ExitMessageMethod",
-                    "Not Allowed",
-                    _log,
-                    ct);
-                return Result<UpdateSecondWeightResult>.Fail("GROSS_WEIGHT_OUT_OF_RANGE");
             }
         }
 
@@ -296,7 +286,9 @@ public sealed class UpdateSecondWeightHandler
                             ISNULL(ElapsedCharging, 0) +
                             DATEDIFF(MINUTE, FinishedChargingAt, @Now)
                     WHERE Id = @LegendId
-                      AND Step < 5;
+                      AND Step < 5
+                      AND ISNULL(AnnulationCommercial, 0) <> 1
+                      AND ISNULL(Status, '') <> 'Canceled';
 
                     DECLARE @RowsAffected INT = @@ROWCOUNT;
 

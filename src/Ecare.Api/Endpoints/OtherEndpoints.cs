@@ -986,6 +986,99 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         - Business mapping (Net, TypeCommande, CFR/EXW)
         """);
 
+        app.MapPut("/api/legend-documents/{id:int}/rfid-card", async (
+            int id,
+            UpdateLegendDocumentCardRequest request,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            if (id <= 0)
+                return Results.BadRequest(new { message = "Identifiant document invalide." });
+
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            string? newCard = request.RFIDCard?.Trim();
+            string? newHex = request.RfidHex?.Trim();
+
+            if (request.TagId.HasValue)
+            {
+                const string tagSql = """
+                    SELECT TOP(1)
+                        CarteSLV,
+                        RfidHex
+                    FROM dbo.Ecare_Tags
+                    WHERE Id = @TagId;
+                    """;
+
+                var tag = await conn.QuerySingleOrDefaultAsync<dynamic>(
+                    new CommandDefinition(tagSql, new { request.TagId }, cancellationToken: ct));
+
+                if (tag is null)
+                    return Results.NotFound(new { message = "Carte introuvable dans Ecare_Tags." });
+
+                newCard = Convert.ToString(tag.CarteSLV)?.Trim();
+                newHex = Convert.ToString(tag.RfidHex)?.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(newCard))
+                return Results.BadRequest(new { message = "Le numero de carte est obligatoire." });
+
+            const string updateSql = """
+                IF NOT EXISTS (SELECT 1 FROM dbo.Ecare_Order_Legend WHERE Id = @Id)
+                BEGIN
+                    SELECT CAST(0 AS int) AS UpdatedRows;
+                    RETURN;
+                END
+
+                UPDATE dbo.Ecare_Order_Legend
+                SET RFIDCard = @RFIDCard
+                WHERE Id = @Id;
+
+                IF COL_LENGTH('dbo.Ecare_Order_Legend', 'RfidHex') IS NOT NULL
+                BEGIN
+                    EXEC sp_executesql
+                        N'UPDATE dbo.Ecare_Order_Legend SET RfidHex = @RfidHex WHERE Id = @Id',
+                        N'@Id int, @RfidHex nvarchar(100)',
+                        @Id = @Id,
+                        @RfidHex = @RfidHex;
+                END
+
+                UPDATE co
+                SET CarteSLV = @RFIDCard,
+                    RfidHex = COALESCE(NULLIF(@RfidHex, ''), co.RfidHex)
+                FROM dbo.Ecare_CommercialOrders co
+                INNER JOIN dbo.Ecare_Order_Legend l ON l.CommercialOrderId = co.Id
+                WHERE l.Id = @Id;
+
+                UPDATE o
+                SET CarteSLV = @RFIDCard
+                FROM dbo.Orders o
+                INNER JOIN dbo.Ecare_Order_Legend l ON l.OrderId = o.Id
+                WHERE l.Id = @Id;
+
+                SELECT CAST(1 AS int) AS UpdatedRows;
+                """;
+
+            var updated = await conn.QuerySingleAsync<int>(
+                new CommandDefinition(updateSql, new { Id = id, RFIDCard = newCard, RfidHex = newHex }, cancellationToken: ct));
+
+            if (updated == 0)
+                return Results.NotFound(new { message = "Document introuvable." });
+
+            return Results.Ok(new
+            {
+                id,
+                rfidCard = newCard,
+                rfidHex = newHex,
+                message = "Carte RFID du document mise a jour avec succes."
+            });
+        })
+        .WithName("UpdateLegendDocumentRfidCard")
+        .WithTags("Legend")
+        .WithSummary("Update RFID card on a legend document and linked command records");
+
         app.MapPut("/api/legend/{id:int}/annulation-commercial", async (
             int id,
             UpdateCommercialAnnulationRequest body,
@@ -1113,6 +1206,13 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         public int? Step { get; init; }
         public string? DeliveryStatus { get; init; }
         public bool? HasCreditOverrun { get; init; }
+    }
+
+    public sealed class UpdateLegendDocumentCardRequest
+    {
+        public int? TagId { get; set; }
+        public string? RFIDCard { get; set; }
+        public string? RfidHex { get; set; }
     }
 
     public sealed class UpdateCommercialAnnulationRequest
