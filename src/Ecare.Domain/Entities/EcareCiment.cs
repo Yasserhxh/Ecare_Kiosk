@@ -9,4 +9,5 @@ public class EcareCiment
     public string? Type { get; set; }
     public string? Description { get; set; }
     public string? CodeSAP { get; set; }
+    public bool IsActive { get; set; } = true;
 }

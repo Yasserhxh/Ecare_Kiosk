@@ -226,6 +226,8 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
 
         string p = produit1.ToLowerInvariant();
 
+        if (p.Contains("CM3")) return 35;
+        if(p.Contains("cm3")) return 35;
         if (p.Contains("55")) return 55;
         if (p.Contains("65")) return 65;
         if (p.Contains("45")) return 45;

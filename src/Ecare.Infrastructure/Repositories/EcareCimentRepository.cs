@@ -14,14 +14,14 @@ public sealed class EcareCimentRepository : IEcareCimentRepository
 {
     public Task<EcareCiment?> GetByIdAsync(int id, IUnitOfWork uow)
         => uow.Connection.QuerySingleOrDefaultAsync<EcareCiment>(
-            $"SELECT Id,Name,ImageUrl,Details,Type,Description FROM {DbTableNames.EcareCiments} WHERE Id = @id",
+            $"SELECT Id,Name,ImageUrl,Details,Type,Description,IsActive FROM {DbTableNames.EcareCiments} WHERE Id = @id",
             new { id },
             uow.Transaction);
 
     public Task<IEnumerable<EcareCiment>> GetAllAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var cmd = new CommandDefinition(
-            $"SELECT Id,Name,ImageUrl,Details,Type,Description,CodeSAP FROM {DbTableNames.EcareCiments} ORDER BY Name",
+            $"SELECT Id,Name,ImageUrl,Details,Type,Description,CodeSAP,IsActive FROM {DbTableNames.EcareCiments} WHERE IsActive = 1 ORDER BY Name",
             transaction: uow.Transaction,
             cancellationToken: ct);
         return uow.Connection.QueryAsync<EcareCiment>(cmd);

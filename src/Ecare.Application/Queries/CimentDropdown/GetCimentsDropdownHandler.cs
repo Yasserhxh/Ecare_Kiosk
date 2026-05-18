@@ -24,6 +24,7 @@ namespace Ecare.Application.Queries.CimentDropdown
             const string sql = @"
             SELECT Id, Name
             FROM EcareCiments
+            WHERE IsActive = 1
             ORDER BY Name;
         ";
 
