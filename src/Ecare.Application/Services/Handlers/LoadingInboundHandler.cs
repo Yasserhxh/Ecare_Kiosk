@@ -229,6 +229,7 @@ public sealed class LoadingInboundHandler : ISignalRInboundHandler
         if (p.Contains("55")) return 55;
         if (p.Contains("65")) return 65;
         if (p.Contains("45")) return 45;
+        if (p.Contains("35")) return 35;
 
         return 0; // default
     }

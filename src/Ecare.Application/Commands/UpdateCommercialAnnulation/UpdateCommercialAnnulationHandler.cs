@@ -53,6 +53,7 @@ namespace Ecare.Application.Commands.UpdateCommercialAnnulation
                 CASE
                     WHEN ISNULL(@AnnulationCommercial, 0) = 1
                          AND @HasFirstPesage = 1
+                         AND @CurrentStep >= 2
                          AND @CurrentStep < 5
                          AND @CurrentLigne IS NOT NULL
                          AND LTRIM(RTRIM(@CurrentLigne)) <> ''

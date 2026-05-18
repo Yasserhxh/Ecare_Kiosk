@@ -22,6 +22,11 @@ public sealed class ProcessParkingCommandHandler
 
     private const string SapCreateOrderUrl =
         "https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapOrders/createOrder";
+    private const string CreditDetailsUrl =
+        "https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/Client/DétailsCrédit";
+    private const string TemaraCreditControlArea = "812";
+    private const string CreditBlockedMessage =
+        "Situation Credit SAP est Bloquée veuillez contacter le guichet commercial";
 
     public ProcessParkingCommandHandler(
         IUnitOfWork uow,
@@ -211,6 +216,33 @@ OUTER APPLY
                 );
 
                 await SafeDbLogAsync(traceId, r.Event, "TYPEPRODUIT_OK", payload: new { r.Produit1, typeProduit }, statusCode: 200, isSuccess: true, slv: r.Slv?.ToString(), matricule: r.Matricule, ct: ct);
+
+                var creditBlocked = await IsCreditBlockedAsync(r, ct);
+                if (creditBlocked)
+                {
+                    await SafeDbLogAsync(
+                        traceId,
+                        r.Event,
+                        "CREDIT_BLOCKED",
+                        payload: new
+                        {
+                            r.CodeSapClient,
+                            r.CodeSapProduit1,
+                            r.Quantite1,
+                            r.CodeSapProduit2,
+                            r.Quantite2
+                        },
+                        statusCode: 409,
+                        isSuccess: false,
+                        slv: r.Slv?.ToString(),
+                        matricule: r.Matricule,
+                        clientName: r.ClientName,
+                        chantier: r.Chantier,
+                        ct: ct);
+
+                    await _uow.RollbackAsync(ct);
+                    return Result<int>.Fail(CreditBlockedMessage);
+                }
 
                 // 2) Resolve PermisDeConduite
                 string? permisDeConduite = null;
@@ -597,6 +629,133 @@ SET CodeSapCommande = @SapOrderNumber;
 
             return Result<int>.Fail("ERROR");
         }
+    }
+
+    private async Task<bool> IsCreditBlockedAsync(ParkingProcessRequest request, CancellationToken ct)
+    {
+        var codeClient = request.CodeSapClient?.Trim();
+        if (string.IsNullOrWhiteSpace(codeClient))
+            return true;
+
+        var estimatedAmount = await CalculateEstimatedOrderAmountAsync(request, ct);
+
+        var client = _httpClient.CreateClient();
+        using var response = await client.PostAsJsonAsync(
+            CreditDetailsUrl,
+            new
+            {
+                Entreprise = TemaraCreditControlArea,
+                CodeClient = codeClient
+            },
+            ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _log.LogWarning(
+                "Credit check failed for parking order. CodeClient={CodeClient}, Status={Status}",
+                codeClient,
+                response.StatusCode);
+            return true;
+        }
+
+        var rawJson = await response.Content.ReadAsStringAsync(ct);
+        using var document = JsonDocument.Parse(rawJson);
+        var root = document.RootElement;
+
+        var accountStatus = ReadString(root, "Statut_Du_Compte", "statut_Du_Compte", "StatutDuCompte", "statutDuCompte");
+        if (!string.IsNullOrWhiteSpace(accountStatus) &&
+            accountStatus.Contains("blo", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var plafond = ReadDecimal(root, "Plafond", "plafond") ?? 0m;
+        var enCours = ReadDecimal(root, "EnCours", "enCours") ?? 0m;
+        var availableCredit = plafond - enCours;
+
+        return estimatedAmount > availableCredit;
+    }
+
+    private async Task<decimal> CalculateEstimatedOrderAmountAsync(ParkingProcessRequest request, CancellationToken ct)
+    {
+        var codes = new[]
+            {
+                request.CodeSapProduit1?.Trim(),
+                request.CodeSapProduit2?.Trim()
+            }
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (codes.Length == 0)
+            return 0m;
+
+        const string sql = @"
+SELECT
+    CodeSAP,
+    TarifParTonne
+FROM dbo.EcareCiments
+WHERE CodeSAP IN @Codes;
+";
+
+        var rows = await _uow.Connection.QueryAsync<CementTariffRow>(
+            new CommandDefinition(
+                sql,
+                new { Codes = codes },
+                transaction: _uow.Transaction,
+                cancellationToken: ct));
+
+        var tariffs = rows
+            .Where(row => !string.IsNullOrWhiteSpace(row.CodeSAP))
+            .ToDictionary(row => row.CodeSAP!.Trim(), row => row.TarifParTonne, StringComparer.OrdinalIgnoreCase);
+
+        return GetLineAmount(request.CodeSapProduit1, request.Quantite1, tariffs)
+             + GetLineAmount(request.CodeSapProduit2, request.Quantite2, tariffs);
+    }
+
+    private static decimal GetLineAmount(string? codeSap, decimal? quantity, IReadOnlyDictionary<string, decimal?> tariffs)
+    {
+        if (string.IsNullOrWhiteSpace(codeSap) || !quantity.HasValue || quantity.Value <= 0)
+            return 0m;
+
+        return tariffs.TryGetValue(codeSap.Trim(), out var unitPrice) && unitPrice.HasValue
+            ? quantity.Value * unitPrice.Value
+            : 0m;
+    }
+
+    private static decimal? ReadDecimal(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!root.TryGetProperty(name, out var value))
+                continue;
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number))
+                return number;
+
+            if (value.ValueKind == JsonValueKind.String &&
+                decimal.TryParse(value.GetString(), out var parsed))
+                return parsed;
+        }
+
+        return null;
+    }
+
+    private static string? ReadString(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String)
+                return value.GetString();
+        }
+
+        return null;
+    }
+
+    private sealed class CementTariffRow
+    {
+        public string? CodeSAP { get; set; }
+        public decimal? TarifParTonne { get; set; }
     }
 
     // ----------------------------

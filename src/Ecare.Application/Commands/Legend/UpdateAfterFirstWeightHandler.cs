@@ -247,7 +247,7 @@ public sealed class UpdateAfterFirstWeightHandler
             if (ptac > 0m)
             {
                 var expectedLoad = (decimal)request.PremierePoid + (q1 + q2) * 1000m;
-                var maxAllowed = ptac * 1.11m; // keep your current rule
+                var maxAllowed = ptac * 1.10m;
 
                 await SafeDbLogAsync(
                     connStr,

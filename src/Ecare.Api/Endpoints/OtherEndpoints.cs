@@ -1023,61 +1023,110 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
             }
 
             if (string.IsNullOrWhiteSpace(newCard))
-                return Results.BadRequest(new { message = "Le numero de carte est obligatoire." });
+                newCard = null;
+
+            var newMatricule = request.Matricule?.Trim();
+            var newChauffeurName = request.ChauffeurName?.Trim();
+            var newPermisDeConduite = request.PermisDeConduite?.Trim();
+
+            if (string.IsNullOrWhiteSpace(newCard) &&
+                string.IsNullOrWhiteSpace(newMatricule) &&
+                string.IsNullOrWhiteSpace(newChauffeurName) &&
+                string.IsNullOrWhiteSpace(newPermisDeConduite))
+            {
+                return Results.BadRequest(new { message = "Aucune information a modifier n'a ete fournie." });
+            }
 
             const string updateSql = """
-                IF NOT EXISTS (SELECT 1 FROM dbo.Ecare_Order_Legend WHERE Id = @Id)
+                DECLARE @CurrentStep int;
+
+                SELECT @CurrentStep = ISNULL(Step, 0)
+                FROM dbo.Ecare_Order_Legend
+                WHERE Id = @Id;
+
+                IF @CurrentStep IS NULL
                 BEGIN
-                    SELECT CAST(0 AS int) AS UpdatedRows;
+                    SELECT CAST(0 AS int) AS ResultCode;
+                    RETURN;
+                END
+
+                IF @CurrentStep <> 0
+                BEGIN
+                    SELECT CAST(-2 AS int) AS ResultCode;
                     RETURN;
                 END
 
                 UPDATE dbo.Ecare_Order_Legend
-                SET RFIDCard = @RFIDCard
-                WHERE Id = @Id;
+                SET RFIDCard = COALESCE(NULLIF(@RFIDCard, ''), RFIDCard),
+                    Matricule = COALESCE(NULLIF(@Matricule, ''), Matricule),
+                    ChauffeurName = COALESCE(NULLIF(@ChauffeurName, ''), ChauffeurName),
+                    PermisDeConduite = COALESCE(NULLIF(@PermisDeConduite, ''), PermisDeConduite)
+                WHERE Id = @Id
+                  AND ISNULL(Step, 0) = 0;
 
                 IF COL_LENGTH('dbo.Ecare_Order_Legend', 'RfidHex') IS NOT NULL
                 BEGIN
                     EXEC sp_executesql
-                        N'UPDATE dbo.Ecare_Order_Legend SET RfidHex = @RfidHex WHERE Id = @Id',
+                        N'UPDATE dbo.Ecare_Order_Legend SET RfidHex = COALESCE(NULLIF(@RfidHex, ''''), RfidHex) WHERE Id = @Id AND ISNULL(Step, 0) = 0',
                         N'@Id int, @RfidHex nvarchar(100)',
                         @Id = @Id,
                         @RfidHex = @RfidHex;
                 END
 
                 UPDATE co
-                SET CarteSLV = @RFIDCard,
-                    RfidHex = COALESCE(NULLIF(@RfidHex, ''), co.RfidHex)
+                SET CarteSLV = COALESCE(NULLIF(@RFIDCard, ''), co.CarteSLV),
+                    RfidHex = COALESCE(NULLIF(@RfidHex, ''), co.RfidHex),
+                    Matricule = COALESCE(NULLIF(@Matricule, ''), co.Matricule),
+                    ChauffeurName = COALESCE(NULLIF(@ChauffeurName, ''), co.ChauffeurName)
                 FROM dbo.Ecare_CommercialOrders co
                 INNER JOIN dbo.Ecare_Order_Legend l ON l.CommercialOrderId = co.Id
-                WHERE l.Id = @Id;
+                WHERE l.Id = @Id
+                  AND ISNULL(l.Step, 0) = 0;
 
                 UPDATE o
-                SET CarteSLV = @RFIDCard
+                SET CarteSLV = COALESCE(NULLIF(@RFIDCard, ''), o.CarteSLV),
+                    PlaqueCamion = COALESCE(NULLIF(@Matricule, ''), o.PlaqueCamion),
+                    ChauffeurNom = COALESCE(NULLIF(@ChauffeurName, ''), o.ChauffeurNom),
+                    PermisDeConduire = COALESCE(NULLIF(@PermisDeConduite, ''), o.PermisDeConduire)
                 FROM dbo.Orders o
                 INNER JOIN dbo.Ecare_Order_Legend l ON l.OrderId = o.Id
-                WHERE l.Id = @Id;
+                WHERE l.Id = @Id
+                  AND ISNULL(l.Step, 0) = 0;
 
-                SELECT CAST(1 AS int) AS UpdatedRows;
+                SELECT CAST(1 AS int) AS ResultCode;
                 """;
 
             var updated = await conn.QuerySingleAsync<int>(
-                new CommandDefinition(updateSql, new { Id = id, RFIDCard = newCard, RfidHex = newHex }, cancellationToken: ct));
+                new CommandDefinition(updateSql, new
+                {
+                    Id = id,
+                    RFIDCard = newCard,
+                    RfidHex = newHex,
+                    Matricule = newMatricule,
+                    ChauffeurName = newChauffeurName,
+                    PermisDeConduite = newPermisDeConduite
+                }, cancellationToken: ct));
 
             if (updated == 0)
                 return Results.NotFound(new { message = "Document introuvable." });
+
+            if (updated == -2)
+                return Results.Conflict(new { message = "Modification autorisee uniquement avant l'arrivee au parking (step 0)." });
 
             return Results.Ok(new
             {
                 id,
                 rfidCard = newCard,
                 rfidHex = newHex,
-                message = "Carte RFID du document mise a jour avec succes."
+                matricule = newMatricule,
+                chauffeurName = newChauffeurName,
+                permisDeConduite = newPermisDeConduite,
+                message = "Informations chauffeur et carte du document mises a jour avec succes."
             });
         })
         .WithName("UpdateLegendDocumentRfidCard")
         .WithTags("Legend")
-        .WithSummary("Update RFID card on a legend document and linked command records");
+        .WithSummary("Update chauffeur, matricule and RFID card on a step 0 legend document and linked command records");
 
         app.MapPut("/api/legend/{id:int}/annulation-commercial", async (
             int id,
@@ -1213,6 +1262,9 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         public int? TagId { get; set; }
         public string? RFIDCard { get; set; }
         public string? RfidHex { get; set; }
+        public string? Matricule { get; set; }
+        public string? ChauffeurName { get; set; }
+        public string? PermisDeConduite { get; set; }
     }
 
     public sealed class UpdateCommercialAnnulationRequest

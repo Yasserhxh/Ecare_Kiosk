@@ -292,6 +292,22 @@ public sealed class UpdateSecondWeightHandler
 
                     DECLARE @RowsAffected INT = @@ROWCOUNT;
 
+                    IF @RowsAffected = 1
+                    BEGIN
+                        UPDATE L
+                        SET RealtimeCapacity =
+                            CASE
+                                WHEN ISNULL(L.RealtimeCapacity, 0) < ISNULL(L.Capacity, 0)
+                                    THEN ISNULL(L.RealtimeCapacity, 0) + 1
+                                ELSE ISNULL(L.Capacity, 0)
+                            END
+                        FROM dbo.Ecare_Ligne L
+                        INNER JOIN dbo.Ecare_Order_Legend O ON O.Ligne = L.Nom
+                        WHERE O.Id = @LegendId
+                          AND O.Ligne IS NOT NULL
+                          AND LTRIM(RTRIM(O.Ligne)) <> '';
+                    END
+
                     IF @RowsAffected = 1 AND @OrderId IS NOT NULL
                     BEGIN
                         UPDATE dbo.Orders
@@ -446,8 +462,6 @@ public sealed class UpdateSecondWeightHandler
         CancellationToken ct)
     {
         const string sql = """
-            DECLARE @Updated TABLE (Ligne NVARCHAR(150));
-
             UPDATE dbo.Ecare_Order_Legend
             SET
                 BonDeLivraison = @BonDeLivraison,
@@ -456,34 +470,8 @@ public sealed class UpdateSecondWeightHandler
                     WHEN ISNULL(AnnulationCommercial, 0) = 1 THEN 'Canceled'
                     ELSE 'Completed'
                 END
-            OUTPUT inserted.Ligne INTO @Updated(Ligne)
             WHERE Id = @LegendId
               AND ISNULL(BonDeLivraison, '') = '';
-
-            IF @@ROWCOUNT > 0
-            BEGIN
-                UPDATE L
-                SET RealtimeCapacity =
-                    CASE
-                        WHEN ISNULL(L.RealtimeCapacity, 0) < ISNULL(L.Capacity, 0)
-                            THEN ISNULL(L.RealtimeCapacity, 0) + 1
-                        ELSE ISNULL(L.Capacity, 0)
-                    END
-                FROM dbo.Ecare_Ligne L
-                WHERE L.Nom = (
-                        SELECT TOP (1) U.Ligne
-                        FROM @Updated U
-                        WHERE U.Ligne IS NOT NULL
-                    )
-                  AND EXISTS (
-                        SELECT 1
-                        FROM dbo.Ecare_Order_Legend O
-                        WHERE O.Id = @LegendId
-                          AND ISNULL(O.AnnulationCommercial, 0) <> 1
-                          AND O.PabExitAt IS NOT NULL
-                          AND O.DeuxiemePoid IS NOT NULL
-                    );
-            END;
             """;
 
         await conn.ExecuteAsync(
