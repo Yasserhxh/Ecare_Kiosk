@@ -157,6 +157,211 @@ ORDER BY Id DESC;";
             return Results.Ok(data);
         });
 
+        app.MapGet("/api/vehicules", async (
+            int page,
+            int pageSize,
+            string? matricule,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 500);
+
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            var where = new StringBuilder("""
+                WHERE ISNULL(IsClient, 0) = 0
+                  AND ISNULL(IsTransporteur, 0) = 0
+                  AND ISNULL(IsDriver, 0) = 0
+                  AND NULLIF(LTRIM(RTRIM(ISNULL(Matricule, ''))), '') IS NOT NULL
+                """);
+            var param = new DynamicParameters();
+
+            if (!string.IsNullOrWhiteSpace(matricule))
+            {
+                where.Append(" AND Matricule LIKE @Matricule ");
+                param.Add("@Matricule", $"%{matricule.Trim()}%");
+            }
+
+            param.Add("@Skip", (page - 1) * pageSize);
+            param.Add("@Take", pageSize);
+
+            var countSql = $"SELECT COUNT(*) FROM dbo.Ecare_ClientEquipements {where};";
+            var dataSql = $"""
+                SELECT
+                    Id,
+                    Matricule,
+                    PTAC,
+                    TARE,
+                    TruckType,
+                    CodeTruckSap,
+                    Status
+                FROM dbo.Ecare_ClientEquipements
+                {where}
+                ORDER BY Id DESC
+                OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
+                """;
+
+            var totalCount = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(countSql, param, cancellationToken: ct));
+            var items = await conn.QueryAsync(
+                new CommandDefinition(dataSql, param, cancellationToken: ct));
+
+            return Results.Ok(new { items, totalCount });
+        });
+
+        app.MapPost("/api/vehicules", async (
+            VehicleRequest request,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            var matricule = NormalizeMatricule(request.Matricule);
+            if (string.IsNullOrWhiteSpace(matricule))
+                return Results.BadRequest(new { message = "Matricule obligatoire. Format attendu: 1111.A.1." });
+
+            if (request.PTAC <= 0 || request.TARE <= 0)
+                return Results.BadRequest(new { message = "PTAC et TARE doivent etre saisis en KG et superieurs a 0." });
+
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            const string duplicateSql = """
+                SELECT TOP (1) Id
+                FROM dbo.Ecare_ClientEquipements
+                WHERE LTRIM(RTRIM(ISNULL(Matricule, ''))) = @Matricule
+                  AND ISNULL(IsClient, 0) = 0
+                  AND ISNULL(IsTransporteur, 0) = 0
+                  AND ISNULL(IsDriver, 0) = 0;
+                """;
+
+            var duplicateId = await conn.QuerySingleOrDefaultAsync<int?>(
+                new CommandDefinition(duplicateSql, new { Matricule = matricule }, cancellationToken: ct));
+
+            if (duplicateId.HasValue)
+                return Results.Conflict(new { message = $"Le matricule {matricule} existe deja dans la liste des vehicules." });
+
+            const string insertSql = """
+                INSERT INTO dbo.Ecare_ClientEquipements
+                (
+                    ClientName,
+                    CarteSLV,
+                    Matricule,
+                    ChauffeurName,
+                    RfidHex,
+                    Status,
+                    PTAC,
+                    TARE,
+                    IsClient,
+                    IsTransporteur,
+                    IsDriver,
+                    TruckType,
+                    CodeTruckSap
+                )
+                VALUES
+                (
+                    '',
+                    '',
+                    @Matricule,
+                    '',
+                    '',
+                    COALESCE(NULLIF(@Status, ''), 'ACTIVE'),
+                    @PTAC,
+                    @TARE,
+                    0,
+                    0,
+                    0,
+                    @TruckType,
+                    @CodeTruckSap
+                );
+
+                SELECT CAST(SCOPE_IDENTITY() AS int);
+                """;
+
+            var id = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(insertSql, new
+                {
+                    Matricule = matricule,
+                    request.PTAC,
+                    request.TARE,
+                    request.TruckType,
+                    request.CodeTruckSap,
+                    request.Status
+                }, cancellationToken: ct));
+
+            return Results.Created($"/api/vehicules/{id}", new { id, matricule });
+        });
+
+        app.MapPut("/api/vehicules/{id:int}", async (
+            int id,
+            VehicleRequest request,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            var matricule = NormalizeMatricule(request.Matricule);
+            if (id <= 0)
+                return Results.BadRequest(new { message = "Identifiant vehicule invalide." });
+
+            if (string.IsNullOrWhiteSpace(matricule))
+                return Results.BadRequest(new { message = "Matricule obligatoire. Format attendu: 1111.A.1." });
+
+            if (request.PTAC <= 0 || request.TARE <= 0)
+                return Results.BadRequest(new { message = "PTAC et TARE doivent etre saisis en KG et superieurs a 0." });
+
+            using var conn = factory.Create();
+            if (conn.State != ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            const string duplicateSql = """
+                SELECT TOP (1) Id
+                FROM dbo.Ecare_ClientEquipements
+                WHERE Id <> @Id
+                  AND LTRIM(RTRIM(ISNULL(Matricule, ''))) = @Matricule
+                  AND ISNULL(IsClient, 0) = 0
+                  AND ISNULL(IsTransporteur, 0) = 0
+                  AND ISNULL(IsDriver, 0) = 0;
+                """;
+
+            var duplicateId = await conn.QuerySingleOrDefaultAsync<int?>(
+                new CommandDefinition(duplicateSql, new { Id = id, Matricule = matricule }, cancellationToken: ct));
+
+            if (duplicateId.HasValue)
+                return Results.Conflict(new { message = $"Le matricule {matricule} existe deja dans la liste des vehicules." });
+
+            const string updateSql = """
+                UPDATE dbo.Ecare_ClientEquipements
+                SET
+                    Matricule = @Matricule,
+                    PTAC = @PTAC,
+                    TARE = @TARE,
+                    TruckType = @TruckType,
+                    CodeTruckSap = @CodeTruckSap,
+                    Status = COALESCE(NULLIF(@Status, ''), Status),
+                    IsClient = 0,
+                    IsTransporteur = 0,
+                    IsDriver = 0
+                WHERE Id = @Id;
+                """;
+
+            var affected = await conn.ExecuteAsync(new CommandDefinition(updateSql, new
+            {
+                Id = id,
+                Matricule = matricule,
+                request.PTAC,
+                request.TARE,
+                request.TruckType,
+                request.CodeTruckSap,
+                request.Status
+            }, cancellationToken: ct));
+
+            if (affected == 0)
+                return Results.NotFound(new { message = "Vehicule introuvable." });
+
+            return Results.Ok(new { id, matricule, message = "Vehicule mis a jour avec succes." });
+        });
+
         app.MapPut("/api/client-equipements/{id:int}", async (
             int id,
             ClientEquipementUpdateRequest request,
@@ -182,7 +387,17 @@ ORDER BY Id DESC;";
             var carteSlv = NormalizeCardNumber(request.CarteSLV ?? current.CarteSLV);
             var rfidHex = request.RfidHex?.Trim() ?? current.RfidHex?.Trim();
 
-            if (!string.IsNullOrWhiteSpace(carteSlv) || !string.IsNullOrWhiteSpace(rfidHex))
+            var cardChanged = !string.Equals(
+                NormalizeCardNumber(current.CarteSLV),
+                carteSlv,
+                StringComparison.OrdinalIgnoreCase);
+
+            var hexChanged = !string.Equals(
+                current.RfidHex?.Trim() ?? string.Empty,
+                rfidHex ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase);
+
+            if (cardChanged || hexChanged)
             {
                 var duplicateSql = $"""
                     SELECT TOP (1) Id
@@ -1039,6 +1254,9 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
 
             const string updateSql = """
                 DECLARE @CurrentStep int;
+                DECLARE @ResolvedPTAC decimal(18, 3);
+                DECLARE @ResolvedTARE decimal(18, 3);
+                DECLARE @ResolvedTruckType nvarchar(255);
 
                 SELECT @CurrentStep = ISNULL(Step, 0)
                 FROM dbo.Ecare_Order_Legend
@@ -1056,11 +1274,27 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                     RETURN;
                 END
 
+                IF NULLIF(@Matricule, '') IS NOT NULL
+                BEGIN
+                    SELECT TOP (1)
+                        @ResolvedPTAC = PTAC,
+                        @ResolvedTARE = TARE,
+                        @ResolvedTruckType = TruckType
+                    FROM dbo.Ecare_ClientEquipements
+                    WHERE LTRIM(RTRIM(ISNULL(Matricule, ''))) = @Matricule
+                    ORDER BY
+                        CASE WHEN ISNULL(IsClient, 0) = 0 AND ISNULL(IsTransporteur, 0) = 0 AND ISNULL(IsDriver, 0) = 0 THEN 0 ELSE 1 END,
+                        Id DESC;
+                END
+
                 UPDATE dbo.Ecare_Order_Legend
                 SET RFIDCard = COALESCE(NULLIF(@RFIDCard, ''), RFIDCard),
                     Matricule = COALESCE(NULLIF(@Matricule, ''), Matricule),
                     ChauffeurName = COALESCE(NULLIF(@ChauffeurName, ''), ChauffeurName),
-                    PermisDeConduite = COALESCE(NULLIF(@PermisDeConduite, ''), PermisDeConduite)
+                    PermisDeConduite = COALESCE(NULLIF(@PermisDeConduite, ''), PermisDeConduite),
+                    PTAC = COALESCE(@ResolvedPTAC, PTAC),
+                    TARE = COALESCE(@ResolvedTARE, TARE),
+                    TypeCamion = COALESCE(NULLIF(@ResolvedTruckType, ''), TypeCamion)
                 WHERE Id = @Id
                   AND ISNULL(Step, 0) = 0;
 
@@ -1311,6 +1545,16 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         public string? PermisConducteur { get; set; }
     }
 
+    public sealed class VehicleRequest
+    {
+        public string? Matricule { get; set; }
+        public decimal PTAC { get; set; }
+        public decimal TARE { get; set; }
+        public string? TruckType { get; set; }
+        public string? CodeTruckSap { get; set; }
+        public string? Status { get; set; }
+    }
+
     private sealed class CardTagRow
     {
         public int Id { get; set; }
@@ -1331,5 +1575,26 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         public int Id { get; set; }
         public int? OrderId { get; set; }
         public int? CommercialOrderId { get; set; }
+    }
+
+    private static string NormalizeMatricule(string? value)
+    {
+        var raw = value?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (raw.Length == 0)
+            return string.Empty;
+
+        var compact = new string(raw.Where(char.IsLetterOrDigit).ToArray());
+        var firstLetterIndex = compact.ToList().FindIndex(char.IsLetter);
+        if (firstLetterIndex <= 0 || firstLetterIndex >= compact.Length - 1)
+            return raw;
+
+        var prefix = compact[..firstLetterIndex];
+        var letter = compact[firstLetterIndex].ToString();
+        var suffix = compact[(firstLetterIndex + 1)..];
+
+        if (!prefix.All(char.IsDigit) || !suffix.All(char.IsDigit))
+            return raw;
+
+        return $"{prefix}.{letter}.{suffix}";
     }
 }

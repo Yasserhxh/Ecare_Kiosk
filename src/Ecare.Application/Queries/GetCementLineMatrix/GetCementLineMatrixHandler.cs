@@ -36,14 +36,16 @@ namespace Ecare.Application.Queries.GetCementLineMatrix
                 ON lc.LigneId = l.Id
             LEFT JOIN EcareCiments c
                 ON c.Id = lc.CimentId
+               AND ISNULL(c.IsActive, 1) = 1
             WHERE (@Usine IS NULL OR z.Usine = @Usine);
 
-            -- 2) Tous les produits
+            -- 2) Produits actifs uniquement
             SELECT
                 c.Id,
                 c.Name,
                 c.[Type]
             FROM EcareCiments c
+            WHERE ISNULL(c.IsActive, 1) = 1
             ORDER BY c.Name;
             """;
 
