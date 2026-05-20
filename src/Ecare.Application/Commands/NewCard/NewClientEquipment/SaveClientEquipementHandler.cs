@@ -60,18 +60,20 @@ namespace Ecare.Application.Commands.NewCard.NewClientEquipment
                             uow.Transaction,
                             cancellationToken: ct));
 
-                    if (tagId.HasValue)
-                        throw new InvalidOperationException($"La carte SLV {carteSlv} existe deja comme carte provisoire.");
+                    // If the tag already exists as provisoire, reuse it (skip insert).
+                    // This is the normal upgrade path: provisoire → permanente.
+                    if (!tagId.HasValue)
+                    {
+                        const string insertTagSql = @"
+                        INSERT INTO dbo.Ecare_Tags (CarteSLV, RfidHex)
+                        VALUES (@CarteSLV, @RfidHex);";
 
-                    const string insertTagSql = @"
-                    INSERT INTO dbo.Ecare_Tags (CarteSLV, RfidHex)
-                    VALUES (@CarteSLV, @RfidHex);";
-
-                    await uow.Connection.ExecuteAsync(
-                        new CommandDefinition(insertTagSql,
-                            new { CarteSLV = carteSlv, RfidHex = rfidHex },
-                            uow.Transaction,
-                            cancellationToken: ct));
+                        await uow.Connection.ExecuteAsync(
+                            new CommandDefinition(insertTagSql,
+                                new { CarteSLV = carteSlv, RfidHex = rfidHex },
+                                uow.Transaction,
+                                cancellationToken: ct));
+                    }
                 }
 
                 // 2) Insert equipement (all nullable columns OK)
