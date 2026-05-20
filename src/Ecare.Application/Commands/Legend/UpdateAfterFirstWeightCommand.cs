@@ -1,10 +1,12 @@
 ﻿using Ecare.Shared;
 using MediatR;
+using System.Text.Json.Serialization;
 
 namespace Ecare.Application.Commands.Legend;
 
 public sealed record UpdateAfterFirstWeightCommand(
-    int RfidCard,
+    [property: JsonConverter(typeof(FlexibleStringJsonConverter))]
+    string RfidCard,
     string Matricule,
     int PremierePoid,
     string Produit1,

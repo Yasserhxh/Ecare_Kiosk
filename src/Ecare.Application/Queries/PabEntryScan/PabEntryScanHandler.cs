@@ -55,7 +55,7 @@ namespace Ecare.Application.Queries.PabEntryScan
                     LEFT JOIN dbo.EcareCiments cim2
                         ON cim2.Name = L.Produit2
                     WHERE
-                        L.RFIDCard = @RfidCard
+                        LTRIM(RTRIM(CAST(L.RFIDCard AS NVARCHAR(50)))) = LTRIM(RTRIM(@RfidCard))
                         AND L.ParkingAt IS NOT NULL
                         AND L.Step = 1
                     ORDER BY L.ParkingAt DESC;

@@ -67,7 +67,7 @@ public sealed class UpdateAfterFirstWeightHandler
 
         var traceId = Guid.NewGuid();
         var evt = "FIRST_WEIGHT";
-        var slv = request.RfidCard.ToString();
+        var slv = request.RfidCard;
         var mat = request.Matricule;
 
         await SafeDbLogAsync(
@@ -115,7 +115,7 @@ public sealed class UpdateAfterFirstWeightHandler
                     Ligne,
                     IsPined
                 FROM dbo.Ecare_Order_Legend
-                WHERE RFIDCard = @RfidCard
+                WHERE LTRIM(RTRIM(CAST(RFIDCard AS NVARCHAR(50)))) = LTRIM(RTRIM(@RfidCard))
                   AND Matricule = @Matricule
                   AND ISNULL(Step, 0) < 5
                 ORDER BY Id DESC;
@@ -443,7 +443,7 @@ public sealed class UpdateAfterFirstWeightHandler
                     OR
                     (
                         @LegendId IS NULL
-                        AND RFIDCard = @RfidCard
+                        AND LTRIM(RTRIM(CAST(RFIDCard AS NVARCHAR(50)))) = LTRIM(RTRIM(@RfidCard))
                         AND Matricule = @Matricule
                         AND Step = 1
                     );
@@ -593,7 +593,7 @@ public sealed class UpdateAfterFirstWeightHandler
                 ex: ex,
                 ct: ct);
 
-            return Result<FirstWeightResultVm>.Fail("FIRST_WEIGHT_UPDATE_ERROR");
+            return Result<FirstWeightResultVm>.Fail($"FIRST_WEIGHT_UPDATE_ERROR | {ex.GetType().Name}: {ex.Message} | StackTrace: {ex.StackTrace}");
         }
     }
 
