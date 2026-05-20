@@ -1273,7 +1273,7 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                     RETURN;
                 END
 
-                IF @CurrentStep <> 0
+                IF @CurrentStep > 1
                 BEGIN
                     SELECT CAST(-2 AS int) AS ResultCode;
                     RETURN;
@@ -1301,12 +1301,12 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                     TARE = COALESCE(@ResolvedTARE, TARE),
                     TypeCamion = COALESCE(NULLIF(@ResolvedTruckType, ''), TypeCamion)
                 WHERE Id = @Id
-                  AND ISNULL(Step, 0) = 0;
+                  AND ISNULL(Step, 0) <= 1;
 
                 IF COL_LENGTH('dbo.Ecare_Order_Legend', 'RfidHex') IS NOT NULL
                 BEGIN
                     EXEC sp_executesql
-                        N'UPDATE dbo.Ecare_Order_Legend SET RfidHex = COALESCE(NULLIF(@RfidHex, ''''), RfidHex) WHERE Id = @Id AND ISNULL(Step, 0) = 0',
+                        N'UPDATE dbo.Ecare_Order_Legend SET RfidHex = COALESCE(NULLIF(@RfidHex, ''''), RfidHex) WHERE Id = @Id AND ISNULL(Step, 0) <= 1',
                         N'@Id int, @RfidHex nvarchar(100)',
                         @Id = @Id,
                         @RfidHex = @RfidHex;
@@ -1320,7 +1320,7 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 FROM dbo.Ecare_CommercialOrders co
                 INNER JOIN dbo.Ecare_Order_Legend l ON l.CommercialOrderId = co.Id
                 WHERE l.Id = @Id
-                  AND ISNULL(l.Step, 0) = 0;
+                  AND ISNULL(l.Step, 0) <= 1;
 
                 UPDATE o
                 SET CarteSLV = COALESCE(NULLIF(@RFIDCard, ''), o.CarteSLV),
@@ -1330,7 +1330,7 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 FROM dbo.Orders o
                 INNER JOIN dbo.Ecare_Order_Legend l ON l.OrderId = o.Id
                 WHERE l.Id = @Id
-                  AND ISNULL(l.Step, 0) = 0;
+                  AND ISNULL(l.Step, 0) <= 1;
 
                 SELECT CAST(1 AS int) AS ResultCode;
                 """;
@@ -1350,7 +1350,7 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 return Results.NotFound(new { message = "Document introuvable." });
 
             if (updated == -2)
-                return Results.Conflict(new { message = "Modification autorisee uniquement avant l'arrivee au parking (step 0)." });
+                return Results.Conflict(new { message = "Modification autorisee uniquement aux etapes 0 et 1." });
 
             return Results.Ok(new
             {
