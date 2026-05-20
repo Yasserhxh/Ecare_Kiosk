@@ -172,10 +172,7 @@ ORDER BY Id DESC;";
                 await ((dynamic)conn).OpenAsync(ct);
 
             var where = new StringBuilder("""
-                WHERE ISNULL(IsClient, 0) = 0
-                  AND ISNULL(IsTransporteur, 0) = 0
-                  AND ISNULL(IsDriver, 0) = 0
-                  AND NULLIF(LTRIM(RTRIM(ISNULL(Matricule, ''))), '') IS NOT NULL
+                WHERE NULLIF(LTRIM(RTRIM(ISNULL(Matricule, ''))), '') IS NOT NULL
                 """);
             var param = new DynamicParameters();
 
@@ -197,7 +194,24 @@ ORDER BY Id DESC;";
                     TARE,
                     TruckType,
                     CodeTruckSap,
-                    Status
+                    Status,
+                    ClientName,
+                    TransporteurName,
+                    ChauffeurName,
+                    CarteSLV,
+                    CodeClientSAP,
+                    CodeTransporteurSap,
+                    CodeTransporteurSapCimar,
+                    IsClient,
+                    IsTransporteur,
+                    IsDriver,
+                    CASE
+                        WHEN ISNULL(IsClient, 0) = 1 AND ISNULL(IsTransporteur, 0) = 1 THEN 'Client / transporteur'
+                        WHEN ISNULL(IsClient, 0) = 1 THEN 'Client'
+                        WHEN ISNULL(IsTransporteur, 0) = 1 THEN 'Transporteur'
+                        WHEN ISNULL(IsDriver, 0) = 1 THEN 'Chauffeur'
+                        ELSE 'Vehicule libre'
+                    END AS AffectationType
                 FROM dbo.Ecare_ClientEquipements
                 {where}
                 ORDER BY Id DESC
@@ -232,9 +246,6 @@ ORDER BY Id DESC;";
                 SELECT TOP (1) Id
                 FROM dbo.Ecare_ClientEquipements
                 WHERE LTRIM(RTRIM(ISNULL(Matricule, ''))) = @Matricule
-                  AND ISNULL(IsClient, 0) = 0
-                  AND ISNULL(IsTransporteur, 0) = 0
-                  AND ISNULL(IsDriver, 0) = 0;
                 """;
 
             var duplicateId = await conn.QuerySingleOrDefaultAsync<int?>(
@@ -318,10 +329,7 @@ ORDER BY Id DESC;";
                 SELECT TOP (1) Id
                 FROM dbo.Ecare_ClientEquipements
                 WHERE Id <> @Id
-                  AND LTRIM(RTRIM(ISNULL(Matricule, ''))) = @Matricule
-                  AND ISNULL(IsClient, 0) = 0
-                  AND ISNULL(IsTransporteur, 0) = 0
-                  AND ISNULL(IsDriver, 0) = 0;
+                  AND LTRIM(RTRIM(ISNULL(Matricule, ''))) = @Matricule;
                 """;
 
             var duplicateId = await conn.QuerySingleOrDefaultAsync<int?>(
@@ -338,10 +346,7 @@ ORDER BY Id DESC;";
                     TARE = @TARE,
                     TruckType = @TruckType,
                     CodeTruckSap = @CodeTruckSap,
-                    Status = COALESCE(NULLIF(@Status, ''), Status),
-                    IsClient = 0,
-                    IsTransporteur = 0,
-                    IsDriver = 0
+                    Status = COALESCE(NULLIF(@Status, ''), Status)
                 WHERE Id = @Id;
                 """;
 
