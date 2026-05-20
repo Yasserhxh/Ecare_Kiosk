@@ -9,4 +9,6 @@ public class ModifyLegendQuantitiesCommand : IRequest<ModifyLegendQuantitiesResu
 
     public decimal? NewQuantite1 { get; set; }
     public decimal? NewQuantite2 { get; set; }
+
+    public int? NewSacNumber { get; set; }
 }

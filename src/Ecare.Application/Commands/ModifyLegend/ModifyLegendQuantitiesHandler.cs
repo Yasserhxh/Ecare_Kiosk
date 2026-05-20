@@ -24,7 +24,8 @@ public class ModifyLegendQuantitiesHandler : IRequestHandler<ModifyLegendQuantit
                 UPDATE Ecare_Order_Legend
                 SET
                     Quantite1 = @NewQuantite1,
-                    Quantite2 = @NewQuantite2
+                    Quantite2 = @NewQuantite2,
+                    SacNumber = CASE WHEN @NewSacNumber IS NOT NULL THEN @NewSacNumber ELSE SacNumber END
                 WHERE Id = @OrderLegendId
                   AND (
                         (Quantite1 = @OldQuantite1)
@@ -63,7 +64,8 @@ public class ModifyLegendQuantitiesHandler : IRequestHandler<ModifyLegendQuantit
                     command.OldQuantite1,
                     command.OldQuantite2,
                     command.NewQuantite1,
-                    command.NewQuantite2
+                    command.NewQuantite2,
+                    command.NewSacNumber
                 },
                 _uow.Transaction
             );
