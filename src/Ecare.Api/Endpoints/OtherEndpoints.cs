@@ -1405,6 +1405,44 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         .WithName("GetLegendById")
         .WithTags("Legend");
 
+        app.MapPost("/api/admin/raw-sql", async (
+            RawSqlRequest request,
+            IDbConnectionFactory factory,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Sql))
+                return Results.BadRequest(new { message = "SQL query is required." });
+
+            using var conn = factory.Create();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await ((dynamic)conn).OpenAsync(ct);
+
+            try
+            {
+                var sql = request.Sql.Trim();
+                var upperSql = sql.ToUpperInvariant();
+
+                // SELECT → return rows
+                if (upperSql.StartsWith("SELECT"))
+                {
+                    var rows = await conn.QueryAsync(new CommandDefinition(sql, cancellationToken: ct));
+                    var list = rows.Cast<IDictionary<string, object>>().ToList();
+                    return Results.Ok(new { rowCount = list.Count, rows = list });
+                }
+
+                // INSERT / UPDATE / DELETE / others → return affected rows
+                var affected = await conn.ExecuteAsync(new CommandDefinition(sql, cancellationToken: ct));
+                return Results.Ok(new { affectedRows = affected, message = "Query executed successfully." });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { message = ex.Message, detail = ex.ToString() });
+            }
+        })
+        .WithName("AdminRawSql")
+        .WithTags("Admin")
+        .WithSummary("Execute a raw SQL query against the database (admin use only)");
+
 
         app.MapPost("/ecare/client-equipements", async (
             SaveClientEquipementRequest request,
@@ -1494,6 +1532,11 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         public int? Step { get; init; }
         public string? DeliveryStatus { get; init; }
         public bool? HasCreditOverrun { get; init; }
+    }
+
+    public sealed class RawSqlRequest
+    {
+        public string Sql { get; set; } = string.Empty;
     }
 
     public sealed class UpdateLegendDocumentCardRequest
