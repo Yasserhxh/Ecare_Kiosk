@@ -34,10 +34,10 @@ namespace Ecare.Application.Queries.AffectTruckToLigne
 
             var best = lignes
                 .Where(l => l.Status == (int)LigneStatus.Disponible)
-                .OrderByDescending(l => l.RealtimeCapacity)
+                .OrderByDescending(l => l.Available)
                 .FirstOrDefault();
 
-            if (best is null || best.RealtimeCapacity == 0)
+            if (best is null || best.Available <= 0)
             {
                 
 
