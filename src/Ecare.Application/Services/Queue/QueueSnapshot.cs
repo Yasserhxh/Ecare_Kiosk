@@ -94,6 +94,17 @@ public static class QueueSnapshot
         return DateTime.MaxValue;
     }
 
+    /// <summary>
+    /// Canonical queue ordering, shared by every list and aligned with the calling order:
+    /// pinned first, earliest pin first, then FIFO by resolved queue timestamp (unset → last),
+    /// then Id for stability. Replaces the previously divergent VRAC/SAC/progress sorts.
+    /// </summary>
+    public static IEnumerable<LegendRow> OrderForQueue(IEnumerable<LegendRow> rows) =>
+        rows.OrderByDescending(r => r.IsPined)
+            .ThenBy(r => r.PinedAt ?? DateTime.MaxValue)
+            .ThenBy(ResolveQueueTimestamp)
+            .ThenBy(r => r.Id);
+
     private static bool IsFirstPlaceExpired(LegendRow row, DateTime now)
     {
         return row.FirstPlaceAt.HasValue
@@ -143,36 +154,30 @@ public static class QueueSnapshot
            ============================================================ */
 
         // EN VALIDATION VRAC (TruckType = Citerne AND no Produit1)
-        var enValidationVrac = rows
-        .Where(r =>
-        r.Produit1 is null &&
-        r.TruckType != null &&
-        r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
-        .OrderBy(r => r.IsPined)
-        .ThenBy(r => r.PinedAt == default ? DateTime.MaxValue : r.PinedAt)
-        .ThenBy(r => r.AddedToQueueAt == default ? DateTime.MaxValue : r.AddedToQueueAt)
-        .Select(r => new QueueItem(
-        r.Matricule,
-        null,
-        r.IsPined,
-        r.PinedAt,
-        r.AddedToQueueAt,
-        r.FirstPlaceAt,
-        r.TimeElapsedInFirstPlace,
-        r.TruckType,
-        r.ChauffeurName,
-        r.TypeProduit))
-        .ToList();
+        var enValidationVrac = OrderForQueue(rows
+            .Where(r =>
+                r.Produit1 is null &&
+                r.TruckType != null &&
+                r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase)))
+            .Select(r => new QueueItem(
+                r.Matricule,
+                null,
+                r.IsPined,
+                r.PinedAt,
+                r.AddedToQueueAt,
+                r.FirstPlaceAt,
+                r.TimeElapsedInFirstPlace,
+                r.TruckType,
+                r.ChauffeurName,
+                r.TypeProduit))
+            .ToList();
 
 
         // EN VALIDATION SAC (TruckType ≠ Citerne AND no Produit1)
-        var enValidationSac = rows
+        var enValidationSac = OrderForQueue(rows
             .Where(r => r.Produit1 is null && r.TruckType != null &&
-                        !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(r => r.IsPined)
-            .ThenBy(r => r.PinedAt ?? DateTime.MinValue)
-            .ThenBy(r => r.AddedToQueueAt)
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName,r.TypeProduit))
+                        !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase)))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit))
             .ToList();
 
         /* ============================================================
@@ -183,10 +188,8 @@ public static class QueueSnapshot
                 .GroupBy(r => r.Produit1!.Trim())
                 .Select(g =>
                 {
-                    var items = g.OrderBy(r => r.IsPined)
-                                 .ThenBy(r => r.PinedAt ?? DateTime.MinValue)
-                                 .ThenBy(r => r.AddedToQueueAt)
-                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName,r.TypeProduit))
+                    var items = OrderForQueue(g)
+                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit))
                                  .ToList();
 
                     // Compute capacity per physical loading line/family.
