@@ -389,20 +389,41 @@ public sealed class UpdateAfterFirstWeightHandler
             var sw = Stopwatch.StartNew();
             FirstWeightResultVm? row;
             const string sqlSelectLigne = """
-                ;WITH LigneUsage AS
+                ;WITH Lignes AS
                 (
-                    SELECT
+                    SELECT DISTINCT
                         L.Id AS LigneId,
                         L.Nom AS LigneName,
                         L.Ligne_ImageUrl AS LigneImageUrl,
-                        FreeCapacity = ISNULL(L.RealtimeCapacity, 0)
+                        L.Capacity AS Capacity,
+                        ISNULL(L.RealtimeCapacity, L.Capacity) AS Rtc
                     FROM dbo.EcareCiments C
                     JOIN dbo.Ecare_LigneCiments LC ON LC.CimentId = C.Id
                     JOIN dbo.Ecare_Ligne L ON L.Id = LC.LigneId
                     WHERE C.Name = @Produit1
                       AND LC.Actif = 1
                       AND ISNULL(L.Status, 0) = 1
-                    GROUP BY L.Id, L.Nom, L.Ligne_ImageUrl, L.RealtimeCapacity
+                ),
+                LigneUsage AS
+                (
+                    SELECT
+                        Lignes.LigneId,
+                        Lignes.LigneName,
+                        Lignes.LigneImageUrl,
+                        FreeCapacity = CASE
+                            WHEN (Lignes.Capacity - occ.Occupancy) < Lignes.Rtc
+                            THEN (Lignes.Capacity - occ.Occupancy)
+                            ELSE Lignes.Rtc
+                        END
+                    FROM Lignes
+                    CROSS APPLY (
+                        SELECT COUNT(*) AS Occupancy
+                        FROM dbo.Ecare_Order_Legend O
+                        WHERE O.Ligne = Lignes.LigneName
+                          AND O.Step BETWEEN 2 AND 4
+                          AND ISNULL(O.AnnulationCommercial, 0) <> 1
+                          AND ISNULL(O.Status, '') <> 'Canceled'
+                    ) occ
                 )
                 SELECT TOP (1)
                     LigneId,
