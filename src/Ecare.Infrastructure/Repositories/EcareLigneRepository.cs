@@ -23,11 +23,7 @@ namespace Ecare.Infrastructure.Repositories
                 l.Nom AS LigneNom,
                 l.Capacity,
                 ISNULL(l.RealtimeCapacity, 0) AS RealtimeCapacity,
-                CASE
-                    WHEN (l.Capacity - occ.Occupancy) < ISNULL(l.RealtimeCapacity, l.Capacity)
-                    THEN (l.Capacity - occ.Occupancy)
-                    ELSE ISNULL(l.RealtimeCapacity, l.Capacity)
-                END AS Available,
+                CASE WHEN av.Available > 0 THEN av.Available ELSE 0 END AS Available,
                 l.Status,
                 c.Id AS CimentId,
                 c.Name AS CimentName,
@@ -45,6 +41,13 @@ namespace Ecare.Infrastructure.Repositories
                       AND ISNULL(O.AnnulationCommercial, 0) <> 1
                       AND ISNULL(O.Status, '') <> 'Canceled'
                 ) occ
+                CROSS APPLY (
+                    SELECT Available = CASE
+                        WHEN (l.Capacity - occ.Occupancy) < ISNULL(l.RealtimeCapacity, l.Capacity)
+                        THEN (l.Capacity - occ.Occupancy)
+                        ELSE ISNULL(l.RealtimeCapacity, l.Capacity)
+                    END
+                ) av
                 WHERE c.Id  = @Id;";
 
             var result = await uow.Connection.QueryAsync<LigneCimentVm>(
