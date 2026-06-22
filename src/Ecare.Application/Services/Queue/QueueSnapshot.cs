@@ -348,30 +348,66 @@ public static class QueueSnapshot
         public static int GetCapacity(string groupKey, bool isPalGroup, IUnitOfWork uow)
         {
             const string sqlProduct = @"
-                SELECT 
-                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
-                FROM Ecare_Ligne AS EL
-                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
-                JOIN EcareCiments AS C ON C.Id = LC.CimentId
-                WHERE LC.Actif = 1
-                  AND ISNULL(EL.Status, 0) = 1
-                  AND C.Name = @GroupKey;";
+                SELECT COALESCE(SUM(CASE WHEN av.Available > 0 THEN av.Available ELSE 0 END), 0) AS TotalRealtimeCapacity
+                FROM (
+                    SELECT DISTINCT EL.Id, EL.Nom, EL.Capacity,
+                           ISNULL(EL.RealtimeCapacity, EL.Capacity) AS Rtc
+                    FROM Ecare_Ligne AS EL
+                    JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                    JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                    WHERE LC.Actif = 1
+                      AND ISNULL(EL.Status, 0) = 1
+                      AND C.Name = @GroupKey
+                ) AS L
+                CROSS APPLY (
+                    SELECT COUNT(*) AS Occupancy
+                    FROM Ecare_Order_Legend AS O
+                    WHERE O.Ligne = L.Nom
+                      AND O.Step BETWEEN 2 AND 4
+                      AND ISNULL(O.AnnulationCommercial, 0) <> 1
+                      AND ISNULL(O.Status, '') <> 'Canceled'
+                ) AS occ
+                CROSS APPLY (
+                    SELECT Available = CASE
+                        WHEN (L.Capacity - occ.Occupancy) < L.Rtc
+                        THEN (L.Capacity - occ.Occupancy)
+                        ELSE L.Rtc
+                    END
+                ) AS av;";
 
             const string sqlPal = @"
-                SELECT
-                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
-                FROM Ecare_Ligne AS EL
-                JOIN Ecare_Zone_Chargement AS EZC ON EZC.Id = EL.ZoneChargementId
-                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
-                JOIN EcareCiments AS C ON C.Id = LC.CimentId
-                WHERE LC.Actif = 1
-                  AND ISNULL(EL.Status, 0) = 1
-                  AND C.Name = @GroupKey
-                  AND (
-                        UPPER(ISNULL(EZC.TypeOperation, '')) = 'PAL'
-                        OR UPPER(ISNULL(EZC.TypeActivite, '')) = 'PAL'
-                        OR UPPER(ISNULL(C.[Type], '')) = 'PAL'
-                      );";
+                SELECT COALESCE(SUM(CASE WHEN av.Available > 0 THEN av.Available ELSE 0 END), 0) AS TotalRealtimeCapacity
+                FROM (
+                    SELECT DISTINCT EL.Id, EL.Nom, EL.Capacity,
+                           ISNULL(EL.RealtimeCapacity, EL.Capacity) AS Rtc
+                    FROM Ecare_Ligne AS EL
+                    JOIN Ecare_Zone_Chargement AS EZC ON EZC.Id = EL.ZoneChargementId
+                    JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                    JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                    WHERE LC.Actif = 1
+                      AND ISNULL(EL.Status, 0) = 1
+                      AND C.Name = @GroupKey
+                      AND (
+                            UPPER(ISNULL(EZC.TypeOperation, '')) = 'PAL'
+                            OR UPPER(ISNULL(EZC.TypeActivite, '')) = 'PAL'
+                            OR UPPER(ISNULL(C.[Type], '')) = 'PAL'
+                          )
+                ) AS L
+                CROSS APPLY (
+                    SELECT COUNT(*) AS Occupancy
+                    FROM Ecare_Order_Legend AS O
+                    WHERE O.Ligne = L.Nom
+                      AND O.Step BETWEEN 2 AND 4
+                      AND ISNULL(O.AnnulationCommercial, 0) <> 1
+                      AND ISNULL(O.Status, '') <> 'Canceled'
+                ) AS occ
+                CROSS APPLY (
+                    SELECT Available = CASE
+                        WHEN (L.Capacity - occ.Occupancy) < L.Rtc
+                        THEN (L.Capacity - occ.Occupancy)
+                        ELSE L.Rtc
+                    END
+                ) AS av;";
 
             return uow.Connection.ExecuteScalar<int>(
                 isPalGroup ? sqlPal : sqlProduct,
@@ -388,30 +424,66 @@ public static class QueueSnapshot
             CancellationToken ct = default)
         {
             const string sqlProduct = @"
-                SELECT 
-                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
-                FROM Ecare_Ligne AS EL
-                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
-                JOIN EcareCiments AS C ON C.Id = LC.CimentId
-                WHERE LC.Actif = 1
-                  AND ISNULL(EL.Status, 0) = 1
-                  AND C.Name = @GroupKey;";
+                SELECT COALESCE(SUM(CASE WHEN av.Available > 0 THEN av.Available ELSE 0 END), 0) AS TotalRealtimeCapacity
+                FROM (
+                    SELECT DISTINCT EL.Id, EL.Nom, EL.Capacity,
+                           ISNULL(EL.RealtimeCapacity, EL.Capacity) AS Rtc
+                    FROM Ecare_Ligne AS EL
+                    JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                    JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                    WHERE LC.Actif = 1
+                      AND ISNULL(EL.Status, 0) = 1
+                      AND C.Name = @GroupKey
+                ) AS L
+                CROSS APPLY (
+                    SELECT COUNT(*) AS Occupancy
+                    FROM Ecare_Order_Legend AS O
+                    WHERE O.Ligne = L.Nom
+                      AND O.Step BETWEEN 2 AND 4
+                      AND ISNULL(O.AnnulationCommercial, 0) <> 1
+                      AND ISNULL(O.Status, '') <> 'Canceled'
+                ) AS occ
+                CROSS APPLY (
+                    SELECT Available = CASE
+                        WHEN (L.Capacity - occ.Occupancy) < L.Rtc
+                        THEN (L.Capacity - occ.Occupancy)
+                        ELSE L.Rtc
+                    END
+                ) AS av;";
 
             const string sqlPal = @"
-                SELECT
-                    COALESCE(SUM(EL.RealtimeCapacity), 0) AS TotalRealtimeCapacity
-                FROM Ecare_Ligne AS EL
-                JOIN Ecare_Zone_Chargement AS EZC ON EZC.Id = EL.ZoneChargementId
-                JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
-                JOIN EcareCiments AS C ON C.Id = LC.CimentId
-                WHERE LC.Actif = 1
-                  AND ISNULL(EL.Status, 0) = 1
-                  AND C.Name = @GroupKey
-                  AND (
-                        UPPER(ISNULL(EZC.TypeOperation, '')) = 'PAL'
-                        OR UPPER(ISNULL(EZC.TypeActivite, '')) = 'PAL'
-                        OR UPPER(ISNULL(C.[Type], '')) = 'PAL'
-                      );";
+                SELECT COALESCE(SUM(CASE WHEN av.Available > 0 THEN av.Available ELSE 0 END), 0) AS TotalRealtimeCapacity
+                FROM (
+                    SELECT DISTINCT EL.Id, EL.Nom, EL.Capacity,
+                           ISNULL(EL.RealtimeCapacity, EL.Capacity) AS Rtc
+                    FROM Ecare_Ligne AS EL
+                    JOIN Ecare_Zone_Chargement AS EZC ON EZC.Id = EL.ZoneChargementId
+                    JOIN Ecare_LigneCiments AS LC ON LC.LigneId = EL.Id
+                    JOIN EcareCiments AS C ON C.Id = LC.CimentId
+                    WHERE LC.Actif = 1
+                      AND ISNULL(EL.Status, 0) = 1
+                      AND C.Name = @GroupKey
+                      AND (
+                            UPPER(ISNULL(EZC.TypeOperation, '')) = 'PAL'
+                            OR UPPER(ISNULL(EZC.TypeActivite, '')) = 'PAL'
+                            OR UPPER(ISNULL(C.[Type], '')) = 'PAL'
+                          )
+                ) AS L
+                CROSS APPLY (
+                    SELECT COUNT(*) AS Occupancy
+                    FROM Ecare_Order_Legend AS O
+                    WHERE O.Ligne = L.Nom
+                      AND O.Step BETWEEN 2 AND 4
+                      AND ISNULL(O.AnnulationCommercial, 0) <> 1
+                      AND ISNULL(O.Status, '') <> 'Canceled'
+                ) AS occ
+                CROSS APPLY (
+                    SELECT Available = CASE
+                        WHEN (L.Capacity - occ.Occupancy) < L.Rtc
+                        THEN (L.Capacity - occ.Occupancy)
+                        ELSE L.Rtc
+                    END
+                ) AS av;";
 
             return connection.ExecuteScalarAsync<int>(
                 new CommandDefinition(
