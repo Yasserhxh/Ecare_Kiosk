@@ -67,6 +67,7 @@ namespace Ecare.Application.Queries.GetLegendById
                 , [FirstPlaceAt]
                 , [TimeElapsedInFirstPlace]
                 , [CreatedAt]
+                , [DateAffectation]
                 , [BonDeCommande]
                 , [Ligne]
                 , [ChequeImg]

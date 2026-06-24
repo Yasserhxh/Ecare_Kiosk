@@ -60,7 +60,7 @@ namespace Ecare.Application.Queries.GetLegendsDocument
                       TypeProduit, CodeClientSAP, CodeProduitSAP,
                       PremierePoid, DeuxiemePoid,
                       ParkingAt, PabEntryAt, StartChargingAt, FinishedChargingAt, PabExitAt,
-                      BonDeLivraison, CreatedAt, BonDeCommande, Ligne,
+                      BonDeLivraison, CreatedAt, DateAffectation, BonDeCommande, Ligne,
                       ExtraSac, PlusBags, MinusBags, StartExtraSac, EndExtraSac,
                       SacNumber, NumberSacs_Charged, Weight_Charged, Status
                 FROM Ecare_Order_Legend

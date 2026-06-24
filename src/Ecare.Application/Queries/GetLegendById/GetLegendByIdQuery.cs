@@ -68,6 +68,7 @@ namespace Ecare.Application.Queries.GetLegendById
         public int? TimeElapsedInFirstPlace { get; set; }
 
         public DateTime? CreatedAt { get; set; }
+        public DateTime? DateAffectation { get; set; }
 
         public string? BonDeCommande { get; set; }
         public string? Ligne { get; set; }

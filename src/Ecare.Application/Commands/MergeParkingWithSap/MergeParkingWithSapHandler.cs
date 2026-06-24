@@ -148,6 +148,7 @@ namespace Ecare.Application.Commands.MergeParkingWithSap
                     TARE                = COALESCE(@TARE, TARE),
                     ParkingAt           = COALESCE(ParkingAt, @ParkingAt),
                     AddedToQueueAt      = COALESCE(AddedToQueueAt, @AddedToQueueAt),
+                    DateAffectation     = COALESCE(DateAffectation, @DateAffectation),
                     Step                = CASE
                                               WHEN @KeepExistingStep = 1 THEN Step
                                               WHEN Step < 1 THEN 1
@@ -192,7 +193,10 @@ namespace Ecare.Application.Commands.MergeParkingWithSap
                         PTAC = ptac,
                         TARE = tare,
                         ParkingAt = GetTypedValue<DateTime?>(parking, "ParkingAt") ?? now,
-                        AddedToQueueAt = GetTypedValue<DateTime?>(parking, "AddedToQueueAt") ?? now
+                        AddedToQueueAt = GetTypedValue<DateTime?>(parking, "AddedToQueueAt") ?? now,
+                        // Affectation = the moment a commande is affected to this matricule (this merge).
+                        // Write-once: COALESCE keeps the first value if the row is ever re-merged.
+                        DateAffectation = now
                     },
                     _uow.Transaction);
 

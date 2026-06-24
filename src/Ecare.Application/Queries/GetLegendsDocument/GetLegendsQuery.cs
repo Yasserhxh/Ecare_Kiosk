@@ -38,6 +38,7 @@ namespace Ecare.Application.Queries.GetLegendsDocument
         public DateTime? PabExitAt { get; set; }
         public string? BonDeLivraison { get; set; }
         public DateTime? CreatedAt { get; set; }
+        public DateTime? DateAffectation { get; set; }
         public string? BonDeCommande { get; set; }
         public string? Ligne { get; set; }
         public int? ExtraSac { get; set; }

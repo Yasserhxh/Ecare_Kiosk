@@ -4,7 +4,9 @@ public sealed class LegendBusinessRow
 {
     // Mapping
     public int Id { get; set; }
-    public DateTime? DateCreation { get; set; }           // ParkingAt
+    public DateTime? DateCreation { get; set; }           // COALESCE(ParkingAt, CreatedAt) — legacy
+    public DateTime? CreatedAt { get; set; }              // real record/commande creation date
+    public DateTime? DateAffectation { get; set; }        // when commande affected to matricule (merge)
     public string? Matricule { get; set; }
     public string? RFID { get; set; }                    // RFIDCard
     public string? ClientName { get; set; }

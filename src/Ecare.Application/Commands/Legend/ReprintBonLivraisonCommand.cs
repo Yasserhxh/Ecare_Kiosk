@@ -97,20 +97,33 @@ public sealed class ReprintBonLivraisonHandler
                 return Result<BlJson>.Fail(validationError);
             }
 
-            var shipment = await TryGetExistingShipmentAsync(request.Id, ct);
+            BlJson? shipment;
 
-            if (shipment is null && string.IsNullOrWhiteSpace(legend.BonDeLivraison))
+            if (!string.IsNullOrWhiteSpace(legend.BonDeLivraison))
             {
-                shipment = await CreateShipmentAsync(request.Id, ct);
+                // Old/completed order: a livraison (BonDeLivraison) already exists. Reprint it via the
+                // date-anchored endpoint, which searches SAP livraisons around the order's exit date
+                // (PabExitAt ±1 day) instead of only today — that today-only window was the cause of
+                // the "SAP_LIVRAISON_NOT_FOUND" error when reprinting old BLs.
+                shipment = await GetReprintShipmentAsync(request.Id, ct);
+            }
+            else
+            {
+                shipment = await TryGetExistingShipmentAsync(request.Id, ct);
 
-                if (shipment is null || string.IsNullOrWhiteSpace(shipment.BonDeLivraison))
-                    return Result<BlJson>.Fail("SAP_EMPTY_RESPONSE");
+                if (shipment is null)
+                {
+                    shipment = await CreateShipmentAsync(request.Id, ct);
 
-                await PersistCreatedShipmentAndReleaseCapacityAsync(
-                    conn,
-                    request.Id,
-                    shipment.BonDeLivraison,
-                    ct);
+                    if (shipment is null || string.IsNullOrWhiteSpace(shipment.BonDeLivraison))
+                        return Result<BlJson>.Fail("SAP_EMPTY_RESPONSE");
+
+                    await PersistCreatedShipmentAndReleaseCapacityAsync(
+                        conn,
+                        request.Id,
+                        shipment.BonDeLivraison,
+                        ct);
+                }
             }
 
             if (shipment is null)
@@ -141,6 +154,31 @@ public sealed class ReprintBonLivraisonHandler
             _log.LogError(ex, "Error reprinting BL for LegendId={Id}", request.Id);
             return Result<BlJson>.Fail("UNEXPECTED_ERROR");
         }
+    }
+
+    private async Task<BlJson?> GetReprintShipmentAsync(int legendId, CancellationToken ct)
+    {
+        var response = await _http.GetAsync(
+            $"https://app-emea-we-dssprod-dss-001.azurewebsites.net/api/SapShipment/livraison/reprint/{legendId}",
+            ct);
+
+        if (response.StatusCode == HttpStatusCode.NotFound ||
+            response.StatusCode == HttpStatusCode.Accepted)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _log.LogError(
+                "SAP livraison reprint lookup failed for LegendId={Id}, Status={Status}",
+                legendId,
+                response.StatusCode);
+
+            throw new InvalidOperationException("SAP_API_ERROR");
+        }
+
+        return await response.Content.ReadFromJsonAsync<BlJson>(cancellationToken: ct);
     }
 
     private async Task<BlJson?> TryGetExistingShipmentAsync(int legendId, CancellationToken ct)

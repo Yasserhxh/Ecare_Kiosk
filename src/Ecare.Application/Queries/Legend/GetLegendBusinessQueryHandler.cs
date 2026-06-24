@@ -26,6 +26,8 @@ SELECT
     -- Mapping
     id,
     COALESCE(ParkingAt, CreatedAt) AS DateCreation,
+    CreatedAt,
+    DateAffectation,
     ParkingAt,
     PabEntryAt,
     StartChargingAt,
