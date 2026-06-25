@@ -51,7 +51,11 @@ public static class QueueSnapshot
         decimal? TimeElapsedInFirstPlace,
         string TruckType,
         string chauffeurNom,
-        string? TypeProduit
+        string? TypeProduit,
+        // Physical scan/parking time. Sent so the dashboard can fall back to it for
+        // FIFO ordering when AddedToQueueAt is null (e.g. unmerged SAP rows), matching
+        // the backend ResolveQueueTimestamp fallback chain.
+        DateTime ParkingAt
     );
 
     public sealed record QueueGroup(
@@ -169,7 +173,8 @@ public static class QueueSnapshot
                 r.TimeElapsedInFirstPlace,
                 r.TruckType,
                 r.ChauffeurName,
-                r.TypeProduit))
+                r.TypeProduit,
+                r.ParkingAt))
             .ToList();
 
 
@@ -177,7 +182,7 @@ public static class QueueSnapshot
         var enValidationSac = OrderForQueue(rows
             .Where(r => r.Produit1 is null && r.TruckType != null &&
                         !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase)))
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit, r.ParkingAt))
             .ToList();
 
         /* ============================================================
@@ -189,7 +194,7 @@ public static class QueueSnapshot
                 .Select(g =>
                 {
                     var items = OrderForQueue(g)
-                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit))
+                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit, r.ParkingAt))
                                  .ToList();
 
                     // Compute capacity per physical loading line/family.
