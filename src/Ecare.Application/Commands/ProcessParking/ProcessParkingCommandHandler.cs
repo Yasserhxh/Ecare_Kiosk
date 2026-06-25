@@ -217,6 +217,37 @@ OUTER APPLY
 
                 await SafeDbLogAsync(traceId, r.Event, "TYPEPRODUIT_OK", payload: new { r.Produit1, typeProduit }, statusCode: 200, isSuccess: true, slv: r.Slv?.ToString(), matricule: r.Matricule, ct: ct);
 
+                // Ordered bags (SacNumber) must always follow the ordered quantity for SAC/PAL.
+                // The parking/SAP feed sends tonnage but not a bag count, so derive it here when
+                // none was supplied. PoidKg is the per-bag weight from the product master.
+                const string sqlPoidKg = @"SELECT TOP(1) PoidKg FROM dbo.EcareCiments WHERE Name = @Name;";
+
+                int? poidKg1 = await _uow.Connection.ExecuteScalarAsync<int?>(
+                    sqlPoidKg, new { Name = r.Produit1 }, _uow.Transaction);
+
+                string? typeProduit2 = null;
+                int? poidKg2 = null;
+                if (!string.IsNullOrWhiteSpace(r.Produit2))
+                {
+                    typeProduit2 = await _uow.Connection.ExecuteScalarAsync<string>(
+                        sqlType, new { Name = r.Produit2 }, _uow.Transaction);
+                    poidKg2 = await _uow.Connection.ExecuteScalarAsync<int?>(
+                        sqlPoidKg, new { Name = r.Produit2 }, _uow.Transaction);
+                }
+
+                // Tonnage is the source of truth for SAC/PAL: always derive the bag count from the
+                // ordered quantity, overriding whatever the parking/SAP feed sent (it carries tonnage,
+                // not bags). Falls back to the incoming value only when PoidKg is unknown (computed = 0).
+                int? effectiveSacNumber = r.SacNumber;
+                var computedSacs =
+                    ComputeSacsFromQuantity(r.Quantite1, typeProduit, poidKg1)
+                    + ComputeSacsFromQuantity(r.Quantite2, typeProduit2, poidKg2);
+
+                if (computedSacs > 0)
+                    effectiveSacNumber = computedSacs;
+
+                await SafeDbLogAsync(traceId, r.Event, "SACNUMBER_RESOLVED", payload: new { incoming = r.SacNumber, effectiveSacNumber, poidKg1, poidKg2 }, statusCode: 200, isSuccess: true, slv: r.Slv?.ToString(), matricule: r.Matricule, ct: ct);
+
                 var creditBlocked = await IsCreditBlockedAsync(r, ct);
                 if (creditBlocked)
                 {
@@ -352,7 +383,7 @@ VALUES
                         TypeProduit = typeProduit,
 
                         r.BonDeCommande,
-                        r.SacNumber,
+                        SacNumber = effectiveSacNumber,
 
                         r.CodeSapProduit1,
                         r.CodeSapProduit2,
@@ -711,6 +742,25 @@ WHERE CodeSAP IN @Codes;
 
         return GetLineAmount(request.CodeSapProduit1, request.Quantite1, tariffs)
              + GetLineAmount(request.CodeSapProduit2, request.Quantite2, tariffs);
+    }
+
+    // Ordered bags for one product line: ceil(quantityTons * 1000 / bagWeightKg), only for SAC/PAL.
+    // Returns 0 when not applicable (not SAC/PAL, no quantity, or no bag weight) so callers can sum lines.
+    private static int ComputeSacsFromQuantity(decimal? quantiteTonnes, string? typeProduit, int? poidKg)
+    {
+        if (string.IsNullOrWhiteSpace(typeProduit))
+            return 0;
+
+        var isSacOrPal =
+            typeProduit.Contains("SAC", StringComparison.OrdinalIgnoreCase) ||
+            typeProduit.Contains("PAL", StringComparison.OrdinalIgnoreCase);
+
+        if (!isSacOrPal ||
+            !quantiteTonnes.HasValue || quantiteTonnes.Value <= 0 ||
+            !poidKg.HasValue || poidKg.Value <= 0)
+            return 0;
+
+        return (int)Math.Ceiling((quantiteTonnes.Value * 1000m) / poidKg.Value);
     }
 
     private static decimal GetLineAmount(string? codeSap, decimal? quantity, IReadOnlyDictionary<string, decimal?> tariffs)

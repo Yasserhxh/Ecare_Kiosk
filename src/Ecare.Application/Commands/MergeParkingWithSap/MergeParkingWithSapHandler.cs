@@ -133,7 +133,27 @@ namespace Ecare.Application.Commands.MergeParkingWithSap
                     Quantite2           = @Quantite2,
                     TypeProduit         = COALESCE(@TypeProduit, TypeProduit),
                     BonDeCommande       = @BonDeCommande,
-                    SacNumber           = COALESCE(@SacNumber, SacNumber),
+                    -- Ordered bags must always follow the ordered quantity for SAC/PAL (tonnage wins).
+                    -- Derive from the merged quantities and bag weights; fall back to the incoming/existing
+                    -- value only when not SAC/PAL or PoidKg is unknown.
+                    SacNumber           = CASE
+                                              WHEN UPPER(ISNULL(@TypeProduit, TypeProduit)) IN ('SAC','PAL') THEN
+                                                  ISNULL(
+                                                      NULLIF(
+                                                          ISNULL(CASE WHEN @Quantite1 > 0
+                                                                      THEN CAST(CEILING(@Quantite1 * 1000.0 /
+                                                                           NULLIF((SELECT TOP 1 PoidKg FROM EcareCiments
+                                                                                   WHERE CodeSAP = @CodeSapProduit1 OR Name = @Produit1), 0)) AS INT)
+                                                                      ELSE 0 END, 0)
+                                                        + ISNULL(CASE WHEN @Quantite2 > 0
+                                                                      THEN CAST(CEILING(@Quantite2 * 1000.0 /
+                                                                           NULLIF((SELECT TOP 1 PoidKg FROM EcareCiments
+                                                                                   WHERE CodeSAP = @CodeSapProduit2 OR Name = @Produit2), 0)) AS INT)
+                                                                      ELSE 0 END, 0),
+                                                      0),
+                                                      COALESCE(@SacNumber, SacNumber))
+                                              ELSE COALESCE(@SacNumber, SacNumber)
+                                          END,
                     CodeSapProduit1     = @CodeSapProduit1,
                     CodeSapProduit2     = @CodeSapProduit2,
                     CodeSapChantier     = @CodeSapChantier,

@@ -56,6 +56,33 @@ public class ModifyLegendQuantitiesHandler : IRequestHandler<ModifyLegendQuantit
                 };
             }
 
+            // Ordered bags must always follow the ordered quantity for SAC/PAL.
+            // Derive SacNumber from the NEW quantities and each product's bag weight (PoidKg),
+            // so a quantity change automatically updates the bag count.
+            var productInfo = await _uow.Connection.QueryFirstOrDefaultAsync<LegendProductInfo>(
+                @"SELECT
+                      L.TypeProduit AS TypeProduit,
+                      (SELECT TOP 1 PoidKg FROM EcareCiments c
+                       WHERE c.CodeSAP = L.CodeSapProduit1 OR c.Name = L.Produit1) AS PoidKg1,
+                      (SELECT TOP 1 PoidKg FROM EcareCiments c
+                       WHERE c.CodeSAP = L.CodeSapProduit2 OR c.Name = L.Produit2) AS PoidKg2
+                  FROM Ecare_Order_Legend L
+                  WHERE L.Id = @OrderLegendId;",
+                new { command.OrderLegendId },
+                _uow.Transaction
+            );
+
+            int? effectiveSacNumber = command.NewSacNumber;
+            if (IsSacOrPal(productInfo?.TypeProduit))
+            {
+                var computedSacs =
+                    ComputeSacsFromQuantity(command.NewQuantite1, productInfo?.PoidKg1)
+                    + ComputeSacsFromQuantity(command.NewQuantite2, productInfo?.PoidKg2);
+
+                if (computedSacs > 0)
+                    effectiveSacNumber = computedSacs;
+            }
+
             var affectedRows = await _uow.Connection.ExecuteAsync(
                 sqlUpdate,
                 new
@@ -65,7 +92,7 @@ public class ModifyLegendQuantitiesHandler : IRequestHandler<ModifyLegendQuantit
                     command.OldQuantite2,
                     command.NewQuantite1,
                     command.NewQuantite2,
-                    command.NewSacNumber
+                    NewSacNumber = effectiveSacNumber
                 },
                 _uow.Transaction
             );
@@ -98,9 +125,26 @@ public class ModifyLegendQuantitiesHandler : IRequestHandler<ModifyLegendQuantit
             };
         }
     }
-    private class LegendQuantitiesDbRow
+    private static bool IsSacOrPal(string? typeProduit)
+        => !string.IsNullOrWhiteSpace(typeProduit)
+           && (typeProduit.Contains("SAC", StringComparison.OrdinalIgnoreCase)
+               || typeProduit.Contains("PAL", StringComparison.OrdinalIgnoreCase));
+
+    // Ordered bags for one product line: ceil(quantityTons * 1000 / bagWeightKg).
+    // Returns 0 when not derivable (no quantity or no bag weight) so callers can sum lines.
+    private static int ComputeSacsFromQuantity(decimal? quantiteTonnes, int? poidKg)
     {
-        public decimal? Quantite1 { get; set; }
-        public decimal? Quantite2 { get; set; }
+        if (!quantiteTonnes.HasValue || quantiteTonnes.Value <= 0 ||
+            !poidKg.HasValue || poidKg.Value <= 0)
+            return 0;
+
+        return (int)Math.Ceiling((quantiteTonnes.Value * 1000m) / poidKg.Value);
+    }
+
+    private sealed class LegendProductInfo
+    {
+        public string? TypeProduit { get; set; }
+        public int? PoidKg1 { get; set; }
+        public int? PoidKg2 { get; set; }
     }
 }
