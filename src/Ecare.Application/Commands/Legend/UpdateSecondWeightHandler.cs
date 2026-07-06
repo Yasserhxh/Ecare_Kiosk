@@ -219,8 +219,8 @@ public sealed class UpdateSecondWeightHandler
                 return Result<UpdateSecondWeightResult>.Fail("ORDER_QUANTITY_MISSING");
             }
 
-            // 1% tolerance for SAC/PAL bagged products.
-            var tolerance = expected * 0.01m;
+            // 2% tolerance for SAC/PAL bagged products.
+            var tolerance = expected * 0.02m;
 
             var minAllowed = expected - tolerance;
             var maxAllowed = expected + tolerance;
