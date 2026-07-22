@@ -50,6 +50,7 @@ public sealed class LegendBusinessRow
     public DateTime? StartChargingAt { get; set; }
     public DateTime? FinishedChargingAt { get; set; }
     public DateTime? PabExitAt { get; set; }
+    public int? ElapsedAffectationToPab { get; set; }   // DATEDIFF(MINUTE, DateAffectation, PabEntryAt) — null if no affectation or no PAB entry
     public int? ElapsedTimeParking { get; set; }
     public int? ElapsedInPabCharging { get; set; }
     public int? ElapsedCharging { get; set; }
