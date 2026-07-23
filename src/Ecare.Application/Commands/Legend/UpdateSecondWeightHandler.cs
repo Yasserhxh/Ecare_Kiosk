@@ -275,6 +275,7 @@ public sealed class UpdateSecondWeightHandler
                     UPDATE dbo.Ecare_Order_Legend
                     SET
                         DeuxiemePoid = @DeuxiemePoid,
+                        PabSortieDeviceId = @DeviceId,
                         Weight_Charged = @DeuxiemePoid - PremierePoid,
                         NumberSacs_Charged = ISNULL(SacNumber, 0),
                         PabExitAt = @Now,
@@ -321,7 +322,8 @@ public sealed class UpdateSecondWeightHandler
                     {
                         LegendId = order.Id,
                         request.DeuxiemePoid,
-                        order.OrderId
+                        order.OrderId,
+                        request.DeviceId
                     },
                     cancellationToken: ct));
 

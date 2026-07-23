@@ -11,7 +11,8 @@ public sealed record UpdateSecondWeightCommand(
     string RfidCard,
     string Matricule,
     int DeuxiemePoid,
-    int? LegendId = null
+    int? LegendId = null,
+    string? DeviceId = null
 ) : IRequest<Result<UpdateSecondWeightResult>>;
 
 public sealed class UpdateSecondWeightResult
