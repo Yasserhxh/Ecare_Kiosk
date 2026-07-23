@@ -442,6 +442,7 @@ public sealed class UpdateAfterFirstWeightHandler
                 UPDATE dbo.Ecare_Order_Legend
                 SET
                     PremierePoid = @PremierePoid,
+                    PabEntreeDeviceId = @DeviceId,
                     PabEntryAt = CONVERT(datetime, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time'),
                     ElapsedTimeParking = CASE
                         WHEN ParkingAt IS NULL THEN NULL
@@ -521,7 +522,8 @@ public sealed class UpdateAfterFirstWeightHandler
                         request.RfidCard,
                         request.Matricule,
                         request.PremierePoid,
-                        LigneName = ligne?.LigneName
+                        LigneName = ligne?.LigneName,
+                        request.DeviceId
                     },
                     cancellationToken: ct));
 

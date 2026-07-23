@@ -10,7 +10,8 @@ public sealed record UpdateAfterFirstWeightCommand(
     string Matricule,
     int PremierePoid,
     string Produit1,
-    int? LegendId = null
+    int? LegendId = null,
+    string? DeviceId = null
 ) : IRequest<Result<FirstWeightResultVm>>;
 
 
