@@ -73,6 +73,8 @@ SELECT
     NumberSacs_Charged,
     Weight_Charged,
     IsLowCreditDeliveryRisk,
+    PabEntreeDeviceId,
+    PabSortieDeviceId,
     DATEDIFF(MINUTE, DateAffectation, PabEntryAt) AS ElapsedAffectationToPab,
     ElapsedTimeParking,
     ElapsedInPab_Charging         AS ElapsedInPabCharging,

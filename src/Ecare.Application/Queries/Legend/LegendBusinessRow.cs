@@ -38,6 +38,8 @@ public sealed class LegendBusinessRow
     public string ScaleTare { get; set; } = "WI";         // constant
 
     public string? TypeLivraison { get; set; }            // CFR / EXW (null si pas d'archive SAP)
+    public string? PabEntreeDeviceId { get; set; }        // bascule that captured PremierePoid
+    public string? PabSortieDeviceId { get; set; }        // bascule that captured DeuxiemePoid
     public int? Seals { get; set; }                       // PlombNumber
     public string? BonCommandeClient { get; set; }        // BonDeCommande
 
