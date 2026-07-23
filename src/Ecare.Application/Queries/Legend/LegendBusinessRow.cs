@@ -37,7 +37,7 @@ public sealed class LegendBusinessRow
     public string ScaleGross { get; set; } = "WO";        // constant
     public string ScaleTare { get; set; } = "WI";         // constant
 
-    public string TypeLivraison { get; set; } = default!; // CFR / EXW
+    public string? TypeLivraison { get; set; }            // CFR / EXW (null si pas d'archive SAP)
     public int? Seals { get; set; }                       // PlombNumber
     public string? BonCommandeClient { get; set; }        // BonDeCommande
 

@@ -63,10 +63,9 @@ SELECT
     'WO'                           AS ScaleGross,
     'WI'                           AS ScaleTare,
 
-    CASE
-        WHEN CommercialOrderId IS NULL THEN 'CFR'
-        ELSE 'EXW'
-    END                           AS TypeLivraison,
+    -- Incoterm réel archivé lors de la création SAP (SapOrderArchives.OperationType).
+    -- NULL si aucune archive (commande antérieure aux archives ou créée directement dans SAP).
+    arch.OperationType            AS TypeLivraison,
 
     PlombNumber                   AS Seals,
     BonDeCommande                 AS BonCommandeClient,
@@ -95,6 +94,17 @@ SELECT
         ELSE 'Simple'
     END                           AS TypeCommande
 FROM dbo.Ecare_Order_Legend
+OUTER APPLY (
+    SELECT TOP (1) a.OperationType
+    FROM dbo.SapOrderArchives a
+    WHERE a.IsSuccess = 1
+      AND a.OperationType IS NOT NULL
+      AND a.SalesDocument IS NOT NULL
+      -- SalesDocument SAP peut être stocké avec ou sans zéros de tête ('0118012786' vs '118012786')
+      AND (a.SalesDocument = Ecare_Order_Legend.CodeSapCommande
+           OR TRY_CONVERT(BIGINT, a.SalesDocument) = TRY_CONVERT(BIGINT, Ecare_Order_Legend.CodeSapCommande))
+    ORDER BY a.Id DESC
+) arch
 WHERE 1 = 1
 ");
 
