@@ -158,6 +158,7 @@ public sealed class UpdateSecondWeightHandler
                 AND ISNULL(Status, '') <> 'Canceled'
             ORDER BY
                 CASE WHEN @LegendId IS NOT NULL AND Id = @LegendId THEN 0 ELSE 1 END,
+                CASE WHEN Step BETWEEN 2 AND 4 AND PabExitAt IS NULL THEN 0 ELSE 1 END,
                 Id DESC
             """,
             new
@@ -172,7 +173,14 @@ public sealed class UpdateSecondWeightHandler
             return Result<UpdateSecondWeightResult>.Fail("ORDER_NOT_FOUND");
 
         if ((order.Step ?? 0) < 2 || (order.Step ?? 0) >= 5 || order.PabExitAt is not null)
+        {
+            _log.LogWarning(
+                "PAB EXIT not ready: ResolvedId={Id} Step={Step} PabExitAt={PabExitAt} " +
+                "(requested LegendId={LegendId} RFID={Rfid} Matricule={Matricule})",
+                order.Id, order.Step, order.PabExitAt,
+                request.LegendId, request.RfidCard, request.Matricule);
             return Result<UpdateSecondWeightResult>.Fail("ORDER_NOT_READY_FOR_EXIT");
+        }
 
         if (!order.PremierePoid.HasValue || request.DeuxiemePoid <= order.PremierePoid.Value)
         {
