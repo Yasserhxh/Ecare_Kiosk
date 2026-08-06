@@ -229,14 +229,37 @@ try
         {
             var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GlobalException");
             var feature = context.Features.Get<IExceptionHandlerFeature>();
+            var error = feature?.Error;
 
-            if (feature?.Error is not null)
+            if (error is not null)
             {
-                logger.LogError(feature.Error, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
+                logger.LogError(error, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
             }
 
             context.Response.StatusCode = 500;
             context.Response.ContentType = "application/json";
+
+            // TEMP DIAGNOSTIC — remove once the root cause is found.
+            // Full exception is exposed ONLY when ?diag=<token> matches env var DIAG_ERROR_TOKEN.
+            // With no token set (or a wrong value) behaviour is unchanged (generic message).
+            var diagToken = Environment.GetEnvironmentVariable("DIAG_ERROR_TOKEN");
+            var showDetails = error is not null
+                && !string.IsNullOrEmpty(diagToken)
+                && context.Request.Query["diag"] == diagToken;
+
+            if (showDetails)
+            {
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    message = "Une erreur interne est survenue.",
+                    type = error!.GetType().FullName,
+                    detail = error.Message,
+                    innerType = error.InnerException?.GetType().FullName,
+                    inner = error.InnerException?.Message,
+                    stack = error.ToString()
+                });
+                return;
+            }
 
             await context.Response.WriteAsJsonAsync(new
             {

@@ -1,4 +1,5 @@
 using Dapper;
+using Ecare.Application.Common;
 using Ecare.Shared;
 using MediatR;
 
@@ -112,7 +113,7 @@ namespace Ecare.Application.Commands.MergeParkingWithSap
 
                 var targetId = sapHasProgress ? sapId.Value : parkingId.Value;
                 var deleteId = sapHasProgress ? parkingId.Value : sapId.Value;
-                var now = DateTime.Now;
+                var now = MoroccoClock.Now;
 
                 const string sqlMergeIntoTarget = @"
                 UPDATE dbo.Ecare_Order_Legend
