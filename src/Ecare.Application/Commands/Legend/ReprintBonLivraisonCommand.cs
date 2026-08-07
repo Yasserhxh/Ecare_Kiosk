@@ -75,40 +75,42 @@ public sealed class ReprintBonLivraisonHandler
             if (legend is null)
                 return Result<BlJson>.Fail("LEGEND_NOT_FOUND");
 
-            if (!legend.PabExitAt.HasValue || !legend.DeuxiemePoid.HasValue || legend.DeuxiemePoid.Value <= 0)
-            {
-                _log.LogWarning(
-                    "Blocked BL print/create for LegendId={Id}: second weight is missing. PabExitAt={PabExitAt}, DeuxiemePoid={DeuxiemePoid}",
-                    request.Id,
-                    legend.PabExitAt,
-                    legend.DeuxiemePoid);
-
-                return Result<BlJson>.Fail("SECOND_WEIGHT_REQUIRED_FOR_BL");
-            }
-
-            var validationError = ValidateSecondWeightForBl(legend);
-            if (validationError is not null)
-            {
-                _log.LogWarning(
-                    "Blocked BL print/create for LegendId={Id}: second weight validation failed with {Error}",
-                    request.Id,
-                    validationError);
-
-                return Result<BlJson>.Fail(validationError);
-            }
-
             BlJson? shipment;
 
             if (!string.IsNullOrWhiteSpace(legend.BonDeLivraison))
             {
-                // Old/completed order: a livraison (BonDeLivraison) already exists. Reprint it via the
-                // date-anchored endpoint, which searches SAP livraisons around the order's exit date
-                // (PabExitAt ±1 day) instead of only today — that today-only window was the cause of
-                // the "SAP_LIVRAISON_NOT_FOUND" error when reprinting old BLs.
+                // Old/completed order: a livraison (BonDeLivraison) already exists in SAP.
+                // No weight/tolerance validation here — those checks gate BL CREATION only;
+                // re-running them on a pure reprint blocks old orders whose loaded weight
+                // legitimately deviates from the ordered quantity. Reprint via the
+                // date-anchored endpoint, which searches SAP livraisons around the order's
+                // exit date instead of only today.
                 shipment = await GetReprintShipmentAsync(request.Id, ct);
             }
             else
             {
+                if (!legend.PabExitAt.HasValue || !legend.DeuxiemePoid.HasValue || legend.DeuxiemePoid.Value <= 0)
+                {
+                    _log.LogWarning(
+                        "Blocked BL print/create for LegendId={Id}: second weight is missing. PabExitAt={PabExitAt}, DeuxiemePoid={DeuxiemePoid}",
+                        request.Id,
+                        legend.PabExitAt,
+                        legend.DeuxiemePoid);
+
+                    return Result<BlJson>.Fail("SECOND_WEIGHT_REQUIRED_FOR_BL");
+                }
+
+                var validationError = ValidateSecondWeightForBl(legend);
+                if (validationError is not null)
+                {
+                    _log.LogWarning(
+                        "Blocked BL print/create for LegendId={Id}: second weight validation failed with {Error}",
+                        request.Id,
+                        validationError);
+
+                    return Result<BlJson>.Fail(validationError);
+                }
+
                 shipment = await TryGetExistingShipmentAsync(request.Id, ct);
 
                 if (shipment is null)

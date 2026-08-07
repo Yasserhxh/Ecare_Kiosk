@@ -93,6 +93,16 @@ public static class LegendOrderEndpoints
                 : Results.BadRequest(result.Error);
         });
 
+        group.MapPost("/legend/loading-point-tare", async (
+            SetLoadingPointTareCommand cmd,
+            IMediator mediator) =>
+        {
+            var result = await mediator.Send(cmd);
+            return result.Success
+                ? Results.Ok(new { success = true })
+                : Results.BadRequest(result.Error);
+        });
+
         group.MapPost("/legend/finish-charging", async (
             FinishChargingCommand cmd,
             IMediator mediator) =>

@@ -111,5 +111,8 @@ namespace Ecare.Application.Queries.GetLegendById
         public string? MotifAnnulationCommercial { get; set; }
         public string? UserIdAnnulationCommercial { get; set; }
         public bool IsLowCreditDeliveryRisk { get; set; }
+
+        // Tare relevée par la bascule du point de chargement VRAC (comparaison PremierePoid)
+        public int? LoadingPointTare { get; set; }
     }
 }

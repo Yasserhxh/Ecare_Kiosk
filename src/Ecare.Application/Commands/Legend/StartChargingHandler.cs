@@ -35,7 +35,11 @@ public sealed class StartChargingHandler
                 SET
                     StartChargingAt = @Now,
                     Step = 3,
-                    ElapsedInPab_Charging = DATEDIFF(MINUTE, PabEntryAt, @Now)
+                    ElapsedInPab_Charging = DATEDIFF(MINUTE, PabEntryAt, @Now),
+                    -- Tare bascule de ligne (comparaison avec PremierePoid) : write-once,
+                    -- valeurs non positives ignorées.
+                    LoadingPointTare = COALESCE(LoadingPointTare,
+                        CASE WHEN @LoadingPointTare > 0 THEN @LoadingPointTare END)
                 WHERE
                     (
                         @LegendId IS NOT NULL
@@ -56,7 +60,8 @@ public sealed class StartChargingHandler
                 {
                     request.LegendId,
                     RfidCard = request.RfidCard,
-                    request.Matricule
+                    request.Matricule,
+                    request.LoadingPointTare
                 },
                 cancellationToken: ct));
 
