@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Ecare.Application.Commands.ProcessParking;
+using Ecare.Application.Common;
 using Ecare.Shared;
 using MediatR;
 using Microsoft.Data.SqlClient;
@@ -90,7 +91,7 @@ WHERE
                     {
                         LegendId = r.LegendId,
                         Slv = r.Slv,
-                        Now = DateTime.Now,
+                        Now = MoroccoClock.Now,
                         BonDeCommande = r.BonDeCommande
                     },
                     _uow.Transaction
@@ -177,8 +178,8 @@ OUTER APPLY
                         Slv = r.Slv,
                         r.TypeCamion,
                         r.NombrePlombs,
-                        Now = DateTime.Now,
-                        Now2 = DateTime.Now,
+                        Now = MoroccoClock.Now,
+                        Now2 = MoroccoClock.Now,
                     },
                     _uow.Transaction
                 );
@@ -391,8 +392,8 @@ VALUES
                         r.CodeSapChantier,
                         r.CodeSapClient,
 
-                        Now = DateTime.Now,
-                        Now2 = DateTime.Now,
+                        Now = MoroccoClock.Now,
+                        Now2 = MoroccoClock.Now,
                         ChequeImage = r.ChequeImage,
                         Chauffeur = r.Chauffeur,
                         PermisDeConduite = string.IsNullOrWhiteSpace(permisDeConduite) ? null : permisDeConduite
@@ -431,7 +432,7 @@ ORDER BY Id DESC;
                     sapBody = new
                     {
                         codeClient = (r.CodeSapClient ?? "").PadLeft(10, '0'),
-                        date = DateTime.Now.ToString("yyyy-MM-dd"),
+                        date = MoroccoClock.Now.ToString("yyyy-MM-dd"),
                         purchNoC = r.BonDeCommande,
                         salesOrg = "MA18",
 
@@ -449,7 +450,7 @@ ORDER BY Id DESC;
                         soldTo = (r.CodeSapClient ?? "").PadLeft(10, '0'),
                         shipTo = (r.CodeSapChantier ?? "").PadLeft(10, '0'),
 
-                        reqDate = DateTime.Now.ToString("yyyy-MM-dd"),
+                        reqDate = MoroccoClock.Now.ToString("yyyy-MM-dd"),
                         reqQty = qty1,
                         reqQty2 = qty2,
 
@@ -468,7 +469,7 @@ ORDER BY Id DESC;
                     sapBody = new
                     {
                         codeClient = (r.CodeSapClient ?? "").PadLeft(10, '0'),
-                        date = DateTime.Now.ToString("yyyy-MM-dd"),
+                        date = MoroccoClock.Now.ToString("yyyy-MM-dd"),
                         purchNoC = r.BonDeCommande,
                         salesOrg = "MA18",
 
@@ -482,7 +483,7 @@ ORDER BY Id DESC;
                         soldTo = (r.CodeSapClient ?? "").PadLeft(10, '0'),
                         shipTo = (r.CodeSapChantier ?? "").PadLeft(10, '0'),
 
-                        reqDate = DateTime.Now.ToString("yyyy-MM-dd"),
+                        reqDate = MoroccoClock.Now.ToString("yyyy-MM-dd"),
                         reqQty = qty1,
 
                         behaveWhenError = "",
