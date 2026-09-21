@@ -34,6 +34,9 @@ public static class QueueSnapshot
         public int Step { get; set; }
         public string? TruckType { get; set; }
         public DateTime ParkingAt { get; set; }
+        // Heure d'affectation de la commande (write-once, kiosk merge ou affectation web).
+        // Null si la sp n'expose pas encore la colonne → fallback AddedToQueueAt/ParkingAt.
+        public DateTime? DateAffectation { get; set; }
         public string ChauffeurName { get; set; }
         public string? TypeProduit {  get; set; }
 
@@ -55,7 +58,10 @@ public static class QueueSnapshot
         // Physical scan/parking time. Sent so the dashboard can fall back to it for
         // FIFO ordering when AddedToQueueAt is null (e.g. unmerged SAP rows), matching
         // the backend ResolveQueueTimestamp fallback chain.
-        DateTime ParkingAt
+        DateTime ParkingAt,
+        // Heure d'affectation de la commande — clé de tri prioritaire côté dashboard,
+        // même chaîne de fallback que ResolveQueueTimestamp.
+        DateTime? DateAffectation
     );
 
     public sealed record QueueGroup(
@@ -88,6 +94,12 @@ public static class QueueSnapshot
     {
         if (row.FirstPlaceAt.HasValue)
             return row.FirstPlaceAt.Value;
+
+        // Priorité à l'heure d'affectation de la commande : l'ordre de traitement suit
+        // l'ordre réel d'affectation (CFR/Rendu comme EXW/Départ), pas l'heure de
+        // pointage physique au parking.
+        if (row.DateAffectation.HasValue)
+            return row.DateAffectation.Value;
 
         if (row.AddedToQueueAt != default)
             return row.AddedToQueueAt;
@@ -174,7 +186,8 @@ public static class QueueSnapshot
                 r.TruckType,
                 r.ChauffeurName,
                 r.TypeProduit,
-                r.ParkingAt))
+                r.ParkingAt,
+                r.DateAffectation))
             .ToList();
 
 
@@ -182,7 +195,7 @@ public static class QueueSnapshot
         var enValidationSac = OrderForQueue(rows
             .Where(r => r.Produit1 is null && r.TruckType != null &&
                         !r.TruckType.Equals("Citerne", StringComparison.OrdinalIgnoreCase)))
-            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit, r.ParkingAt))
+            .Select(r => new QueueItem(r.Matricule, null, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit, r.ParkingAt, r.DateAffectation))
             .ToList();
 
         /* ============================================================
@@ -194,7 +207,7 @@ public static class QueueSnapshot
                 .Select(g =>
                 {
                     var items = OrderForQueue(g)
-                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit, r.ParkingAt))
+                                 .Select(r => new QueueItem(r.Matricule, r.Produit1, r.IsPined, r.PinedAt, r.AddedToQueueAt, r.FirstPlaceAt, r.TimeElapsedInFirstPlace, r.TruckType, r.ChauffeurName, r.TypeProduit, r.ParkingAt, r.DateAffectation))
                                  .ToList();
 
                     // Compute capacity per physical loading line/family.

@@ -5,13 +5,16 @@ namespace Ecare.Application.Tests;
 public class QueueOrderingTests
 {
     private static QueueSnapshot.LegendRow Row(
-        int id, DateTime addedToQueueAt, bool pinned = false, DateTime? pinedAt = null)
+        int id, DateTime addedToQueueAt, bool pinned = false, DateTime? pinedAt = null,
+        DateTime? dateAffectation = null, DateTime parkingAt = default)
         => new()
         {
             Id = id,
             AddedToQueueAt = addedToQueueAt,
             IsPined = pinned,
             PinedAt = pinedAt,
+            DateAffectation = dateAffectation,
+            ParkingAt = parkingAt,
         };
 
     [Fact]
@@ -47,6 +50,36 @@ public class QueueOrderingTests
         var ordered = QueueSnapshot.OrderForQueue(new[] { unpinnedEarly, pinnedLate }).ToList();
 
         Assert.Equal(new[] { 2, 1 }, ordered.Select(r => r.Id));
+    }
+
+    [Fact]
+    public void Affectation_time_beats_queue_and_parking_time()
+    {
+        // CFR affectée à 10h00 mais camion pointé tôt (file à 08h00) vs
+        // EXW affectée à 09h00, camion pointé après (file à 10h30) :
+        // l'ordre réel de traitement suit l'heure d'affectation → EXW d'abord.
+        var cfrAffecteeTard = Row(1, new DateTime(2026, 9, 21, 8, 0, 0),
+            dateAffectation: new DateTime(2026, 9, 21, 10, 0, 0));
+        var exwAffecteeTot = Row(2, new DateTime(2026, 9, 21, 10, 30, 0),
+            dateAffectation: new DateTime(2026, 9, 21, 9, 0, 0));
+
+        var ordered = QueueSnapshot.OrderForQueue(new[] { cfrAffecteeTard, exwAffecteeTot }).ToList();
+
+        Assert.Equal(new[] { 2, 1 }, ordered.Select(r => r.Id));
+    }
+
+    [Fact]
+    public void Missing_affectation_falls_back_to_queue_then_parking_time()
+    {
+        // Ligne historique sans DateAffectation (sp pas encore migrée) : comportement inchangé.
+        var sansAffectation = Row(1, new DateTime(2026, 9, 21, 9, 0, 0));
+        var avecAffectation = Row(2, default,
+            dateAffectation: new DateTime(2026, 9, 21, 9, 30, 0),
+            parkingAt: new DateTime(2026, 9, 21, 9, 30, 0));
+
+        var ordered = QueueSnapshot.OrderForQueue(new[] { avecAffectation, sansAffectation }).ToList();
+
+        Assert.Equal(new[] { 1, 2 }, ordered.Select(r => r.Id));
     }
 
     [Fact]
