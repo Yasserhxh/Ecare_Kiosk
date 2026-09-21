@@ -67,7 +67,7 @@ namespace Ecare.Application.Queries.GetLegendById
                 , [FirstPlaceAt]
                 , [TimeElapsedInFirstPlace]
                 , [CreatedAt]
-                , [DateAffectation]
+                , COALESCE([DateAffectation], [ParkingAt]) AS [DateAffectation] -- Depart EXW : affectation = pointage parking
                 , [BonDeCommande]
                 , [Ligne]
                 , [ChequeImg]

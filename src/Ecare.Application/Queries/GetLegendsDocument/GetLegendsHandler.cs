@@ -60,7 +60,11 @@ namespace Ecare.Application.Queries.GetLegendsDocument
                       TypeProduit, CodeClientSAP, CodeProduitSAP,
                       PremierePoid, DeuxiemePoid,
                       ParkingAt, PabEntryAt, StartChargingAt, FinishedChargingAt, PabExitAt,
-                      BonDeLivraison, CreatedAt, DateAffectation, BonDeCommande, Ligne,
+                      BonDeLivraison, CreatedAt,
+                      -- Depart EXW : l'affectation se fait au pointage parking, les lignes
+                      -- anterieures au dual write-once n'ont pas de DateAffectation propre.
+                      COALESCE(DateAffectation, ParkingAt) AS DateAffectation,
+                      BonDeCommande, Ligne,
                       ExtraSac, PlusBags, MinusBags, StartExtraSac, EndExtraSac,
                       SacNumber, NumberSacs_Charged, Weight_Charged, Status
                 FROM Ecare_Order_Legend
