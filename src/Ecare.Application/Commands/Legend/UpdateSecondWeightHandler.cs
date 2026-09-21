@@ -48,6 +48,8 @@ public sealed class BlJson
 {
     public string? Site { get; set; }
     public string? BonDeLivraison { get; set; }
+    // ID interne MyCimar (CommercialOrder), relayé de l'API SAP vers PrintProgramm.
+    public int? IdMyCimar { get; set; }
     public ClientJson? Client { get; set; }
     public TransportJson? Transport { get; set; }
     public PesageJson? Pesage { get; set; }
