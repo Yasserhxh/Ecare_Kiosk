@@ -9,6 +9,8 @@ BEGIN
         OfflineCreatedAt datetime NULL,
         OfflineSyncedAt  datetime NULL;
 END
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_EOL_OfflineStatus')
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_EOL_OfflineStatus' AND object_id = OBJECT_ID('dbo.Ecare_Order_Legend'))
     CREATE INDEX IX_EOL_OfflineStatus ON dbo.Ecare_Order_Legend(OfflineStatus)
         WHERE OfflineStatus IS NOT NULL;
+GO
