@@ -1248,24 +1248,38 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
             var newMatricule = request.Matricule?.Trim();
             var newChauffeurName = request.ChauffeurName?.Trim();
             var newPermisDeConduite = request.PermisDeConduite?.Trim();
+            var newTransporteurName = request.TransporteurName?.Trim();
+            var newCodeTransporteurSap = request.CodeTransporteurSap?.Trim();
 
             if (string.IsNullOrWhiteSpace(newCard) &&
                 string.IsNullOrWhiteSpace(newMatricule) &&
                 string.IsNullOrWhiteSpace(newChauffeurName) &&
-                string.IsNullOrWhiteSpace(newPermisDeConduite))
+                string.IsNullOrWhiteSpace(newPermisDeConduite) &&
+                string.IsNullOrWhiteSpace(newTransporteurName) &&
+                string.IsNullOrWhiteSpace(newCodeTransporteurSap))
             {
                 return Results.BadRequest(new { message = "Aucune information a modifier n'a ete fournie." });
             }
 
             const string updateSql = """
                 DECLARE @CurrentStep int;
+                DECLARE @HasFirstWeigh bit = 0;
+                DECLARE @IsRendu bit = 0;
                 DECLARE @ResolvedPTAC decimal(18, 3);
                 DECLARE @ResolvedTARE decimal(18, 3);
                 DECLARE @ResolvedTruckType nvarchar(255);
+                DECLARE @ResolvedTransporteurName nvarchar(255);
+                DECLARE @ResolvedCodeTransporteurSap nvarchar(100);
 
-                SELECT @CurrentStep = ISNULL(Step, 0)
-                FROM dbo.Ecare_Order_Legend
-                WHERE Id = @Id;
+                SELECT
+                    @CurrentStep = ISNULL(l.Step, 0),
+                    @HasFirstWeigh = CASE WHEN l.PremierePoid IS NOT NULL OR l.PabEntryAt IS NOT NULL THEN 1 ELSE 0 END,
+                    -- Rendu (CFR) = mode delivery sur la commande liée (commerciale ou portail).
+                    @IsRendu = CASE WHEN LOWER(LTRIM(RTRIM(ISNULL(co.ModeDelivraison, o.ModeDelivraison)))) = 'delivery' THEN 1 ELSE 0 END
+                FROM dbo.Ecare_Order_Legend l
+                LEFT JOIN dbo.Ecare_CommercialOrders co ON co.Id = l.CommercialOrderId
+                LEFT JOIN dbo.Orders o ON o.Id = l.OrderId
+                WHERE l.Id = @Id;
 
                 IF @CurrentStep IS NULL
                 BEGIN
@@ -1276,6 +1290,14 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 IF @CurrentStep > 1
                 BEGIN
                     SELECT CAST(-2 AS int) AS ResultCode;
+                    RETURN;
+                END
+
+                -- Changement de transporteur : commandes Rendu (CFR) uniquement, avant 1ère pesée.
+                IF (NULLIF(@TransporteurName, '') IS NOT NULL OR NULLIF(@CodeTransporteurSap, '') IS NOT NULL)
+                   AND (@IsRendu = 0 OR @HasFirstWeigh = 1)
+                BEGIN
+                    SELECT CAST(-3 AS int) AS ResultCode;
                     RETURN;
                 END
 
@@ -1290,6 +1312,16 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                     ORDER BY
                         CASE WHEN ISNULL(IsClient, 0) = 0 AND ISNULL(IsTransporteur, 0) = 0 AND ISNULL(IsDriver, 0) = 0 THEN 0 ELSE 1 END,
                         Id DESC;
+
+                    -- Transporteur lié au matricule (équipement transporteur) : fallback
+                    -- automatique si l'utilisateur n'a pas saisi/corrigé le transporteur.
+                    SELECT TOP (1)
+                        @ResolvedTransporteurName = TransporteurName,
+                        @ResolvedCodeTransporteurSap = CodeTransporteurSapCimar
+                    FROM dbo.Ecare_ClientEquipements
+                    WHERE LTRIM(RTRIM(ISNULL(Matricule, ''))) = @Matricule
+                      AND ISNULL(IsTransporteur, 0) = 1
+                    ORDER BY Id DESC;
                 END
 
                 UPDATE dbo.Ecare_Order_Legend
@@ -1299,7 +1331,13 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                     PermisDeConduite = COALESCE(NULLIF(@PermisDeConduite, ''), PermisDeConduite),
                     PTAC = COALESCE(@ResolvedPTAC, PTAC),
                     TARE = COALESCE(@ResolvedTARE, TARE),
-                    TypeCamion = COALESCE(NULLIF(@ResolvedTruckType, ''), TypeCamion)
+                    TypeCamion = COALESCE(NULLIF(@ResolvedTruckType, ''), TypeCamion),
+                    TransporteurName = CASE WHEN @IsRendu = 1
+                        THEN COALESCE(NULLIF(@TransporteurName, ''), NULLIF(@ResolvedTransporteurName, ''), TransporteurName)
+                        ELSE TransporteurName END,
+                    CodeTransporteurSap = CASE WHEN @IsRendu = 1
+                        THEN COALESCE(NULLIF(@CodeTransporteurSap, ''), NULLIF(@ResolvedCodeTransporteurSap, ''), CodeTransporteurSap)
+                        ELSE CodeTransporteurSap END
                 WHERE Id = @Id
                   AND ISNULL(Step, 0) <= 1;
 
@@ -1343,7 +1381,9 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                     RfidHex = newHex,
                     Matricule = newMatricule,
                     ChauffeurName = newChauffeurName,
-                    PermisDeConduite = newPermisDeConduite
+                    PermisDeConduite = newPermisDeConduite,
+                    TransporteurName = newTransporteurName,
+                    CodeTransporteurSap = newCodeTransporteurSap
                 }, cancellationToken: ct));
 
             if (updated == 0)
@@ -1351,6 +1391,9 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
 
             if (updated == -2)
                 return Results.Conflict(new { message = "Modification autorisee uniquement aux etapes 0 et 1." });
+
+            if (updated == -3)
+                return Results.Conflict(new { message = "Le changement de transporteur est reserve aux commandes Rendu (CFR) avant la premiere pesee." });
 
             return Results.Ok(new
             {
@@ -1360,6 +1403,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 matricule = newMatricule,
                 chauffeurName = newChauffeurName,
                 permisDeConduite = newPermisDeConduite,
+                transporteurName = newTransporteurName,
+                codeTransporteurSap = newCodeTransporteurSap,
                 message = "Informations chauffeur et carte du document mises a jour avec succes."
             });
         })
@@ -1547,6 +1592,10 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         public string? Matricule { get; set; }
         public string? ChauffeurName { get; set; }
         public string? PermisDeConduite { get; set; }
+        // Modification d'affectation CFR (Rendu) avant 1ère pesée : transporteur
+        // vérifié/corrigé par l'utilisateur. Ignorés/refusés pour les commandes Départ.
+        public string? TransporteurName { get; set; }
+        public string? CodeTransporteurSap { get; set; }
     }
 
     public sealed class UpdateCommercialAnnulationRequest
