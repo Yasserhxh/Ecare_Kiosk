@@ -214,6 +214,10 @@ try
         client.Timeout = TimeSpan.FromSeconds(60);
     });
 
+    // Named client used by UpdateSecondWeightHandler and ReprintBonLivraisonHandler.
+    // 15 s timeout: avoids blocking the truck at the bridge when SAP is slow.
+    builder.Services.AddHttpClient("SapShipment", c => c.Timeout = TimeSpan.FromSeconds(15));
+
     builder.Services.AddHostedService<OrderLegendSyncBackgroundService>();
     // ---------------------------------------------------------
     // Build + middleware

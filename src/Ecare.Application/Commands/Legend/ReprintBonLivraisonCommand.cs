@@ -65,7 +65,8 @@ public sealed class ReprintBonLivraisonHandler
                         Quantite2,
                         TypeProduit,
                         PTAC,
-                        TARE
+                        TARE,
+                        ISNULL(IsOffline, 0) AS IsOffline
                     FROM dbo.Ecare_Order_Legend
                     WHERE Id = @Id;
                     """,
@@ -76,6 +77,60 @@ public sealed class ReprintBonLivraisonHandler
                 return Result<BlJson>.Fail("LEGEND_NOT_FOUND");
 
             BlJson? shipment;
+
+            // ── Offline branch ────────────────────────────────────────────────────
+            // When IsOffline=1 and BonDeLivraison is still empty we must NOT call
+            // SAP — the truck has already exited with a provisional BL.
+            // Instead build the payload locally from the legend data and broadcast.
+            if (legend.IsOffline && string.IsNullOrWhiteSpace(legend.BonDeLivraison))
+            {
+                var snap = await conn.QuerySingleOrDefaultAsync<OfflineLegendSnapshot>(
+                    new CommandDefinition(
+                        """
+                        SELECT TOP (1)
+                            Site,
+                            ClientName,
+                            Chantier,
+                            BonDeCommande,
+                            CodeSapClient,
+                            Matricule,
+                            ChauffeurName,
+                            TransporteurName,
+                            PermisDeConduite,
+                            Plombs,
+                            TypeProduit,
+                            CodeSapProduit1,
+                            CodeSapProduit2,
+                            Produit1,
+                            Produit2,
+                            Quantite1,
+                            Quantite2,
+                            SacNumber,
+                            PremierePoid,
+                            DeuxiemePoid,
+                            PabEntryAt,
+                            PabExitAt,
+                            NumberSacs_Charged,
+                            Weight_Charged
+                        FROM dbo.Ecare_Order_Legend
+                        WHERE Id = @LegendId
+                        """,
+                        new { LegendId = request.Id },
+                        cancellationToken: ct));
+
+                var provisionalPayload = UpdateSecondWeightHandler.BuildProvisionalBlPayload(request.Id, snap);
+
+                await SignalRHelper.BroadcastAsync(
+                    _signalR,
+                    _opt.Hub,
+                    _opt.Method,
+                    provisionalPayload,
+                    _log,
+                    ct);
+
+                return Result<BlJson>.Ok(provisionalPayload);
+            }
+            // ── End offline branch ────────────────────────────────────────────────
 
             if (!string.IsNullOrWhiteSpace(legend.BonDeLivraison))
             {
@@ -303,6 +358,7 @@ public sealed class ReprintBonLivraisonHandler
         public string? TypeProduit { get; init; }
         public int? PTAC { get; init; }
         public int? TARE { get; init; }
+        public bool IsOffline { get; init; }
     }
 
     private static string? ValidateSecondWeightForBl(ReprintLegendRow legend)
