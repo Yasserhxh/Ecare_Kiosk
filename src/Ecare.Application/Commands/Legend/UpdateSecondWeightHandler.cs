@@ -395,6 +395,9 @@ public sealed class UpdateSecondWeightHandler
             //    ANY failure → provisional path: truck always exits.
             BlJson? shipment = null;
             bool sapSucceeded = false;
+            // Snapshot loaded eagerly on the sync-success path so the provisional block can
+            // reuse it without issuing a second SELECT.
+            OfflineLegendSnapshot? cachedSnap = null;
 
             var target = OfflineSecondWeightRules.ResolveSapTarget(order.IsOffline);
 
@@ -418,14 +421,48 @@ public sealed class UpdateSecondWeightHandler
                             await PersistShipmentAndReleaseCapacityAsync(
                                 conn, legendId, syncResult.BonDeLivraison, ct);
 
-                            // Build a minimal BlJson from the sync response for printing.
-                            // (The sync endpoint does not return the full BL payload, so we
-                            //  use null for fields not available and let the printer use IdMyCimar.)
-                            shipment = new BlJson
-                            {
-                                BonDeLivraison = syncResult.BonDeLivraison,
-                                IdMyCimar = legendId
-                            };
+                            // Load the snapshot now so the provisional SELECT below is skipped,
+                            // and build the full BL payload (client/transport/pesage/produits).
+                            // Then stamp the real BonDeLivraison from SAP so the printer renders
+                            // a complete, normal BL — not a provisional one.
+                            cachedSnap = await conn.QuerySingleOrDefaultAsync<OfflineLegendSnapshot>(
+                                new CommandDefinition(
+                                    """
+                                    SELECT TOP (1)
+                                        Site,
+                                        ClientName,
+                                        Chantier,
+                                        BonDeCommande,
+                                        CodeSapClient,
+                                        Matricule,
+                                        ChauffeurName,
+                                        TransporteurName,
+                                        PermisDeConduite,
+                                        Plombs,
+                                        TypeProduit,
+                                        CodeSapProduit1,
+                                        CodeSapProduit2,
+                                        Produit1,
+                                        Produit2,
+                                        Quantite1,
+                                        Quantite2,
+                                        SacNumber,
+                                        PremierePoid,
+                                        DeuxiemePoid,
+                                        PabEntryAt,
+                                        PabExitAt,
+                                        NumberSacs_Charged,
+                                        Weight_Charged
+                                    FROM dbo.Ecare_Order_Legend
+                                    WHERE Id = @LegendId
+                                    """,
+                                    new { LegendId = legendId },
+                                    cancellationToken: ct));
+
+                            shipment = BuildProvisionalBlPayload(legendId, cachedSnap);
+                            // Override the null BonDeLivraison with the real SAP number so the
+                            // printer knows this is a fully-synced BL, not a provisional one.
+                            shipment.BonDeLivraison = syncResult.BonDeLivraison;
                             sapSucceeded = true;
                         }
                         else
@@ -558,7 +595,9 @@ public sealed class UpdateSecondWeightHandler
             else
             {
                 // Provisional path: build BL payload locally (BonDeLivraison=null, IdMyCimar=legendId).
-                var snap = await conn.QuerySingleOrDefaultAsync<OfflineLegendSnapshot>(
+                // Reuse cachedSnap if it was already loaded on the sync-success path above;
+                // otherwise fetch it now (normal offline failures and normal-path failures).
+                var snap = cachedSnap ?? await conn.QuerySingleOrDefaultAsync<OfflineLegendSnapshot>(
                     new CommandDefinition(
                         """
                         SELECT TOP (1)
@@ -682,7 +721,8 @@ public sealed class UpdateSecondWeightHandler
     /// Marks the legend as offline-provisional (no BonDeLivraison, IsSynced remains 0).
     /// Status='Completed' and Step=5 were already set by the main UPDATE above.
     /// Sets IsOffline=1, OfflineStatus, OfflineSyncError, OfflineCreatedAt=COALESCE(existing,@now).
-    /// Also releases line capacity (same logic as PersistShipmentAndReleaseCapacityAsync).
+    /// Note: capacity release (RealtimeCapacity increment) is performed by the initial weight UPDATE
+    /// at the top of Handle — this method does NOT touch RealtimeCapacity.
     /// </summary>
     private static async Task MarkOfflineProvisionalAsync(
         SqlConnection conn,
