@@ -219,6 +219,34 @@ try
     builder.Services.AddHttpClient("SapShipment", c => c.Timeout = TimeSpan.FromSeconds(15));
 
     builder.Services.AddHostedService<OrderLegendSyncBackgroundService>();
+
+    // ---------------------------------------------------------
+    // Alerte « camion en dépassement (> 75 min dans l'usine) »
+    // E-mail via Azure AD / Microsoft Graph (même app registration que mycimar-web-client).
+    // Registration conditionnelle : si les identifiants Graph sont absents, on n'enregistre
+    // ni le client MSAL ni le worker → l'app démarre normalement (pas de crash au boot).
+    // ---------------------------------------------------------
+    var overstayEnabled = cfg.GetValue("OverstayAlert:Enabled", true);
+    var mailClientId = cfg["AzureAdMail:ClientId"];
+    if (overstayEnabled && !string.IsNullOrWhiteSpace(mailClientId))
+    {
+        builder.Services.Configure<Ecare.Application.Services.Alerts.OverstayAlertOptions>(
+            cfg.GetSection("OverstayAlert"));
+        builder.Services.AddSingleton<Microsoft.Identity.Client.IConfidentialClientApplication>(_ =>
+            Microsoft.Identity.Client.ConfidentialClientApplicationBuilder
+                .Create(mailClientId)
+                .WithClientSecret(cfg["AzureAdMail:ClientSecret"])
+                .WithAuthority(new Uri($"https://login.microsoftonline.com/{cfg["AzureAdMail:TenantId"]}"))
+                .Build());
+        builder.Services.AddSingleton<Ecare.Infrastructure.Email.IEmailSender, Ecare.Infrastructure.Email.GraphEmailSender>();
+        builder.Services.AddHostedService<OverstayAlertBackgroundService>();
+        Console.WriteLine("✓ Alerte dépassement camion activée");
+    }
+    else
+    {
+        Console.WriteLine("⚠ Alerte dépassement camion NON activée (OverstayAlert:Enabled=false ou AzureAdMail:ClientId manquant)");
+    }
+
     // ---------------------------------------------------------
     // Build + middleware
     // ---------------------------------------------------------
