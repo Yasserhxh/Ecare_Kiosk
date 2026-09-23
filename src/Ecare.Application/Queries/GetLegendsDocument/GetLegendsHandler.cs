@@ -66,7 +66,8 @@ namespace Ecare.Application.Queries.GetLegendsDocument
                       COALESCE(DateAffectation, ParkingAt) AS DateAffectation,
                       BonDeCommande, Ligne,
                       ExtraSac, PlusBags, MinusBags, StartExtraSac, EndExtraSac,
-                      SacNumber, NumberSacs_Charged, Weight_Charged, Status
+                      SacNumber, NumberSacs_Charged, Weight_Charged, Status,
+                      ISNULL(IsOffline,0) AS IsOffline, OfflineStatus, OfflineSyncError
                 FROM Ecare_Order_Legend
                 {where}
                 ORDER BY CreatedAt DESC

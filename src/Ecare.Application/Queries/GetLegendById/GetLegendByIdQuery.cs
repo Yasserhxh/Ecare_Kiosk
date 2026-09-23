@@ -114,5 +114,10 @@ namespace Ecare.Application.Queries.GetLegendById
 
         // Tare relevée par la bascule du point de chargement VRAC (comparaison PremierePoid)
         public int? LoadingPointTare { get; set; }
+
+        // Flags offline
+        public bool IsOffline { get; set; }
+        public string? OfflineStatus { get; set; }
+        public string? OfflineSyncError { get; set; }
     }
 }

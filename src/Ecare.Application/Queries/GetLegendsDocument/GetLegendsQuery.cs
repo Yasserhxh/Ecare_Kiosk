@@ -50,6 +50,9 @@ namespace Ecare.Application.Queries.GetLegendsDocument
         public int? NumberSacs_Charged { get; set; }
         public decimal? Weight_Charged { get; set; }
         public string? Status { get; set; }
+        public bool IsOffline { get; set; }
+        public string? OfflineStatus { get; set; }
+        public string? OfflineSyncError { get; set; }
     }
 
     public sealed class PagedLegendResult

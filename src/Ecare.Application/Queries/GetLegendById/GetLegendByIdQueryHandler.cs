@@ -99,6 +99,9 @@ namespace Ecare.Application.Queries.GetLegendById
                 , [UserIdAnnulationCommercial]
                 , [IsLowCreditDeliveryRisk]
                 , [LoadingPointTare]
+                , ISNULL([IsOffline],0) AS [IsOffline]
+                , [OfflineStatus]
+                , [OfflineSyncError]
             FROM [dbo].[Ecare_Order_Legend]
             WHERE [Id] = @Id;
             ";
