@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Ecare.Application.Services.Alerts;
 using Xunit;
 
@@ -8,26 +10,44 @@ public class OverstayAlertRulesTests
 {
     // Repère fixe en heure locale Maroc (PabEntryAt est stocké en heure Maroc par le kiosk).
     private static readonly DateTime Now = new(2026, 9, 23, 10, 0, 0);
+    private static readonly int[] Paliers = { 75, 90 };
+
+    private static ISet<int> Sent(params int[] t) => new HashSet<int>(t);
 
     [Fact]
-    public void Pas_de_premiere_pesee_pas_de_depassement()
-        => Assert.False(OverstayAlertRules.IsOverstaying(null, null, Now, 75));
+    public void Pas_de_premiere_pesee_aucun_palier()
+        => Assert.Empty(OverstayAlertRules.StagesToSend(null, null, Now, Paliers, Sent()));
 
     [Fact]
-    public void Deuxieme_pesee_faite_pas_de_depassement()
-        => Assert.False(OverstayAlertRules.IsOverstaying(Now.AddMinutes(-120), 30000, Now, 75));
+    public void Deuxieme_pesee_faite_aucun_palier()
+        => Assert.Empty(OverstayAlertRules.StagesToSend(Now.AddMinutes(-120), 30000, Now, Paliers, Sent()));
 
     [Fact]
-    public void Sous_le_seuil_pas_de_depassement()
-        => Assert.False(OverstayAlertRules.IsOverstaying(Now.AddMinutes(-74), null, Now, 75));
+    public void Sous_le_premier_seuil_aucun_palier()
+        => Assert.Empty(OverstayAlertRules.StagesToSend(Now.AddMinutes(-60), null, Now, Paliers, Sent()));
 
     [Fact]
-    public void Au_seuil_exact_pas_encore_depassement()
-        => Assert.False(OverstayAlertRules.IsOverstaying(Now.AddMinutes(-75), null, Now, 75));
+    public void Au_seuil_exact_pas_encore_declenche()
+        => Assert.Empty(OverstayAlertRules.StagesToSend(Now.AddMinutes(-75), null, Now, Paliers, Sent()));
 
     [Fact]
-    public void Au_dela_du_seuil_depassement()
-        => Assert.True(OverstayAlertRules.IsOverstaying(Now.AddMinutes(-76), null, Now, 75));
+    public void Au_dela_de_75_declenche_seulement_75()
+        => Assert.Equal(new[] { 75 },
+            OverstayAlertRules.StagesToSend(Now.AddMinutes(-80), null, Now, Paliers, Sent()).ToArray());
+
+    [Fact]
+    public void Palier_75_deja_envoye_ne_renvoie_rien_avant_90()
+        => Assert.Empty(OverstayAlertRules.StagesToSend(Now.AddMinutes(-80), null, Now, Paliers, Sent(75)));
+
+    [Fact]
+    public void Au_dela_de_90_avec_75_deja_envoye_declenche_90()
+        => Assert.Equal(new[] { 90 },
+            OverstayAlertRules.StagesToSend(Now.AddMinutes(-95), null, Now, Paliers, Sent(75)).ToArray());
+
+    [Fact]
+    public void Worker_rate_les_deux_paliers_les_envoie_ensemble()
+        => Assert.Equal(new[] { 75, 90 },
+            OverstayAlertRules.StagesToSend(Now.AddMinutes(-95), null, Now, Paliers, Sent()).ToArray());
 
     [Fact]
     public void ElapsedMinutes_arrondi_a_la_minute()

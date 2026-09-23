@@ -13,14 +13,26 @@ namespace Ecare.Application.Services.Alerts;
 public static class OverstayAlertRules
 {
     /// <summary>
-    /// Vrai si le camion est entré (1ère pesée faite), pas encore sorti (2ème pesée absente),
-    /// et présent depuis strictement plus de <paramref name="thresholdMinutes"/> minutes.
+    /// Paliers d'alerte (ex. 75 puis 90 min) à envoyer maintenant pour ce camion :
+    /// franchis (durée écoulée &gt; palier) mais pas encore notifiés. Vide si le camion
+    /// n'est pas entré (pas de 1ère pesée) ou déjà sorti (2ème pesée faite). Trié croissant.
+    /// Renvoyer plusieurs paliers d'un coup couvre le cas d'un worker resté indisponible.
     /// </summary>
-    public static bool IsOverstaying(DateTime? pabEntryAt, int? deuxiemePoid, DateTime nowLocal, int thresholdMinutes)
+    public static IReadOnlyList<int> StagesToSend(
+        DateTime? pabEntryAt,
+        int? deuxiemePoid,
+        DateTime nowLocal,
+        IEnumerable<int> thresholds,
+        ISet<int> alreadySent)
     {
-        if (pabEntryAt is null) return false;   // pas encore de 1ère pesée → pas dans l'usine
-        if (deuxiemePoid is not null) return false; // 2ème pesée faite → déjà sorti
-        return (nowLocal - pabEntryAt.Value).TotalMinutes > thresholdMinutes;
+        if (pabEntryAt is null || deuxiemePoid is not null)
+            return Array.Empty<int>();
+
+        var elapsed = ElapsedMinutes(pabEntryAt.Value, nowLocal);
+        return thresholds
+            .Where(t => elapsed > t && !alreadySent.Contains(t))
+            .OrderBy(t => t)
+            .ToList();
     }
 
     /// <summary>Minutes écoulées depuis la 1ère pesée, arrondies à la minute.</summary>

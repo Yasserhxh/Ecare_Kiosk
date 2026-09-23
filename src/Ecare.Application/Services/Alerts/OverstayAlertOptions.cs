@@ -11,8 +11,11 @@ public sealed class OverstayAlertOptions
     /// <summary>Active/désactive le worker d'alerte.</summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Seuil de présence dans l'usine avant alerte, en minutes.</summary>
-    public int ThresholdMinutes { get; set; } = 75;
+    /// <summary>
+    /// Paliers d'alerte, en minutes (une alerte par palier et par camion).
+    /// Défaut : 75 min puis 90 min.
+    /// </summary>
+    public List<int> Thresholds { get; set; } = new() { 75, 90 };
 
     /// <summary>Fréquence de scan, en minutes.</summary>
     public int PollIntervalMinutes { get; set; } = 5;
