@@ -357,6 +357,10 @@ try
     app.MapDeviceEndpoints();
     app.MapEcareEngineEndpoints();
     app.MapAuthEndpoints();
+    // I2: Validate Spa:BaseUrl is present at startup so a missing key fails fast with a clear message
+    // rather than an NRE per-request in /auth/sso/complete.
+    _ = app.Configuration["Spa:BaseUrl"]
+        ?? throw new InvalidOperationException("Spa:BaseUrl is required for SSO (appsettings.json or env var).");
     app.MapSsoEndpoints();
     app.MapBlobEndpoints();
     app.MapDriversEndpoints();
