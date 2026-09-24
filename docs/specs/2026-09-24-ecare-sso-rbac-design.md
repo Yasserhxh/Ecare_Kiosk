@@ -8,13 +8,17 @@
 
 ## 1. Goal
 
-1. **SSO** — replace Ecare's username/password login with Azure AD (Entra) SSO, replicating the
-   working pattern in `mycimar-web-client` (Microsoft.Identity.Web OpenID Connect, match Azure email
-   against the shared `AspNetUsers`, roles from the shared `AspNetUserRoles`). This is Excel row R14
-   *"Activation SSO CIMAR FLOW → désactivation auth pwd"*.
+1. **SSO** — **add** Azure AD (Entra) SSO login to Ecare *alongside* the existing username/password
+   login (not a replacement), replicating the working pattern in `mycimar-web-client`
+   (Microsoft.Identity.Web OpenID Connect, match Azure email against the shared `AspNetUsers`, roles
+   from the shared `AspNetUserRoles`). Password login keeps working exactly as today. Excel row R14
+   *"désactivation auth pwd"* is therefore an **optional, deferred** switch, not the delivered end
+   state — both auth methods coexist.
 2. **RBAC** — enforce the read/write permission matrix (Sheet "Matrice Accès") across four profils:
    **Agent de Guichet**, **Logistique**, **Expédition**, **Admin IT** — on Ecare_Kiosk endpoints and
-   in the Ecare-FrontUi.
+   in the Ecare-FrontUi. **Enforcement applies to SSO-authenticated sessions only** for this delivery;
+   password sessions keep today's unrestricted behavior (see Decisions). RBAC becomes universal later
+   when password login is retired.
 
 ## 2. Key facts established during exploration
 
@@ -63,6 +67,11 @@
 - **Permission matrix storage:** in code (seeded authorization policies), single source of truth.
 - **Role names (exact strings):** `Agent de Guichet`, `Logistique`, `Expédition`, `Admin IT`
   (Admin IT already exists — reused).
+- **Password vs SSO enforcement:** password logins are **exempt** from RBAC (full/legacy access,
+  `authmethod=pwd`); SSO logins are **enforced** (`authmethod=sso` + `perms`). Future: retire password
+  login → RBAC universal.
+- **Admin role equivalence:** the web-client catalog has both `Admin` and `Admin IT`. Both map to the
+  **Admin IT** permission set in Ecare.
 
 ## 4. The permission matrix (from Sheet "Matrice Accès")
 
@@ -107,8 +116,19 @@ double-underscore `AzureAd__ClientSecret`):
   "SigoutcallbackUrl": "/signout-oidc"
 },
 "Spa": { "BaseUrl": "<Ecare-FrontUi origin>" },
-"Auth": { "PasswordLoginEnabled": false }
+"Auth": { "PasswordLoginEnabled": true }
 ```
+
+**Both login methods coexist, but they behave differently (by design):**
+- `POST /auth/login` (**password**) stays fully functional and unchanged. Its JWT carries
+  `authmethod=pwd` and is treated as **full/legacy access** — the RBAC matrix is **not** enforced, so
+  password users get "the system how it is normally" (today's behavior).
+- `GET /auth/sso/login` (**SSO**) is the new path. Its JWT carries `authmethod=sso`, `role`, `VilleId`,
+  `activite`, and the `perms` array — and the **RBAC matrix is enforced**.
+
+`Auth:PasswordLoginEnabled` defaults to `true`. The intended **future** end-state (not this delivery) is
+to set it `false` for Ecare (and retire password login for guichet commercial in web-client), at which
+point RBAC becomes universal because only SSO sessions remain.
 
 **Program.cs** — two coexisting schemes:
 - `JwtBearer` stays the **default** authenticate/challenge scheme (protects `/…` API calls) — unchanged.
@@ -127,16 +147,18 @@ double-underscore `AzureAd__ClientSecret`):
   4. `GetRolesAsync`; resolve the single Ecare profil role,
   5. resolve `VilleId` (`ApplicationUser.Id_Ville`) and `activité`
      (`AspNetRoles_Activités` for the role),
-  6. mint the Ecare JWT via `JwtTokenService`, adding claims `role`, `VilleId`, `activite`, and a
-     `perms` array (from the permission map),
+  6. mint the Ecare JWT via `JwtTokenService`, adding claims `authmethod=sso`, `role`, `VilleId`,
+     `activite`, and a `perms` array (from the permission map); the existing `POST /auth/login` path is
+     updated to add `authmethod=pwd` (and no `perms`, since password sessions are exempt),
   7. store a short-lived (~60 s) **one-time code → JWT** entry (in-memory `IMemoryCache`, single-use),
   8. sign out the transient cookie and redirect to `{Spa:BaseUrl}/auth/callback?code=<code>`.
 - `POST /auth/sso/exchange` `{ code }` → validates + consumes the code, returns
   `{ token, userName, email, role, perms, expiresAt }` (extends the current `AuthResponse`).
 - `GET /auth/sso/logout` → cookie sign-out + Azure AD sign-out (`/signout-oidc`).
 
-**Password login:** `POST /auth/login` is gated behind `Auth:PasswordLoginEnabled` (default `false`).
-Kept only as a rollback switch; returns 404/disabled when off.
+**Password login:** `POST /auth/login` stays **enabled and unchanged** (`Auth:PasswordLoginEnabled`
+default `true`) — password and SSO coexist. The flag only allows turning password login off in the
+future (R14); when off, `/auth/login` returns disabled.
 
 ## 6. Role & permission model — Ecare_Kiosk (in code)
 
@@ -144,9 +166,13 @@ New files in `Ecare.Application` (or a small `Ecare.Security` area):
 - `EcareRoles` — string constants for the 4 role names (exact wording from Section 3).
 - `Permissions` — string constants for every key in the Section-4 table.
 - `PermissionMatrix` — `IReadOnlyDictionary<string, IReadOnlySet<string>>` mapping each role to its
-  permission set, encoding the Section-4 table exactly. **Single source of truth.**
-- `PermissionRequirement : IAuthorizationRequirement` (+ `PermissionAuthorizationHandler`) — checks the
-  caller's role claim(s) against `PermissionMatrix`.
+  permission set, encoding the Section-4 table exactly. **Single source of truth.** `Admin` and
+  `Admin IT` both resolve to the Admin IT set.
+- `PermissionRequirement : IAuthorizationRequirement` (+ `PermissionAuthorizationHandler`) with this
+  logic: (a) if the token's `authmethod == pwd` → **succeed** (password sessions are exempt this
+  delivery); (b) if `authmethod == sso` → succeed only when the required permission is in the caller's
+  `perms` (equivalently, in `PermissionMatrix[role]`). No token → the underlying
+  `RequireAuthorization` returns 401.
 - Startup: register one authorization **policy per permission** named `Perm:<key>` (loop over
   `Permissions`), each backed by a `PermissionRequirement`. Alternatively a single policy provider that
   materializes `Perm:*` policies on demand.
@@ -157,8 +183,11 @@ API share the exact same set without the SPA re-encoding the matrix.
 ## 7. Backend enforcement — Ecare_Kiosk endpoints
 
 - Add `.RequireAuthorization("Perm:<key>")` to the **agent/admin-facing** endpoint groups, mapping each
-  route to its matrix function. Target groups (from `Endpoints/*.cs`): `Order`, `Queue`, `Flux`, `Pab`,
-  `Device`, `Ligne`, `Other`. Exact route→permission assignments are finalized in the implementation
+  route to its matrix function. Because password tokens are exempt in the handler, this is transparent to
+  password users (they still pass) while SSO users are enforced; a caller with **no** token gets 401
+  (the React app always holds a token, so this matches today's logged-in behavior). Target groups (from
+  `Endpoints/*.cs`): `Order`, `Queue`, `Flux`, `Pab`, `Device`, `Ligne`, `Other`. Exact
+  route→permission assignments are finalized in the implementation
   plan by reading each endpoint; the mapping follows Section 4 (e.g. order create/validate/cancel →
   `Perm:Commands.Write`; quantity correction → `Perm:CommandsQuantities.Write`; queue force-call →
   `Perm:ForceCall.Execute`; camion/chauffeur create → `Perm:LogisticsData.Write`; RFID affectation →
@@ -194,10 +223,13 @@ doesn't drop them. Not required for delivery.
 - **New route** `/auth/callback`: reads `code` (or `error`), calls `POST /auth/sso/exchange`, stores
   `{ token, user, perms }` in the existing `localStorage` keys, redirects to the app; on `error=denied`
   shows the mycimar-style "La connexion a échoué / accès non autorisé" message.
-- **`authService`**: add `getPermissions(): string[]` and `hasPermission(key): boolean` (reads `perms`
-  from the stored user / decoded JWT).
+- **`authService`**: add `getAuthMethod()`, `getPermissions(): string[]`, and
+  `hasPermission(key): boolean` where **`authmethod=pwd` ⇒ `hasPermission` returns `true` for
+  everything** (password users see the full UI, matching backend exemption); `authmethod=sso` ⇒ checks
+  the `perms` array.
 - **Route protection**: re-enable `RequireAuth` in `PrivateRoutes.tsx` and add a permission-aware guard
-  (`RequirePermission` wrapper) + conditional rendering to hide/disable actions per `perms`.
+  (`RequirePermission` wrapper) + conditional rendering to hide/disable actions per `hasPermission`.
+  Password sessions pass all permission checks; SSO sessions are gated per the matrix.
 - **401 handling** in `src/api/auth.ts`: repoint the redirect to the SSO login.
 
 ## 10. Error handling
@@ -212,7 +244,9 @@ doesn't drop them. Not required for delivery.
 
 - **Permission map test** — asserts `PermissionMatrix` equals the Section-4 table cell-by-cell (the
   guard against silent drift).
-- **Authorization handler tests** — role X + permission Y → allow/deny per matrix.
+- **Authorization handler tests** — role X + permission Y → allow/deny per matrix; `authmethod=pwd`
+  token → always allowed (exempt); `authmethod=sso` token → enforced; `Admin` and `Admin IT` both get
+  the Admin IT set.
 - **SSO callback handler test** — faked `UserManager`: email→user→JWT happy path; user-not-found,
   inactive, and no-role paths → denied redirect.
 - **One-time-code exchange test** — single-use, expiry.
@@ -226,8 +260,9 @@ doesn't drop them. Not required for delivery.
    Service settings.
 3. Admin IT assigns users to the new roles via mycimar's `Employées` pages.
 4. Deploy Ecare_Kiosk (SSO endpoints live, `PasswordLoginEnabled` still `true`).
-5. Deploy Ecare-FrontUi (SSO login).
-6. Flip `Auth:PasswordLoginEnabled = false` (completes R14).
+5. Deploy Ecare-FrontUi (SSO login button added; password form kept).
+6. *(Optional, deferred — not part of this delivery)* Flip `Auth:PasswordLoginEnabled = false` to
+   complete R14, only if/when the business decides to retire password login.
 
 ## 13. Out of scope
 
