@@ -1,6 +1,7 @@
 ﻿using Azure.Storage.Blobs;
 using Ecare.Api.Endpoints;
 using Ecare.Api.Extensions;
+using Ecare.Api.Security;
 using Ecare.Application;
 using Ecare.Application.Auth.Services;
 using Ecare.Application.Pipelines;
@@ -221,6 +222,8 @@ try
     builder.Services.AddSingleton<IAuthorizationHandler, Ecare.Api.Security.PermissionAuthorizationHandler>();
     builder.Services.AddMemoryCache(); // used by the SSO one-time-code store (Task 6)
     builder.Services.AddScoped<JwtTokenService>();
+    builder.Services.AddScoped<SsoCallbackService>();
+    builder.Services.AddSingleton<OneTimeCodeStore>();
 
     Console.WriteLine("✓ Authentication configured");
 
@@ -354,6 +357,7 @@ try
     app.MapDeviceEndpoints();
     app.MapEcareEngineEndpoints();
     app.MapAuthEndpoints();
+    app.MapSsoEndpoints();
     app.MapBlobEndpoints();
     app.MapDriversEndpoints();
     app.MapTruckEndpoints();
