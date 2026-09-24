@@ -22,12 +22,14 @@ public static class Permissions
     public const string TraceabilityLogsRead    = "TraceabilityLogs.Read";
     public const string LoadingSettingsRead     = "LoadingSettings.Read";
     public const string LoadingSettingsWrite    = "LoadingSettings.Write";
+    public const string AdminRawSql             = "Admin.RawSql";
 
     public static readonly IReadOnlyList<string> All = new[]
     {
         CommandsRead, CommandsWrite, CommandsQuantitiesRead, CommandsQuantitiesWrite,
         FluxStatusRead, ForceCallRead, ForceCallExecute, LogisticsDataRead, LogisticsDataWrite,
         RfidRead, RfidWrite, BaggingRead, BaggingWrite, LoadingQuotasRead, LoadingQuotasWrite,
-        ReportsRead, WeighingRead, TraceabilityLogsRead, LoadingSettingsRead, LoadingSettingsWrite
+        ReportsRead, WeighingRead, TraceabilityLogsRead, LoadingSettingsRead, LoadingSettingsWrite,
+        AdminRawSql
     };
 }

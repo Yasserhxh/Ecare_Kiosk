@@ -48,7 +48,8 @@ public class PermissionMatrixTests
         {
             "Commands.Read","CommandsQuantities.Read","FluxStatus.Read","ForceCall.Read",
             "LogisticsData.Read","Rfid.Read","Bagging.Read","Bagging.Write","LoadingQuotas.Read",
-            "Reports.Read","Weighing.Read","TraceabilityLogs.Read","LoadingSettings.Read"
+            "Reports.Read","Weighing.Read","TraceabilityLogs.Read","LoadingSettings.Read",
+            "Admin.RawSql"
         };
         Assert.Equal(expected, PermissionMatrix.For(EcareRoles.AdminIT).ToHashSet());
     }

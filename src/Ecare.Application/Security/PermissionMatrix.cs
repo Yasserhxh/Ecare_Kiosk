@@ -30,7 +30,8 @@ public static class PermissionMatrix
         {
             P.CommandsRead, P.CommandsQuantitiesRead, P.FluxStatusRead, P.ForceCallRead,
             P.LogisticsDataRead, P.RfidRead, P.BaggingRead, P.BaggingWrite, P.LoadingQuotasRead,
-            P.ReportsRead, P.WeighingRead, P.TraceabilityLogsRead, P.LoadingSettingsRead
+            P.ReportsRead, P.WeighingRead, P.TraceabilityLogsRead, P.LoadingSettingsRead,
+            P.AdminRawSql
         },
     };
 

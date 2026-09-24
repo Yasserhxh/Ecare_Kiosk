@@ -1503,7 +1503,7 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         .WithName("AdminRawSql")
         .WithTags("Admin")
         .WithSummary("Execute a raw SQL query against the database (admin use only)")
-        .RequireAuthorization("Perm:Commands.Write");
+        .RequireAuthorization("Perm:Admin.RawSql");
 
 
         app.MapPost("/ecare/client-equipements", async (
