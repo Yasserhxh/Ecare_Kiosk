@@ -39,7 +39,7 @@ public class LoginHandler(
         var role = roles.FirstOrDefault() ?? "User";
 
         // 6️ Generate JWT
-        var token = jwtService.GenerateToken(user, role);
+        var token = jwtService.GenerateToken(user, role); // defaults to pwd, no perms
 
         return new AuthResponse(
             token,
@@ -47,7 +47,8 @@ public class LoginHandler(
             user.Email!,
             role,
             userId,
-            jwtService.GetExpirationUtc()
-        );
+            jwtService.GetExpirationUtc(),
+            AuthMethod: "pwd",
+            Perms: Array.Empty<string>());
     }
 }
