@@ -16,6 +16,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Identity.Web;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Azure.SignalR.Management;
@@ -160,7 +161,7 @@ try
         .AddEntityFrameworkStores<EcareDbContext>()
         .AddDefaultTokenProviders();
 
-    builder.Services.AddAuthentication(options =>
+    var authBuilder = builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -185,6 +186,35 @@ try
                 ClockSkew = TimeSpan.Zero
             };
         });
+
+    // ---------------------------------------------------------
+    // Azure AD OpenID Connect scheme (for SSO login dance only).
+    // Guarded: a missing ClientID must NOT crash local boot.
+    // JWT stays the default authenticate/challenge scheme for API calls.
+    // ---------------------------------------------------------
+    if (!string.IsNullOrWhiteSpace(cfg["AzureAd:ClientID"]))
+    {
+        authBuilder.AddMicrosoftIdentityWebApp(
+            configureMicrosoftIdentityOptions: options =>
+            {
+                options.Instance = cfg["AzureAd:Instance"]!;
+                options.TenantId = cfg["AzureAd:TenantID"];
+                options.ClientId = cfg["AzureAd:ClientID"];
+                options.ClientSecret = cfg["AzureAd:ClientSecret"];
+                options.CallbackPath = cfg["AzureAd:CallbackUrl"];               // /signin-oidc
+                options.SignedOutCallbackPath = cfg["AzureAd:SigoutcallbackUrl"]; // /signout-oidc
+                options.SignInScheme = Microsoft.AspNetCore.Identity.IdentityConstants.ExternalScheme;
+            },
+            configureCookieAuthenticationOptions: null,
+            openIdConnectScheme: "OpenIdConnect",
+            cookieScheme: "EcareSsoCookie",
+            displayName: null);
+        Console.WriteLine("✓ SSO Azure AD (OpenID Connect) configuré");
+    }
+    else
+    {
+        Console.WriteLine("⚠ SSO non configuré (AzureAd:ClientID manquant)");
+    }
 
     builder.Services.AddAuthorization();
     builder.Services.AddSingleton<IAuthorizationPolicyProvider, Ecare.Api.Security.PermissionPolicyProvider>();
