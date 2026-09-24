@@ -15,6 +15,7 @@ using Ecare.Shared;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Azure.SignalR.Management;
@@ -186,6 +187,9 @@ try
         });
 
     builder.Services.AddAuthorization();
+    builder.Services.AddSingleton<IAuthorizationPolicyProvider, Ecare.Api.Security.PermissionPolicyProvider>();
+    builder.Services.AddSingleton<IAuthorizationHandler, Ecare.Api.Security.PermissionAuthorizationHandler>();
+    builder.Services.AddMemoryCache(); // used by the SSO one-time-code store (Task 6)
     builder.Services.AddScoped<JwtTokenService>();
 
     Console.WriteLine("✓ Authentication configured");
