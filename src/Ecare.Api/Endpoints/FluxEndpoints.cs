@@ -10,7 +10,8 @@ public static class FluxEndpoints
     public static IEndpointRouteBuilder MapFluxEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/flux/qualite", async (IMediator m, CancellationToken ct) =>
-            await m.Send(new GetFluxQualiteQuery(), ct));
+            await m.Send(new GetFluxQualiteQuery(), ct))
+            .RequireAuthorization("Perm:FluxStatus.Read");
 
 
         app.MapPost("/flux", async (CreateFluxEntryCommand c, IMediator m, CancellationToken ct) =>

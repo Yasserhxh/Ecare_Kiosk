@@ -12,19 +12,24 @@ public static class OrderEndpoints
     public static IEndpointRouteBuilder MapOrderEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/orders/confirm", async (ConfirmOrderCommand c, IMediator m) =>
-            await m.Send(c));
+            await m.Send(c))
+            .RequireAuthorization("Perm:Commands.Write");
 
         app.MapPost("/orders/cancel", async (CancelOrderCommand c, IMediator m) =>
-            await m.Send(c));
+            await m.Send(c))
+            .RequireAuthorization("Perm:Commands.Write");
 
         app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, CancellationToken ct) =>
-            await m.Send(c, ct));
+            await m.Send(c, ct))
+            .RequireAuthorization("Perm:Commands.Write");
 
         app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) =>
-            await m.Send(c, ct));
+            await m.Send(c, ct))
+            .RequireAuthorization("Perm:Commands.Write");
 
         app.MapPost("/orders/from-form", async (CreateOrderFromFormCommand c, IMediator m, CancellationToken ct) =>
-            await m.Send(c, ct));
+            await m.Send(c, ct))
+            .RequireAuthorization("Perm:Commands.Write");
 
         app.MapPut("/{orderId:int}/cheque-image",
             async (
@@ -47,7 +52,8 @@ public static class OrderEndpoints
             .WithName("UpdateOrderChequeImage")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .RequireAuthorization("Perm:Commands.Write");
 
 
         //New Confirm Endpoint 

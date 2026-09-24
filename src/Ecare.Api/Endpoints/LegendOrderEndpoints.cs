@@ -43,7 +43,8 @@ public static class LegendOrderEndpoints
                 success = true,
                 value = result.Value
             });
-        });
+        })
+        .RequireAuthorization("Perm:Commands.Write");
 
         group.MapPost("/legend-orders", async (
             CreateLegacyOrderLegendCommand cmd,
@@ -54,7 +55,8 @@ public static class LegendOrderEndpoints
             return result.Success
                 ? Results.Ok(new { id = result.Value })
                 : Results.BadRequest(result.Error);
-        });
+        })
+        .RequireAuthorization("Perm:Commands.Write");
 
         group.MapPost("/legend/first-weight", async (
             UpdateAfterFirstWeightCommand cmd,
@@ -179,7 +181,8 @@ public static class LegendOrderEndpoints
             return result.Success
                 ? Results.Ok(result.Value)
                 : Results.NotFound(result.Error);
-        });
+        })
+        .RequireAuthorization("Perm:Commands.Read");
 
         group.MapPost("/merge/order", async (
             MergeParkingRequest req,
@@ -191,7 +194,8 @@ public static class LegendOrderEndpoints
             return result.Success
                 ? Results.Ok(new { updated = result.Value })
                 : Results.BadRequest(result.Error);
-        });
+        })
+        .RequireAuthorization("Perm:Commands.Write");
 
         group.MapPost("/{id:int}/reprint-bl", async (
             int id,
@@ -211,7 +215,8 @@ public static class LegendOrderEndpoints
                     success = false,
                     error = result.Error
                 });
-        });
+        })
+        .RequireAuthorization("Perm:Commands.Write");
 
         group.MapPost("/legend/{id}/cancel", async (
             int id,
@@ -223,7 +228,8 @@ public static class LegendOrderEndpoints
             return ok
                 ? Results.Ok(new { message = "Legend canceled successfully." })
                 : Results.NotFound(new { message = "Legend not found." });
-        });
+        })
+        .RequireAuthorization("Perm:Commands.Write");
 
         group.MapGet("/legends-documents", async (
             string? clientName,
@@ -243,7 +249,8 @@ public static class LegendOrderEndpoints
             ), ct);
 
             return Results.Ok(result);
-        });
+        })
+        .RequireAuthorization("Perm:Reports.Read");
 
         group.MapPost("/cancel-first-pesage", async (
             int id,
@@ -255,7 +262,8 @@ public static class LegendOrderEndpoints
                 Id = id,
                 FirstPesageCanceledBy = user
             });
-        });
+        })
+        .RequireAuthorization("Perm:Weighing.Read");
 
         group.MapPost("/cancel-second-pesage", async (
             int id,
@@ -267,7 +275,8 @@ public static class LegendOrderEndpoints
                 Id = id,
                 SecondPesageCanceledBy = user
             });
-        });
+        })
+        .RequireAuthorization("Perm:Weighing.Read");
 
         group.MapPut("/{id:int}/modify-quantities", async (
             int id,
@@ -287,7 +296,8 @@ public static class LegendOrderEndpoints
             return result.Success
                 ? Results.Ok(result)
                 : Results.BadRequest(result);
-        });
+        })
+        .RequireAuthorization("Perm:CommandsQuantities.Write");
 
         return app;
     }

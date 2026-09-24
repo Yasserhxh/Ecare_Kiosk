@@ -34,7 +34,8 @@ public static class CementMatrixEndpoints
                 return Results.BadRequest(new { error = result.Error });
 
             return Results.Ok(result.Value);   // CementMatrixVm
-        });
+        })
+        .RequireAuthorization("Perm:Bagging.Read");
 
         group.MapPost("/affect", async (
             AffectCimentToLigneRequest dto,
@@ -60,7 +61,8 @@ public static class CementMatrixEndpoints
                 message = "Produit affecté à la ligne avec succès."
             });
         })
-        .WithName("AffectCimentToLigne");
+        .WithName("AffectCimentToLigne")
+        .RequireAuthorization("Perm:Bagging.Write");
 
         group.MapGet("/lignes-status", async (string? usine, ISender sender, CancellationToken ct) =>
         {
@@ -72,7 +74,8 @@ public static class CementMatrixEndpoints
 
             return Results.Ok(result.Value);
         })
-        .WithName("GetCementLinesFlat");
+        .WithName("GetCementLinesFlat")
+        .RequireAuthorization("Perm:Bagging.Read");
 
         group.MapPost("/{ligneId:int}/toggle-status", async (
             int ligneId,
@@ -98,7 +101,8 @@ public static class CementMatrixEndpoints
                 newStatus = result.Value // 0 ou 1
             });
         })
-        .WithName("ToggleLigneStatus");
+        .WithName("ToggleLigneStatus")
+        .RequireAuthorization("Perm:LoadingSettings.Write");
 
         group.MapPost("/{ligneId:int}/capacity", async (
            int ligneId,
@@ -125,7 +129,8 @@ public static class CementMatrixEndpoints
                 capacity = result.Value
             });
         })
-       .WithName("ChangeLigneCapacity");
+       .WithName("ChangeLigneCapacity")
+       .RequireAuthorization("Perm:LoadingQuotas.Write");
 
         group.MapPost("/{ligneId:int}/realtime-capacity", async (
            int ligneId,
@@ -152,7 +157,8 @@ public static class CementMatrixEndpoints
                 realtimeCapacity = result.Value
             });
         })
-       .WithName("ChangeLigneRealtimeCapacity");
+       .WithName("ChangeLigneRealtimeCapacity")
+       .RequireAuthorization("Perm:LoadingQuotas.Write");
 
         group.MapGet("/cheques", async (
             int page,
@@ -178,7 +184,8 @@ public static class CementMatrixEndpoints
                 data = result.Value // { items, page, pageSize, totalCount }
             });
         })
-        .WithName("GetOrderChequesPaged");
+        .WithName("GetOrderChequesPaged")
+        .RequireAuthorization("Perm:Reports.Read");
 
         app.MapPut("/ligne/{ligneId}/ciment/{cimentId}/toggle",
         async (int ligneId, int cimentId, IMediator mediator) =>
@@ -198,7 +205,8 @@ public static class CementMatrixEndpoints
         .WithName("ToggleLigneCiment")
         .WithTags("Lignes")
         .Produces(StatusCodes.Status200OK)
-        .Produces(StatusCodes.Status400BadRequest);
+        .Produces(StatusCodes.Status400BadRequest)
+        .RequireAuthorization("Perm:Bagging.Write");
 
 
         return app;

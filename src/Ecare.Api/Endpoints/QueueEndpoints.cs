@@ -22,7 +22,8 @@ public static class QueueEndpoints
 
             return Results.Created($"/queue/{result.Value}", new { id = result.Value });
         })
-        .WithName("CreateQueueEntry");
+        .WithName("CreateQueueEntry")
+        .RequireAuthorization("Perm:ForceCall.Execute");
 
         app.MapPost("/queue/toggle-pin/{matricule}", async (string matricule, IMediator mediator, CancellationToken ct) =>
         {
@@ -31,17 +32,20 @@ public static class QueueEndpoints
 
             var res = await mediator.Send(new TogglePinByMatriculeCommand(matricule), ct);
             return res.Success ? Results.Ok(new { affected = res.Value }) : Results.BadRequest(res.Error);
-        });
+        })
+        .RequireAuthorization("Perm:ForceCall.Execute");
 
         app.MapPost("/queue/rebroadcast", async (ServiceManager signalR, IUnitOfWork uow, ILoggerFactory loggerFactory, CancellationToken ct) =>
         {
             var log = loggerFactory.CreateLogger("QueueRebroadcast");
             await QueueSnapshot.BuildAndBroadcastAsync(signalR, uow, log, ct);
             return Results.Ok(new { ok = true, sent = "QueueDataEvent", hub = "queue_data_hub" });
-        });
+        })
+        .RequireAuthorization("Perm:ForceCall.Execute");
 
         app.MapPost("/queue/update-details", async (UpdateQueueDetailsCommand c, IMediator m) =>
-            await m.Send(c));
+            await m.Send(c))
+            .RequireAuthorization("Perm:ForceCall.Execute");
 
         return app;
     }
