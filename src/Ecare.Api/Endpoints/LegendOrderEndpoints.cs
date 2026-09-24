@@ -262,8 +262,7 @@ public static class LegendOrderEndpoints
                 Id = id,
                 FirstPesageCanceledBy = user
             });
-        })
-        .RequireAuthorization("Perm:Weighing.Read");
+        });
 
         group.MapPost("/cancel-second-pesage", async (
             int id,
@@ -275,8 +274,7 @@ public static class LegendOrderEndpoints
                 Id = id,
                 SecondPesageCanceledBy = user
             });
-        })
-        .RequireAuthorization("Perm:Weighing.Read");
+        });
 
         group.MapPut("/{id:int}/modify-quantities", async (
             int id,

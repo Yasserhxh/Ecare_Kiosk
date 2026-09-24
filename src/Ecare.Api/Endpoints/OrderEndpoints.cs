@@ -20,8 +20,7 @@ public static class OrderEndpoints
             .RequireAuthorization("Perm:Commands.Write");
 
         app.MapPost("/orders", async (CreateOrderAtKioskCommand c, IMediator m, CancellationToken ct) =>
-            await m.Send(c, ct))
-            .RequireAuthorization("Perm:Commands.Write");
+            await m.Send(c, ct));
 
         app.MapPost("/orders/legacy", async (CreateLegacyOrderCommand c, IMediator m, CancellationToken ct) =>
             await m.Send(c, ct))
