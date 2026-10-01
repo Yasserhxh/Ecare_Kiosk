@@ -213,6 +213,27 @@ public static class LegendOrderEndpoints
                 });
         });
 
+        // Impression manuelle d'un BL Offline (sans SAP) depuis l'écran Documents.
+        group.MapPost("/{id:int}/print-offline-bl", async (
+            int id,
+            IMediator mediator,
+            CancellationToken ct) =>
+        {
+            var result = await mediator.Send(new PrintOfflineBlCommand(id), ct);
+
+            return result.Success
+                ? Results.Ok(new
+                {
+                    success = true,
+                    data = result.Value
+                })
+                : Results.BadRequest(new
+                {
+                    success = false,
+                    error = result.Error
+                });
+        });
+
         group.MapPost("/legend/{id}/cancel", async (
             int id,
             IMediator mediator,

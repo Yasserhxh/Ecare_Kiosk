@@ -1,5 +1,4 @@
 using Dapper;
-using Ecare.Application.Common;
 using Ecare.Application.Dtos;
 using Ecare.Shared;
 using MediatR;
@@ -9,7 +8,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Xml.Linq;
 
 namespace Ecare.Application.Commands.Legend;
@@ -44,9 +42,6 @@ public sealed class TestWeightDto
     public int? Step { get; set; }
     public DateTime? FinishedChargingAt { get; set; }
     public DateTime? PabExitAt { get; set; }
-    // Offline flags
-    public bool IsOffline { get; set; }
-    public string? OfflineStatus { get; set; }
 }
 
 public sealed class BlJson
@@ -88,18 +83,6 @@ public sealed class ProductJson
     public string? Libelle { get; set; }
     public string? Quantite { get; set; }
     public int? Sacs { get; set; }
-}
-
-/// <summary>
-/// DTO for the offline sync endpoint response (Task 2 web-api).
-/// camelCase JSON: { status, codeSapCommande, bonDeLivraison, error }
-/// </summary>
-internal sealed class SapOfflineSyncResponse
-{
-    public string? Status { get; set; }
-    public string? CodeSapCommande { get; set; }
-    public string? BonDeLivraison { get; set; }
-    public string? Error { get; set; }
 }
 
 /// <summary>
@@ -187,9 +170,7 @@ public sealed class UpdateSecondWeightHandler
                 PTAC,
                 Step,
                 FinishedChargingAt,
-                PabExitAt,
-                ISNULL(IsOffline, 0)    AS IsOffline,
-                OfflineStatus
+                PabExitAt
             FROM dbo.Ecare_Order_Legend
             WHERE
                 (
@@ -391,259 +372,82 @@ public sealed class UpdateSecondWeightHandler
             // 2️⃣ Build the SAP request identifier
             var legendId = order.Id;
 
-            // 3️⃣ Call SAP — either the offline sync endpoint or the normal shipmentNotification.
-            //    ANY failure → provisional path: truck always exits.
-            BlJson? shipment = null;
-            bool sapSucceeded = false;
-            // Snapshot loaded eagerly on the sync-success path so the provisional block can
-            // reuse it without issuing a second SELECT.
-            OfflineLegendSnapshot? cachedSnap = null;
+            // 3️⃣ Call SAP Shipment API — flux normal : un seul appel, pas de retry,
+            //    pas de BL provisoire automatique. Échec SAP = erreur remontée au kiosque.
+            //    Le BL offline se déclenche manuellement depuis l'écran Documents.
+            var sapRequest = new ShipmentNotificationRequest { Id = legendId };
 
-            var target = OfflineSecondWeightRules.ResolveSapTarget(order.IsOffline);
+            var response = await _http.PostAsJsonAsync(
+                $"{SapBaseUrl}/api/SapShipment/shipmentNotification",
+                sapRequest,
+                ct);
 
-            if (target == "sync")
+            if (!response.IsSuccessStatusCode)
             {
-                // Legend is already offline — try to sync via Task-2 endpoint.
-                try
-                {
-                    var syncUrl = $"{SapBaseUrl}/api/SapOffline/sync/{legendId}";
-                    var syncResp = await _http.PostAsJsonAsync(syncUrl, (object?)null, ct);
+                _log.LogError(
+                    "SAP shipment API failed for Id={Id}, Status={Status}",
+                    legendId,
+                    response.StatusCode);
 
-                    if (syncResp.IsSuccessStatusCode)
-                    {
-                        var syncResult = await syncResp.Content.ReadFromJsonAsync<SapOfflineSyncResponse>(
-                            new JsonSerializerOptions(JsonSerializerDefaults.Web), ct);
-
-                        if (syncResult?.Status == "Synchronisee" &&
-                            !string.IsNullOrWhiteSpace(syncResult.BonDeLivraison))
-                        {
-                            // Sync succeeded — persist and continue normal flow.
-                            await PersistShipmentAndReleaseCapacityAsync(
-                                conn, legendId, syncResult.BonDeLivraison, ct);
-
-                            // Load the snapshot now so the provisional SELECT below is skipped,
-                            // and build the full BL payload (client/transport/pesage/produits).
-                            // Then stamp the real BonDeLivraison from SAP so the printer renders
-                            // a complete, normal BL — not a provisional one.
-                            cachedSnap = await conn.QuerySingleOrDefaultAsync<OfflineLegendSnapshot>(
-                                new CommandDefinition(
-                                    """
-                                    SELECT TOP (1)
-                                        Site,
-                                        ClientName,
-                                        Chantier,
-                                        BonDeCommande,
-                                        CodeSapClient,
-                                        Matricule,
-                                        ChauffeurName,
-                                        TransporteurName,
-                                        PermisDeConduite,
-                                        Plombs,
-                                        TypeProduit,
-                                        CodeSapProduit1,
-                                        CodeSapProduit2,
-                                        Produit1,
-                                        Produit2,
-                                        Quantite1,
-                                        Quantite2,
-                                        SacNumber,
-                                        PremierePoid,
-                                        DeuxiemePoid,
-                                        PabEntryAt,
-                                        PabExitAt,
-                                        NumberSacs_Charged,
-                                        Weight_Charged
-                                    FROM dbo.Ecare_Order_Legend
-                                    WHERE Id = @LegendId
-                                    """,
-                                    new { LegendId = legendId },
-                                    cancellationToken: ct));
-
-                            shipment = BuildProvisionalBlPayload(legendId, cachedSnap);
-                            // Override the null BonDeLivraison with the real SAP number so the
-                            // printer knows this is a fully-synced BL, not a provisional one.
-                            shipment.BonDeLivraison = syncResult.BonDeLivraison;
-                            sapSucceeded = true;
-                        }
-                        else
-                        {
-                            // Sync returned EnAttente or Erreur — stay provisional.
-                            var syncStatus = syncResult?.Status ?? "EnAttente";
-                            var syncError = syncResult?.Error;
-                            bool isBusiness = syncStatus == "Erreur";
-                            var (_, offlineSt, offlineErr) = OfflineSecondWeightRules.OnSapFailure(
-                                wasOffline: true,
-                                isConnectivity: !isBusiness,
-                                syncError ?? syncStatus);
-
-                            await MarkOfflineProvisionalAsync(
-                                conn, legendId, offlineSt, offlineErr, ct);
-                        }
-                    }
-                    else
-                    {
-                        // Non-2xx from sync endpoint → business error.
-                        var errMsg = $"SapOffline/sync returned {(int)syncResp.StatusCode}";
-                        var (_, offlineSt, offlineErr) = OfflineSecondWeightRules.OnSapFailure(
-                            wasOffline: true, isConnectivity: false, errMsg);
-                        await MarkOfflineProvisionalAsync(conn, legendId, offlineSt, offlineErr, ct);
-                    }
-                }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
-                {
-                    _log.LogWarning(ex, "Connectivity error calling SapOffline/sync for LegendId={Id}", legendId);
-                    var (_, offlineSt, offlineErr) = OfflineSecondWeightRules.OnSapFailure(
-                        wasOffline: true, isConnectivity: true, ex.Message);
-                    await MarkOfflineProvisionalAsync(conn, legendId, offlineSt, offlineErr, ct);
-                }
-            }
-            else
-            {
-                // Normal path: call shipmentNotification with connectivity guard.
-                try
-                {
-                    var sapRequest = new ShipmentNotificationRequest { Id = legendId };
-                    var response = await _http.PostAsJsonAsync(
-                        $"{SapBaseUrl}/api/SapShipment/shipmentNotification",
-                        sapRequest,
-                        ct);
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var parsed = await response.Content.ReadFromJsonAsync<BlJson>(ct);
-
-                        if (parsed is not null && !string.IsNullOrWhiteSpace(parsed.BonDeLivraison))
-                        {
-                            await PersistShipmentAndReleaseCapacityAsync(
-                                conn, legendId, parsed.BonDeLivraison, ct);
-
-                            shipment = new BlJson
-                            {
-                                Site = parsed.Site,
-                                BonDeLivraison = parsed.BonDeLivraison,
-                                IdMyCimar = legendId,
-                                Client = new ClientJson
-                                {
-                                    CodeSap = parsed.Client?.CodeSap,
-                                    Name = parsed.Client?.Name,
-                                    Chantier = parsed.Client?.Chantier,
-                                    BonDeCommande = parsed.Client?.BonDeCommande
-                                },
-                                Transport = new TransportJson
-                                {
-                                    Transporteur = parsed.Transport?.Transporteur,
-                                    Matricule = parsed.Transport?.Matricule,
-                                    Chauffeur = parsed.Transport?.Chauffeur,
-                                    Scelles = parsed.Transport?.Scelles,
-                                    Cin = parsed.Transport?.Cin,
-                                },
-                                Pesage = new PesageJson
-                                {
-                                    PoidsVide = parsed.Pesage?.PoidsVide,
-                                    PoidsBrut = parsed.Pesage?.PoidsBrut,
-                                    PabEntryAt = parsed.Pesage?.PabEntryAt,
-                                    PabExitAt = parsed.Pesage?.PabExitAt
-                                },
-                                Produits = parsed.Produits?.Select(p => new ProductJson
-                                {
-                                    Code = p.Code,
-                                    Libelle = p.Libelle,
-                                    Quantite = p.Quantite,
-                                    Sacs = p.Sacs
-                                }).ToList()
-                            };
-                            sapSucceeded = true;
-                        }
-                        else
-                        {
-                            // 2xx but empty BL — treat as business error.
-                            _log.LogWarning("SAP shipmentNotification returned empty BL for LegendId={Id}", legendId);
-                            var (_, offlineSt, offlineErr) = OfflineSecondWeightRules.OnSapFailure(
-                                wasOffline: false, isConnectivity: false, "SAP_EMPTY_RESPONSE");
-                            await MarkOfflineProvisionalAsync(conn, legendId, offlineSt, offlineErr, ct);
-                        }
-                    }
-                    else
-                    {
-                        _log.LogError(
-                            "SAP shipment API failed for LegendId={Id}, Status={Status}",
-                            legendId, response.StatusCode);
-                        var errMsg = $"HTTP {(int)response.StatusCode}";
-                        var (_, offlineSt, offlineErr) = OfflineSecondWeightRules.OnSapFailure(
-                            wasOffline: false, isConnectivity: false, errMsg);
-                        await MarkOfflineProvisionalAsync(conn, legendId, offlineSt, offlineErr, ct);
-                    }
-                }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
-                {
-                    _log.LogWarning(ex, "Connectivity error calling SapShipment for LegendId={Id}", legendId);
-                    var (_, offlineSt, offlineErr) = OfflineSecondWeightRules.OnSapFailure(
-                        wasOffline: false, isConnectivity: true, ex.Message);
-                    await MarkOfflineProvisionalAsync(conn, legendId, offlineSt, offlineErr, ct);
-                }
+                return Result<UpdateSecondWeightResult>.Fail("SAP_API_ERROR");
             }
 
-            // 4️⃣ Build and broadcast the print payload.
-            //    If SAP succeeded, shipment is already populated above.
-            //    If provisional (sapSucceeded=false), build payload from DB.
-            BlJson printPayload;
+            var shipment = await response.Content.ReadFromJsonAsync<BlJson>(ct);
 
-            if (sapSucceeded && shipment is not null)
+            if (shipment is null || string.IsNullOrWhiteSpace(shipment.BonDeLivraison))
+                return Result<UpdateSecondWeightResult>.Fail("SAP_EMPTY_RESPONSE");
+
+            await PersistShipmentAndReleaseCapacityAsync(
+                conn,
+                legendId,
+                shipment.BonDeLivraison,
+                ct);
+
+            var signalRPayload = new BlJson
             {
-                printPayload = shipment;
-            }
-            else
-            {
-                // Provisional path: build BL payload locally (BonDeLivraison=null, IdMyCimar=legendId).
-                // Reuse cachedSnap if it was already loaded on the sync-success path above;
-                // otherwise fetch it now (normal offline failures and normal-path failures).
-                var snap = cachedSnap ?? await conn.QuerySingleOrDefaultAsync<OfflineLegendSnapshot>(
-                    new CommandDefinition(
-                        """
-                        SELECT TOP (1)
-                            Site,
-                            ClientName,
-                            Chantier,
-                            BonDeCommande,
-                            CodeSapClient,
-                            Matricule,
-                            ChauffeurName,
-                            TransporteurName,
-                            PermisDeConduite,
-                            Plombs,
-                            TypeProduit,
-                            CodeSapProduit1,
-                            CodeSapProduit2,
-                            Produit1,
-                            Produit2,
-                            Quantite1,
-                            Quantite2,
-                            SacNumber,
-                            PremierePoid,
-                            DeuxiemePoid,
-                            PabEntryAt,
-                            PabExitAt,
-                            NumberSacs_Charged,
-                            Weight_Charged
-                        FROM dbo.Ecare_Order_Legend
-                        WHERE Id = @LegendId
-                        """,
-                        new { LegendId = legendId },
-                        cancellationToken: ct));
+                Site = shipment.Site,
+                BonDeLivraison = shipment.BonDeLivraison,
+                IdMyCimar = legendId,
+                Client = new ClientJson
+                {
+                    CodeSap = shipment.Client?.CodeSap,
+                    Name = shipment.Client?.Name,
+                    Chantier = shipment.Client?.Chantier,
+                    BonDeCommande = shipment.Client?.BonDeCommande
+                },
+                Transport = new TransportJson
+                {
+                    Transporteur = shipment.Transport?.Transporteur,
+                    Matricule = shipment.Transport?.Matricule,
+                    Chauffeur = shipment.Transport?.Chauffeur,
+                    Scelles = shipment.Transport?.Scelles,
+                    Cin = shipment.Transport?.Cin,
+                },
+                Pesage = new PesageJson
+                {
+                    PoidsVide = shipment.Pesage?.PoidsVide,
+                    PoidsBrut = shipment.Pesage?.PoidsBrut,
+                    PabEntryAt = shipment.Pesage?.PabEntryAt,
+                    PabExitAt = shipment.Pesage?.PabExitAt
+                },
+                Produits = shipment.Produits?.Select(p => new ProductJson
+                {
+                    Code = p.Code,
+                    Libelle = p.Libelle,
+                    Quantite = p.Quantite,
+                    Sacs = p.Sacs
+                }).ToList()
+            };
 
-                printPayload = BuildProvisionalBlPayload(legendId, snap);
-            }
-
-            // Broadcast to printer hub.
+            // 4️⃣ Send to SignalR / printer
             await SignalRHelper.BroadcastAsync(
                 _signalR,
                 _opt.Hub,
                 _opt.Method,
-                printPayload,
+                signalRPayload,
                 _log,
                 ct);
 
-            // 5️⃣ Broadcast "Allowed" — truck exits regardless of SAP outcome.
             await SignalRHelper.BroadcastAsync(
                 _signalR,
                 "ExitMessageHub",
@@ -652,7 +456,7 @@ public sealed class UpdateSecondWeightHandler
                 _log,
                 ct);
 
-            // 6️⃣ Return success
+            // 5️⃣ Return success
             return Result<UpdateSecondWeightResult>.Ok(new UpdateSecondWeightResult
             {
                 Success = true,
@@ -714,45 +518,6 @@ public sealed class UpdateSecondWeightHandler
                     LegendId = legendId,
                     BonDeLivraison = bonDeLivraison
                 },
-                cancellationToken: ct));
-    }
-
-    /// <summary>
-    /// Marks the legend as offline-provisional (no BonDeLivraison, IsSynced remains 0).
-    /// Status='Completed' and Step=5 were already set by the main UPDATE above.
-    /// Sets IsOffline=1, OfflineStatus, OfflineSyncError, OfflineCreatedAt=COALESCE(existing,@now).
-    /// Note: capacity release (RealtimeCapacity increment) is performed by the initial weight UPDATE
-    /// at the top of Handle — this method does NOT touch RealtimeCapacity.
-    /// </summary>
-    private static async Task MarkOfflineProvisionalAsync(
-        SqlConnection conn,
-        int legendId,
-        string offlineStatus,
-        string? offlineSyncError,
-        CancellationToken ct)
-    {
-        const string sql = """
-            DECLARE @Now DATETIME =
-                CONVERT(DATETIME, SYSDATETIMEOFFSET() AT TIME ZONE 'Morocco Standard Time');
-
-            UPDATE dbo.Ecare_Order_Legend
-            SET
-                IsOffline        = 1,
-                OfflineStatus    = @OfflineStatus,
-                OfflineSyncError = @OfflineSyncError,
-                OfflineCreatedAt = COALESCE(OfflineCreatedAt, @Now),
-                Status           = CASE
-                    WHEN ISNULL(AnnulationCommercial, 0) = 1 THEN 'Canceled'
-                    ELSE 'Completed'
-                END,
-                Step = 5
-            WHERE Id = @LegendId;
-            """;
-
-        await conn.ExecuteAsync(
-            new CommandDefinition(
-                sql,
-                new { LegendId = legendId, OfflineStatus = offlineStatus, OfflineSyncError = offlineSyncError },
                 cancellationToken: ct));
     }
 

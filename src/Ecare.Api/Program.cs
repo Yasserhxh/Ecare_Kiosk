@@ -220,7 +220,8 @@ try
     // que SAP répondait). Quand SAP est réellement down, l'échec est quasi immédiat
     // (connexion refusée) — le chemin provisoire du mode offline reste le filet de
     // sécurité en cas d'échec, pas un couperet à 15 s qui coupe des appels sains.
-    builder.Services.AddHttpClient("SapShipment", c => c.Timeout = TimeSpan.FromSeconds(100));
+   // builder.Services.AddHttpClient("SapShipment", c => c.Timeout = TimeSpan.FromSeconds(100));
+    builder.Services.AddHttpClient("SapShipment");
 
     builder.Services.AddHostedService<OrderLegendSyncBackgroundService>();
 
