@@ -215,8 +215,12 @@ try
     });
 
     // Named client used by UpdateSecondWeightHandler and ReprintBonLivraisonHandler.
-    // 15 s timeout: avoids blocking the truck at the bridge when SAP is slow.
-    builder.Services.AddHttpClient("SapShipment", c => c.Timeout = TimeSpan.FromSeconds(15));
+    // 100 s : la création de livraison SAP + récupération du BL dépasse souvent 15 s
+    // en fonctionnement NORMAL (constaté en prod le 01/10/2026 : BL non créés alors
+    // que SAP répondait). Quand SAP est réellement down, l'échec est quasi immédiat
+    // (connexion refusée) — le chemin provisoire du mode offline reste le filet de
+    // sécurité en cas d'échec, pas un couperet à 15 s qui coupe des appels sains.
+    builder.Services.AddHttpClient("SapShipment", c => c.Timeout = TimeSpan.FromSeconds(100));
 
     builder.Services.AddHostedService<OrderLegendSyncBackgroundService>();
 
