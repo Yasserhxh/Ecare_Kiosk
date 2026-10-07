@@ -29,7 +29,8 @@ public static class TruckEndpoints
             return result.Success
                 ? Results.Created($"/api/trucks/types/{result.Value}", new { id = result.Value })
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Write");
 
         // GET PAGINATED TRUCK TYPES
         group.MapGet("/types", async (
@@ -44,7 +45,8 @@ public static class TruckEndpoints
             return result.Success
                 ? Results.Ok(result.Value)
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Read");
 
         // GET TRUCK TYPE DROPDOWN
         group.MapGet("/types/dropdown", async (
@@ -55,7 +57,8 @@ public static class TruckEndpoints
             return result.Success
                 ? Results.Ok(result.Value)
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Read");
 
 
         // ---------------------------------------------------------
@@ -72,7 +75,8 @@ public static class TruckEndpoints
             return result.Success
                 ? Results.Created($"/api/trucks/{result.Value}", new { id = result.Value })
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Write");
 
         // GET PAGINATED TRUCKS WITH FILTERS + JOIN
         group.MapGet("/", async (
@@ -90,7 +94,8 @@ public static class TruckEndpoints
             return result.Success
                 ? Results.Ok(result.Value)
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Read");
 
         // GET TRUCK DROPDOWN (Id + Matricule)
         group.MapGet("/dropdown", async (
@@ -101,7 +106,8 @@ public static class TruckEndpoints
             return result.Success
                 ? Results.Ok(result.Value)
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Read");
 
         return app;
     }

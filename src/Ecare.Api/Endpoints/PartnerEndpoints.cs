@@ -25,7 +25,8 @@ namespace Ecare.Api.Endpoints
                 return result.Success
                     ? Results.Created($"/api/partners/{result.Value}", new { id = result.Value })
                     : Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Write");
 
             // -------------------------------------------------------
             // GET PAGINATED PARTNERS
@@ -45,7 +46,8 @@ namespace Ecare.Api.Endpoints
                 return result.Success
                     ? Results.Ok(result.Value)
                     : Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Read");
 
             group.MapGet("/dropdown", async (
                 IMediator med,
@@ -56,7 +58,8 @@ namespace Ecare.Api.Endpoints
                 return result.Success
                     ? Results.Ok(result.Value)
                     : Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Read");
 
             return app;
         }

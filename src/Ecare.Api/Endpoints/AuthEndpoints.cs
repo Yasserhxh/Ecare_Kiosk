@@ -10,8 +10,12 @@ namespace Ecare.Api.Endpoints
     {
         public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
         {
-            app.MapPost("/auth/login", async (LoginQuery query, IMediator mediator, ILoggerFactory loggerFactory) =>
+            app.MapPost("/auth/login", async (LoginQuery query, IMediator mediator, IConfiguration cfg, ILoggerFactory loggerFactory) =>
             {
+                if (!cfg.GetValue("Auth:PasswordLoginEnabled", true))
+                    return Results.Json(new { message = "La connexion par mot de passe est désactivée. Utilisez le SSO." },
+                        statusCode: StatusCodes.Status403Forbidden);
+
                 var logger = loggerFactory.CreateLogger("AuthLogin");
 
                 try

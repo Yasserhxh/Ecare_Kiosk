@@ -12,6 +12,9 @@ public class JwtTokenService(IConfiguration config)
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromDays(365);
 
     public string GenerateToken(ApplicationUser user, string role)
+        => GenerateToken(user, role, "pwd", Array.Empty<string>());
+
+    public string GenerateToken(ApplicationUser user, string role, string authMethod, IEnumerable<string> perms)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -21,8 +24,10 @@ public class JwtTokenService(IConfiguration config)
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.UserName ?? ""),
             new(ClaimTypes.Email, user.Email ?? ""),
-            new(ClaimTypes.Role, role)
+            new(ClaimTypes.Role, role),
+            new("authmethod", authMethod),
         };
+        claims.AddRange(perms.Select(p => new Claim("perm", p)));
 
         var token = new JwtSecurityToken(
             issuer: config["Jwt:Issuer"],

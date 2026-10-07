@@ -26,7 +26,8 @@ public static class PartnerTruckEndpoints
             return result.Success
                 ? Results.Ok(new { message = result.Value })
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Write");
 
         // ----------------------------------------------------
         // UNLINK PARTNER FROM TRUCK
@@ -45,7 +46,8 @@ public static class PartnerTruckEndpoints
             return result.Success
                 ? Results.Ok(new { message = result.Value })
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Write");
 
         group.MapGet("/truck-links", async (
            int page,
@@ -59,7 +61,8 @@ public static class PartnerTruckEndpoints
             return result.Success
                 ? Results.Ok(result.Value)
                 : Results.BadRequest(new { error = result.Error });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Read");
 
         return app;
     }

@@ -21,7 +21,8 @@ namespace Ecare.Api.Endpoints
                     return Results.Created($"/api/drivers/{result.Value}", new { id = result.Value });
 
                 return Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Write");
 
             // ---------------------------------------------------------
             // GET /api/drivers/dropdown  (Id + FullName, not paginated)
@@ -33,7 +34,8 @@ namespace Ecare.Api.Endpoints
                 return result.Success
                     ? Results.Ok(result.Value)
                     : Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Read");
 
             group.MapGet("/{id:int}", async (int id, IMediator mediator, CancellationToken ct) =>
             {
@@ -43,7 +45,8 @@ namespace Ecare.Api.Endpoints
                     return Results.NotFound(new { error = result.Error });
 
                 return Results.Ok(result.Value);
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Read");
 
             // ---------------------------------------------------------
             // GET /api/drivers  (Paginated + multi-filter)
@@ -65,7 +68,8 @@ namespace Ecare.Api.Endpoints
                 return result.Success
                     ? Results.Ok(result.Value)
                     : Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Read");
 
             group.MapPut("/{id:int}", async (int id, CreateDriverCommand body, IMediator mediator, CancellationToken ct) =>
             {
@@ -82,7 +86,8 @@ namespace Ecare.Api.Endpoints
                 return result.Success
                     ? Results.Ok(new { success = true })
                     : Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Write");
 
             group.MapDelete("/{id:int}", async (int id, IMediator mediator, CancellationToken ct) =>
             {
@@ -91,7 +96,8 @@ namespace Ecare.Api.Endpoints
                 return result.Success
                     ? Results.NoContent()
                     : Results.BadRequest(new { error = result.Error });
-            });
+            })
+            .RequireAuthorization("Perm:LogisticsData.Write");
 
             return app;
         }

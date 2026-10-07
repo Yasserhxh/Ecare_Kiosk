@@ -6,4 +6,6 @@ public record AuthResponse(
     string Email,
     string Role,
     string UserId,
-    DateTime ExpiresAt);
+    DateTime ExpiresAt,
+    string AuthMethod,
+    IReadOnlyList<string> Perms);

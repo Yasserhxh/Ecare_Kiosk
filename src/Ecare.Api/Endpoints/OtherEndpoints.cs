@@ -78,7 +78,8 @@ public static class OtherEndpoints
                 {
                     return Results.Conflict(new { message = ex.Message });
                 }
-            });
+            })
+            .RequireAuthorization("Perm:Rfid.Write");
 
         app.MapGet("/api/client-equipements", async (
             int? isClient,
@@ -155,7 +156,8 @@ ORDER BY Id DESC;";
 
             var data = await conn.QueryAsync(sql, param);
             return Results.Ok(data);
-        });
+        })
+        .RequireAuthorization("Perm:Rfid.Read");
 
         app.MapGet("/api/vehicules", async (
             int page,
@@ -224,7 +226,8 @@ ORDER BY Id DESC;";
                 new CommandDefinition(dataSql, param, cancellationToken: ct));
 
             return Results.Ok(new { items, totalCount });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Read");
 
         app.MapPost("/api/vehicules", async (
             VehicleRequest request,
@@ -303,7 +306,8 @@ ORDER BY Id DESC;";
                 }, cancellationToken: ct));
 
             return Results.Created($"/api/vehicules/{id}", new { id, matricule });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Write");
 
         app.MapPut("/api/vehicules/{id:int}", async (
             int id,
@@ -365,7 +369,8 @@ ORDER BY Id DESC;";
                 return Results.NotFound(new { message = "Vehicule introuvable." });
 
             return Results.Ok(new { id, matricule, message = "Vehicule mis a jour avec succes." });
-        });
+        })
+        .RequireAuthorization("Perm:LogisticsData.Write");
 
         app.MapPut("/api/client-equipements/{id:int}", async (
             int id,
@@ -519,7 +524,8 @@ ORDER BY Id DESC;";
             }
 
             return Results.Ok(new { id, message = "Client equipement updated successfully." });
-        });
+        })
+        .RequireAuthorization("Perm:Rfid.Write");
 
         app.MapGet("/api/ecare-tags", async (
             string? carteSlv,
@@ -577,7 +583,8 @@ ORDER BY Id DESC;";
 
             var data = await conn.QueryAsync(sql, param);
             return Results.Ok(data);
-        });
+        })
+        .RequireAuthorization("Perm:Rfid.Read");
 
         app.MapPost("/api/ecare-tags", async (
             EcareTagRequest request,
@@ -632,7 +639,8 @@ ORDER BY Id DESC;";
                 RfidHex = rfidHex,
                 Message = "Carte provisoire creee avec succes."
             });
-        });
+        })
+        .RequireAuthorization("Perm:Rfid.Write");
 
         app.MapGet("/api/cards/all", async (
             string? cardNumber,
@@ -761,7 +769,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
 
             var data = await conn.QueryAsync(sql, param);
             return Results.Ok(data);
-        });
+        })
+        .RequireAuthorization("Perm:Rfid.Read");
 
         app.MapPost("/api/cards/{cardId:int}/disable", async (
             int cardId,
@@ -833,7 +842,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 await tx.RollbackAsync(ct);
                 throw;
             }
-        });
+        })
+        .RequireAuthorization("Perm:Rfid.Write");
 
         app.MapPost("/api/cards/{cardId:int}/reactivate", async (
             int cardId,
@@ -920,7 +930,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 await tx.RollbackAsync(ct);
                 throw;
             }
-        });
+        })
+        .RequireAuthorization("Perm:Rfid.Write");
 
         app.MapPost("/api/cards/{cardId:int}/assign", async (
             int cardId,
@@ -1126,8 +1137,9 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
                 await tx.RollbackAsync(ct);
                 throw;
             }
-        });
-      
+        })
+        .RequireAuthorization("Perm:Rfid.Write");
+
 
         /*app.MapGet("/api/app-logs",
         async ([AsParameters] AppLogsQueryParams q, IMediator med, CancellationToken ct) =>
@@ -1204,7 +1216,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         - Hour range
         - Matricule / Chantier / Produit / Step filters
         - Business mapping (Net, TypeCommande, CFR/EXW)
-        """);
+        """)
+        .RequireAuthorization("Perm:Reports.Read");
 
         app.MapPut("/api/legend-documents/{id:int}/rfid-card", async (
             int id,
@@ -1410,7 +1423,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         })
         .WithName("UpdateLegendDocumentRfidCard")
         .WithTags("Legend")
-        .WithSummary("Update chauffeur, matricule and RFID card on a step 0 legend document and linked command records");
+        .WithSummary("Update chauffeur, matricule and RFID card on a step 0 legend document and linked command records")
+        .RequireAuthorization("Perm:Rfid.Write");
 
         app.MapPut("/api/legend/{id:int}/annulation-commercial", async (
             int id,
@@ -1433,7 +1447,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
             return Results.Ok(result.Value);
         })
         .WithName("UpdateCommercialAnnulation")
-        .WithTags("Legend");
+        .WithTags("Legend")
+        .RequireAuthorization("Perm:Commands.Write");
 
         app.MapGet("/api/legend/{id:int}", async (
             int id,
@@ -1448,7 +1463,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
             return Results.Ok(result.Value);
         })
         .WithName("GetLegendById")
-        .WithTags("Legend");
+        .WithTags("Legend")
+        .RequireAuthorization("Perm:Reports.Read");
 
         app.MapPost("/api/admin/raw-sql", async (
             RawSqlRequest request,
@@ -1486,7 +1502,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
         })
         .WithName("AdminRawSql")
         .WithTags("Admin")
-        .WithSummary("Execute a raw SQL query against the database (admin use only)");
+        .WithSummary("Execute a raw SQL query against the database (admin use only)")
+        .RequireAuthorization("Perm:Admin.RawSql");
 
 
         app.MapPost("/ecare/client-equipements", async (
@@ -1505,7 +1522,8 @@ ORDER BY t.RawCardNumber ASC, t.TagId DESC;";
             }
         })
         .WithName("SaveEcareClientEquipement")
-        .WithTags("Ecare");
+        .WithTags("Ecare")
+        .RequireAuthorization("Perm:Rfid.Write");
 
 
         app.MapPost("/api/pab/trigger/{type}", async (
