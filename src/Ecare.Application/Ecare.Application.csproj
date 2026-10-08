@@ -13,6 +13,10 @@
     <PackageReference Include="Microsoft.Azure.SignalR.Management" Version="1.32.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
+    <!-- Pinned to the version Ecare.Api ships (via Microsoft.Identity.Web 3.0.1). Without the pin the transitive
+         6.35.0 from Microsoft.Data.SqlClient is used at compile time while 8.0.1 is loaded at runtime (2026-10-08 PAB entry outage). -->
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Ecare.Domain\Ecare.Domain.csproj" />

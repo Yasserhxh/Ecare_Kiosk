@@ -35,14 +35,31 @@ public static class PermissionMatrix
         },
     };
 
+    /// <summary>Roles that reuse another profil's permission set verbatim.</summary>
+    private static readonly IReadOnlyDictionary<string, string> Equivalences =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [EcareRoles.Admin]                    = EcareRoles.AdminIT, // legacy equivalence
+        [EcareRoles.CoordinateurCommercial]   = EcareRoles.AgentDeGuichet,
+        [EcareRoles.ChefAgenceLogistique]     = EcareRoles.Logistique,
+        [EcareRoles.SuperviseurEnsachage]     = EcareRoles.Expedition,
+        [EcareRoles.ChefEquipeEnsachage]      = EcareRoles.Expedition,
+        [EcareRoles.SurveillantQuaiEnsachage] = EcareRoles.Expedition,
+        [EcareRoles.OperateurVracEnsachage]   = EcareRoles.Expedition,
+    };
+
     public static readonly IReadOnlyList<string> Roles = new[]
-    { EcareRoles.AgentDeGuichet, EcareRoles.Logistique, EcareRoles.Expedition, EcareRoles.AdminIT };
+    {
+        EcareRoles.AgentDeGuichet, EcareRoles.Logistique, EcareRoles.Expedition, EcareRoles.AdminIT,
+        EcareRoles.CoordinateurCommercial, EcareRoles.ChefAgenceLogistique, EcareRoles.SuperviseurEnsachage,
+        EcareRoles.ChefEquipeEnsachage, EcareRoles.SurveillantQuaiEnsachage, EcareRoles.OperateurVracEnsachage
+    };
 
     private static readonly IReadOnlySet<string> Empty = new HashSet<string>();
 
     public static IReadOnlySet<string> For(string role)
     {
-        if (role == EcareRoles.Admin) role = EcareRoles.AdminIT; // legacy equivalence
+        if (Equivalences.TryGetValue(role, out var baseRole)) role = baseRole;
         return Map.TryGetValue(role, out var set) ? set : Empty;
     }
 }

@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.Options;
 
 namespace Ecare.Api.Security;
 
-public sealed class PermissionPolicyProvider(IOptions<AuthorizationOptions> options)
+public sealed class PermissionPolicyProvider(IOptions<AuthorizationOptions> options, IConfiguration config)
     : IAuthorizationPolicyProvider
 {
     private readonly DefaultAuthorizationPolicyProvider _fallback = new(options);
@@ -13,15 +14,20 @@ public sealed class PermissionPolicyProvider(IOptions<AuthorizationOptions> opti
 
     public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
-        if (policyName.StartsWith(PermissionRequirement.PolicyPrefix, StringComparison.Ordinal))
+        if (!policyName.StartsWith(PermissionRequirement.PolicyPrefix, StringComparison.Ordinal))
+            return _fallback.GetPolicyAsync(policyName);
+
+        var builder = new AuthorizationPolicyBuilder();
+        if (config.GetValue(AuthSettings.RbacEnforcedKey, false))
         {
             var perm = policyName[PermissionRequirement.PolicyPrefix.Length..];
-            var policy = new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .AddRequirements(new PermissionRequirement(perm))
-                .Build();
-            return Task.FromResult<AuthorizationPolicy?>(policy);
+            builder.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(perm));
         }
-        return _fallback.GetPolicyAsync(policyName);
+        else
+        {
+            // Rollout phase: RBAC declared on endpoints but not enforced (legacy anonymous access).
+            builder.AddRequirements(new AssertionRequirement(_ => true));
+        }
+        return Task.FromResult<AuthorizationPolicy?>(builder.Build());
     }
 }

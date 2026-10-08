@@ -62,6 +62,30 @@ public class PermissionMatrixTests
     public void Unknown_role_has_no_permissions()
         => Assert.Empty(PermissionMatrix.For("NoSuchRole"));
 
+    [Theory]
+    [InlineData(EcareRoles.CoordinateurCommercial, EcareRoles.AgentDeGuichet)]
+    [InlineData(EcareRoles.ChefAgenceLogistique, EcareRoles.Logistique)]
+    [InlineData(EcareRoles.SuperviseurEnsachage, EcareRoles.Expedition)]
+    [InlineData(EcareRoles.ChefEquipeEnsachage, EcareRoles.Expedition)]
+    [InlineData(EcareRoles.SurveillantQuaiEnsachage, EcareRoles.Expedition)]
+    [InlineData(EcareRoles.OperateurVracEnsachage, EcareRoles.Expedition)]
+    public void Equivalent_role_has_the_same_set_as_its_base_profil(string role, string baseRole)
+    {
+        Assert.NotEmpty(PermissionMatrix.For(role));
+        Assert.Equal(PermissionMatrix.For(baseRole), PermissionMatrix.For(role));
+    }
+
+    [Fact]
+    public void Roles_lists_every_equivalent_role()
+    {
+        var expected = new[]
+        {
+            EcareRoles.CoordinateurCommercial, EcareRoles.ChefAgenceLogistique, EcareRoles.SuperviseurEnsachage,
+            EcareRoles.ChefEquipeEnsachage, EcareRoles.SurveillantQuaiEnsachage, EcareRoles.OperateurVracEnsachage
+        };
+        Assert.True(expected.All(PermissionMatrix.Roles.Contains));
+    }
+
     [Fact]
     public void Permissions_All_covers_every_key_used_in_the_matrix()
     {

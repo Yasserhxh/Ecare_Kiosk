@@ -6,7 +6,6 @@ using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -108,7 +107,7 @@ WHERE
             // =====================================================================
             // CASE 2 — NO ORDER + NO CLIENT → Insert minimal order
             // =====================================================================
-            if (r.Event == "NO_ORDER_NO_CLIENT" || r.ClientName.IsNullOrEmpty())
+            if (r.Event == "NO_ORDER_NO_CLIENT" || string.IsNullOrEmpty(r.ClientName))
             {
                 await SafeDbLogAsync(
                     traceId,
@@ -195,7 +194,7 @@ OUTER APPLY
             // =====================================================================
             // CASE 3 — CLIENT + CHANTIER + PRODUCTS → Insert + SAP Order
             // =====================================================================
-            if (r.Event == "CLIENTS_WITH_CHANTIERS" && !r.ClientName.IsNullOrEmpty())
+            if (r.Event == "CLIENTS_WITH_CHANTIERS" && !string.IsNullOrEmpty(r.ClientName))
             {
                 await SafeDbLogAsync(
                     traceId,

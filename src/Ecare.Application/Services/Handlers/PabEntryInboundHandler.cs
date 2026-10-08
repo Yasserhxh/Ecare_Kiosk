@@ -7,7 +7,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
 
 namespace Ecare.Application.Services
@@ -92,7 +91,7 @@ namespace Ecare.Application.Services
             // --------------------------
              
 
-            if (vm.Produit1 == "" || vm.Produit1.IsNullOrEmpty()) {
+            if (string.IsNullOrEmpty(vm.Produit1)) {
                 return;
             }
 
