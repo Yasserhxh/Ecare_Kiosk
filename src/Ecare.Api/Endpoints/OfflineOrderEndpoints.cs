@@ -17,9 +17,13 @@ public static class OfflineOrderEndpoints
         AND AnnulationCommercial IS NULL
         """;
 
-    private const string OperationsSql = $"""
-        SELECT Id, ClientName, Chantier, Produit1, Quantite1, Matricule, Step,
-               CodeSapCommande, BonDeLivraison, OfflineStatus, OfflineSyncError, OfflineCreatedAt
+    // Alias camelCase : les lignes Dapper dynamiques sont sérialisées avec les noms tels quels.
+    public const string OperationsSql = $"""
+        SELECT Id AS id, ClientName AS clientName, Chantier AS chantier, Produit1 AS produit1,
+               Quantite1 AS quantite1, Matricule AS matricule, Step AS step,
+               CodeSapCommande AS codeSapCommande, BonDeLivraison AS bonDeLivraison,
+               OfflineStatus AS offlineStatus, OfflineSyncError AS offlineSyncError,
+               OfflineCreatedAt AS offlineCreatedAt
         FROM dbo.Ecare_Order_Legend
         WHERE {PendingFilter}
         ORDER BY Id;
