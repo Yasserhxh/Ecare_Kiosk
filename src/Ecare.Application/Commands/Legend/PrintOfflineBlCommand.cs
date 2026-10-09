@@ -79,7 +79,6 @@ public sealed class PrintOfflineBlHandler
                 new CommandDefinition(
                     """
                     SELECT TOP (1)
-                        Site,
                         ClientName,
                         Chantier,
                         BonDeCommande,
@@ -126,7 +125,10 @@ public sealed class PrintOfflineBlHandler
         catch (Exception ex)
         {
             _log.LogError(ex, "Error printing offline BL for LegendId={Id}", request.Id);
-            return Result<BlJson>.Fail("UNEXPECTED_ERROR");
+            // Type + message (pas de stack trace) pour diagnostiquer depuis le front,
+            // même convention que UpdateSecondWeightHandler.
+            var root = ex.GetBaseException();
+            return Result<BlJson>.Fail($"UNEXPECTED_ERROR: {root.GetType().Name}: {root.Message}");
         }
     }
 

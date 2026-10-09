@@ -88,7 +88,6 @@ public sealed class ReprintBonLivraisonHandler
                     new CommandDefinition(
                         """
                         SELECT TOP (1)
-                            Site,
                             ClientName,
                             Chantier,
                             BonDeCommande,

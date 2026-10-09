@@ -251,6 +251,14 @@ try
         client.Timeout = TimeSpan.FromSeconds(60);
     });
 
+    // Synchro SAP des commandes offline (page Flow) relayée au web-api SapOfflineController.
+    // 200 s : sous la limite de 230 s d'App Service pour la requête Flow → kiosque.
+    builder.Services.AddHttpClient<Ecare.Application.OfflineOrders.IOfflineSyncProxy, Ecare.Application.OfflineOrders.OfflineSyncProxy>(client =>
+    {
+        client.BaseAddress = new Uri("https://app-emea-we-dssprod-dss-001.azurewebsites.net/");
+        client.Timeout = TimeSpan.FromSeconds(200);
+    });
+
     // Named client used by UpdateSecondWeightHandler and ReprintBonLivraisonHandler.
     // 100 s : la création de livraison SAP + récupération du BL dépasse souvent 15 s
     // en fonctionnement NORMAL (constaté en prod le 01/10/2026 : BL non créés alors
@@ -377,6 +385,7 @@ try
     app.MapPartnerTruckEndpoints();
     app.MapChantierEndpoints();
     app.MapProduitEndpoints();
+    app.MapOfflineOrderEndpoints();
 
     app.MapGet("/time", () =>
     {

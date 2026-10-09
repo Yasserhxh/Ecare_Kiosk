@@ -538,44 +538,37 @@ public sealed class UpdateSecondWeightHandler
             };
         }
 
-        // Weight formatting: "X T Y kg" matching the SAP-built payload convention.
-        static string FormatWeight(int? kg)
-        {
-            if (kg is null or 0) return "0 T 0 kg";
-            var tonnes = kg.Value / 1000;
-            var remainder = kg.Value % 1000;
-            return $"{tonnes} T {remainder} kg";
-        }
+        // Mirrors mycimar-web-api SapShipmentController so the offline BL prints exactly
+        // like the online one: raw product code, "T,kkk" weights, normalized libellé,
+        // net weight as bulk quantity, scellés grouped by pairs.
+        var isBulk = string.Equals(snap.TypeProduit, "VRAC", StringComparison.OrdinalIgnoreCase);
+        var netKg = Math.Max(0, (snap.DeuxiemePoid ?? 0) - (snap.PremierePoid ?? 0));
 
         var produits = new List<ProductJson>();
 
-        if (!string.IsNullOrWhiteSpace(snap.Produit1))
+        if (!string.IsNullOrWhiteSpace(snap.CodeSapProduit1) || !string.IsNullOrWhiteSpace(snap.Produit1))
         {
             produits.Add(new ProductJson
             {
-                Code = snap.CodeSapProduit1?.PadLeft(18, '0'),
-                Libelle = snap.Produit1,
-                Quantite = snap.Quantite1?.ToString("0.###"),
-                Sacs = snap.SacNumber
+                Code = snap.CodeSapProduit1,
+                Libelle = NormalizeMaterialLibelle(snap.Produit1),
+                Quantite = isBulk ? FormatKgToTonsKg(netKg) : snap.Quantite1?.ToString("0.###") ?? "0",
+                Sacs = snap.SacNumber ?? 0
             });
         }
 
-        if (!string.IsNullOrWhiteSpace(snap.Produit2))
+        if (!string.IsNullOrWhiteSpace(snap.CodeSapProduit2) || !string.IsNullOrWhiteSpace(snap.Produit2))
         {
             produits.Add(new ProductJson
             {
-                Code = snap.CodeSapProduit2?.PadLeft(18, '0'),
-                Libelle = snap.Produit2,
-                Quantite = snap.Quantite2?.ToString("0.###"),
-                Sacs = null
+                Code = snap.CodeSapProduit2,
+                Libelle = NormalizeMaterialLibelle(snap.Produit2),
+                Quantite = snap.Quantite2?.ToString("0.###") ?? "0",
+                Sacs = 0
             });
         }
 
-        // Parse plombs (scellés) from comma-separated string.
-        var scelles = string.IsNullOrWhiteSpace(snap.Plombs)
-            ? new List<string>()
-            : snap.Plombs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                  .ToList();
+        var scelles = PairScelles(snap.Plombs);
 
         return new BlJson
         {
@@ -599,13 +592,51 @@ public sealed class UpdateSecondWeightHandler
             },
             Pesage = new PesageJson
             {
-                PoidsVide = FormatWeight(snap.PremierePoid),
-                PoidsBrut = FormatWeight(snap.DeuxiemePoid),
+                PoidsVide = FormatKgToTonsKg(snap.PremierePoid ?? 0),
+                PoidsBrut = FormatKgToTonsKg(snap.DeuxiemePoid ?? 0),
                 PabEntryAt = snap.PabEntryAt,
                 PabExitAt = snap.PabExitAt
             },
             Produits = produits.Count > 0 ? produits : null
         };
+    }
+
+    // Same format as the online BL (web-api FormatKgToTonsKg): 43160 kg -> "43,160".
+    private static string FormatKgToTonsKg(int kg) => $"{kg / 1000},{kg % 1000:000}";
+
+    // Plombs are stored "a,b,c,d"; the online BL prints them grouped by pairs ("a,b", "c,d").
+    private static List<string> PairScelles(string? plombs)
+    {
+        if (string.IsNullOrWhiteSpace(plombs))
+            return new List<string>();
+
+        var parts = plombs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var scelles = new List<string>();
+        for (var i = 0; i < parts.Length; i += 2)
+            scelles.Add(i + 1 < parts.Length ? $"{parts[i]},{parts[i + 1]}" : parts[i]);
+        return scelles;
+    }
+
+    // Copy of the web-api _materialNameMap so offline libellés match the online BL.
+    private static readonly Dictionary<string, string> MaterialNameMap =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "CPJ 45 sac palettisé", "Cimapro (CPJ45) sac 50 kg palettisé" },
+            { "Ciment CPJ55 sac 45 Kg palettisé", "L'qwam (CPJ55) SAC 45 KG PAL" },
+            { "CPJ 35 sac palettisé", "Lamaalem (CPJ35) sac 50 kg palettisé" },
+            { "Ciment CPJ35 sac 50 Kg", "Lamaalem (CPJ35) sac 50 Kg" },
+            { "Ciment CPJ55 sac 45 Kg", "L'qwam (CPJ55) SAC 45 KG" },
+            { "Ciment CPJ45 sac 50 Kg", "Cimapro (CPJ45) sac 50 kg" },
+            { "Cimartob sac 45 Kg", "Cimartob sac 45 Kg" },
+            { "Cimartob sac 45 Kg palettisé", "Cimartob sac 45 Kg palettisé" }
+        };
+
+    private static string? NormalizeMaterialLibelle(string? libelle)
+    {
+        if (string.IsNullOrWhiteSpace(libelle))
+            return libelle;
+        var trimmed = libelle.Trim();
+        return MaterialNameMap.TryGetValue(trimmed, out var mapped) ? mapped : trimmed;
     }
 }
 
